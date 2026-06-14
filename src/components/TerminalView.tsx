@@ -255,6 +255,7 @@ export function TerminalView({
   return (
     <div
       ref={containerRef}
+      className="nezha-xterm-host"
       style={{
         width: "100%",
         height: "100%",

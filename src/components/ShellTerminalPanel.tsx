@@ -265,6 +265,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
     return (
       <div
         ref={containerRef}
+        className="nezha-xterm-host nezha-shell-xterm-host"
         style={{
           position: "absolute",
           inset: 0,
