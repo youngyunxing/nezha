@@ -38,6 +38,20 @@ import { APP_PLATFORM } from "./platform";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import { useI18n } from "./i18n";
+import {
+  DARK_THEME_STORAGE_KEY,
+  getNextThemeMode,
+  getPreferredDarkTheme,
+  getPreferredLightTheme,
+  isDarkThemeMode,
+  isLightThemeMode,
+  isThemeMode,
+  LIGHT_THEME_STORAGE_KEY,
+  resolveThemeVariant,
+  THEME_STORAGE_KEY,
+  type DarkThemeMode,
+  type LightThemeMode,
+} from "./theme";
 import s from "./styles";
 import "./App.css";
 
@@ -141,19 +155,19 @@ function getSystemPrefersDark() {
 }
 
 function getInitialThemeMode(): ThemeMode {
-  const stored = localStorage.getItem("nezha:theme");
-  return stored === "dark" ||
-    stored === "light" ||
-    stored === "system" ||
-    stored === "eyecare" ||
-    stored === "midnight"
-    ? stored
-    : "system";
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  return isThemeMode(stored) ? stored : "system";
 }
 
-function resolveThemeVariant(mode: ThemeMode, systemPrefersDark: boolean): ThemeVariant {
-  if (mode === "system") return systemPrefersDark ? "midnight" : "light";
-  return mode;
+function getInitialLightThemeMode(): LightThemeMode {
+  return getPreferredLightTheme(
+    getInitialThemeMode(),
+    localStorage.getItem(LIGHT_THEME_STORAGE_KEY),
+  );
+}
+
+function getInitialDarkThemeMode(): DarkThemeMode {
+  return getPreferredDarkTheme(getInitialThemeMode(), localStorage.getItem(DARK_THEME_STORAGE_KEY));
 }
 
 function getInitialTerminalFontSize(): TerminalFontSize {
@@ -192,6 +206,8 @@ function App() {
   const { t } = useI18n();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialThemeMode);
+  const [lightThemeMode, setLightThemeMode] = useState<LightThemeMode>(getInitialLightThemeMode);
+  const [darkThemeMode, setDarkThemeMode] = useState<DarkThemeMode>(getInitialDarkThemeMode);
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
   const themeVariant: ThemeVariant = resolveThemeVariant(themeMode, systemPrefersDark);
   const [terminalFontSize, setTerminalFontSize] = useState<TerminalFontSize>(
@@ -288,8 +304,16 @@ function App() {
     root.classList.toggle("dark", themeVariant === "dark" || themeVariant === "midnight");
     root.classList.toggle("midnight", themeVariant === "midnight");
     root.classList.toggle("eyecare", themeVariant === "eyecare");
-    localStorage.setItem("nezha:theme", themeMode);
+    localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeVariant, themeMode]);
+
+  useEffect(() => {
+    localStorage.setItem(LIGHT_THEME_STORAGE_KEY, lightThemeMode);
+  }, [lightThemeMode]);
+
+  useEffect(() => {
+    localStorage.setItem(DARK_THEME_STORAGE_KEY, darkThemeMode);
+  }, [darkThemeMode]);
 
   useEffect(() => {
     // Tauri window theme only understands light/dark/null; map eyecare to light
@@ -351,18 +375,17 @@ function App() {
     document.documentElement.style.setProperty("--font-mono", effective);
   }, [monoFontFamily]);
 
+  const handleThemeModeChange = useCallback((mode: ThemeMode) => {
+    if (isLightThemeMode(mode)) setLightThemeMode(mode);
+    if (isDarkThemeMode(mode)) setDarkThemeMode(mode);
+    setThemeMode(mode);
+  }, []);
+
   const handleToggleTheme = useCallback(() => {
     setThemeMode((currentMode) => {
-      // Toggle only cycles between the canonical light/dark pair. The dark side
-      // defaults to midnight (neutral near-black surfaces); eyecare and any
-      // future opt-in variants retreat to "light" so the shortcut remains a
-      // one-tap escape hatch.
-      if (currentMode === "dark" || currentMode === "midnight") return "light";
-      if (currentMode === "light") return "midnight";
-      if (currentMode === "system") return systemPrefersDark ? "light" : "midnight";
-      return "light";
+      return getNextThemeMode(currentMode, systemPrefersDark, lightThemeMode, darkThemeMode);
     });
-  }, [systemPrefersDark]);
+  }, [darkThemeMode, lightThemeMode, systemPrefersDark]);
 
   useEffect(() => {
     async function init() {
@@ -1189,7 +1212,7 @@ function App() {
               themeVariant={themeVariant}
               themeMode={themeMode}
               systemPrefersDark={systemPrefersDark}
-              onThemeModeChange={setThemeMode}
+              onThemeModeChange={handleThemeModeChange}
               onToggleTheme={handleToggleTheme}
               terminalFontSize={terminalFontSize}
               onTerminalFontSizeChange={setTerminalFontSize}
@@ -1226,7 +1249,7 @@ function App() {
             themeVariant={themeVariant}
             themeMode={themeMode}
             systemPrefersDark={systemPrefersDark}
-            onThemeModeChange={setThemeMode}
+            onThemeModeChange={handleThemeModeChange}
             onToggleTheme={handleToggleTheme}
             terminalFontSize={terminalFontSize}
             onTerminalFontSizeChange={setTerminalFontSize}
