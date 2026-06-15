@@ -7,11 +7,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import { attachSmartCopy } from "./terminalCopyHelper";
 import type { TerminalFontSize, FontFamily, ThemeVariant } from "../types";
 import {
-  themeFor,
+  applyTerminalTheme,
   initTerminal,
   loadWebglAddon,
   safeFit,
   createSmartWriter,
+  themeFor,
   attachMacWebKitTerminalGuard,
   applyTerminalFontSize,
   applyTerminalFontFamily,
@@ -228,7 +229,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
 
     useEffect(() => {
       if (terminalRef.current) {
-        terminalRef.current.options.theme = themeFor(themeVariant);
+        applyTerminalTheme(terminalRef.current, themeVariant);
       }
     }, [themeVariant]);
 

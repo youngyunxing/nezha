@@ -87,6 +87,15 @@ export function themeFor(variant: ThemeVariant) {
   return LIGHT_THEME;
 }
 
+export function minimumContrastRatioFor(variant: ThemeVariant): number {
+  return variant === "dark" ? 1 : 4.5;
+}
+
+export function applyTerminalTheme(term: Terminal, variant: ThemeVariant): void {
+  term.options.theme = themeFor(variant);
+  term.options.minimumContrastRatio = minimumContrastRatioFor(variant);
+}
+
 // ── Watermark flow control ───────────────────────────────────────────────────
 
 const HIGH_WATER = 128 * 1024; // 128 KB：超过时停止写入
@@ -325,6 +334,7 @@ export function initTerminal(
     fontFamily,
     fontSize,
     theme: themeFor(variant),
+    minimumContrastRatio: minimumContrastRatioFor(variant),
     allowProposedApi: true,
     overviewRuler: { width: XTERM_OVERLAY_SCROLLBAR_WIDTH },
     // 当运行中的 TUI（Claude Code / Codex）开启鼠标上报时，xterm 默认把拖动当作

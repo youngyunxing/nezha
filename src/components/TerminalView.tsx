@@ -12,7 +12,7 @@ import {
 } from "../shortcuts";
 import type { TerminalFontSize, FontFamily, ThemeVariant } from "../types";
 import {
-  themeFor,
+  applyTerminalTheme,
   initTerminal,
   loadWebglAddon,
   safeFit,
@@ -226,7 +226,7 @@ export function TerminalView({
 
   useEffect(() => {
     if (terminalRef.current) {
-      terminalRef.current.options.theme = themeFor(themeVariant);
+      applyTerminalTheme(terminalRef.current, themeVariant);
     }
   }, [themeVariant]);
 
