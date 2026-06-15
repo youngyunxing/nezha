@@ -5,9 +5,9 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { IS_MAC_WEBKIT } from "../platform";
 import type { ThemeVariant } from "../types";
 
-// xterm 6 的自绘滚动条宽度由 overviewRuler.width 复用控制；保持 1px 预留，
-// 视觉宽度和贴边效果由 App.css 中的 .nezha-xterm-host 覆盖完成。
-const XTERM_OVERLAY_SCROLLBAR_WIDTH = 1;
+// xterm 6 的自绘滚动条宽度由 overviewRuler.width 复用控制；FitAddon 会用它
+// 计算可用列数，因此必须和 App.css 中的滚动条槽宽保持一致。
+const XTERM_SCROLLBAR_WIDTH = 12;
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 
@@ -326,7 +326,7 @@ export function initTerminal(
     fontSize,
     theme: themeFor(variant),
     allowProposedApi: true,
-    overviewRuler: { width: XTERM_OVERLAY_SCROLLBAR_WIDTH },
+    overviewRuler: { width: XTERM_SCROLLBAR_WIDTH },
     // 当运行中的 TUI（Claude Code / Codex）开启鼠标上报时，xterm 默认把拖动当作
     // 鼠标事件转发给程序并取消本地选区，导致 macOS 用户"运行时无法框选"。开启此项后
     // 按住 ⌥ Option 拖动可强制本地选区（iTerm2 / Terminal.app 的标准约定）。
@@ -340,6 +340,38 @@ export function initTerminal(
   term.unicode.activeVersion = "11";
 
   return { term, fitAddon };
+}
+
+export function attachTerminalScrollbarAutoHide(term: Terminal, container: HTMLElement): () => void {
+  const ownerWindow = container.ownerDocument.defaultView ?? window;
+  let scrollHideTimer: number | null = null;
+
+  const clearScrollHideTimer = () => {
+    if (scrollHideTimer === null) return;
+    ownerWindow.clearTimeout(scrollHideTimer);
+    scrollHideTimer = null;
+  };
+
+  const hideAfterScroll = () => {
+    clearScrollHideTimer();
+    scrollHideTimer = ownerWindow.setTimeout(() => {
+      container.classList.remove("nezha-xterm-scrolling");
+      scrollHideTimer = null;
+    }, 700);
+  };
+
+  const handleScroll = () => {
+    container.classList.add("nezha-xterm-scrolling");
+    hideAfterScroll();
+  };
+
+  const scrollDisposable = term.onScroll(handleScroll);
+
+  return () => {
+    clearScrollHideTimer();
+    container.classList.remove("nezha-xterm-scrolling");
+    scrollDisposable.dispose();
+  };
 }
 
 /**

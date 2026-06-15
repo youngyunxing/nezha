@@ -13,6 +13,7 @@ import {
   safeFit,
   createSmartWriter,
   attachMacWebKitTerminalGuard,
+  attachTerminalScrollbarAutoHide,
   applyTerminalFontSize,
   applyTerminalFontFamily,
 } from "./terminalShared";
@@ -110,6 +111,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
       term.open(container);
+      const disposeScrollbarAutoHide = attachTerminalScrollbarAutoHide(term, container);
       const disposeInputFix = attachMacWebKitShiftInputFix(term);
       loadWebglAddon(term);
       const writer = createSmartWriter(term);
@@ -203,6 +205,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
         document.removeEventListener("visibilitychange", handleVisibilityChange);
         terminalRef.current = null;
         fitAddonRef.current = null;
+        disposeScrollbarAutoHide();
         disposeMacWebKitGuard();
         disposeInputFix();
         term.dispose();
@@ -270,7 +273,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
           position: "absolute",
           inset: 0,
           overflow: "hidden",
-          padding: "4px 6px",
+          padding: "4px 0 4px 6px",
           cursor: "text",
           visibility: isActive ? "visible" : "hidden",
           pointerEvents: isActive ? "auto" : "none",
