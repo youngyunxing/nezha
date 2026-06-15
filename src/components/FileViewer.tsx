@@ -287,7 +287,7 @@ function FilePreviewPane({
   previewMode: boolean;
 }) {
   const editorTheme =
-    themeVariant === "dark"
+    themeVariant === "dark" || themeVariant === "midnight"
       ? githubDark
       : themeVariant === "eyecare"
         ? solarizedLight
