@@ -12,7 +12,8 @@ import {
 } from "../shortcuts";
 import type { TerminalFontSize, FontFamily, ThemeVariant } from "../types";
 import {
-  applyTerminalTheme,
+  themeFor,
+  minimumContrastRatioFor,
   initTerminal,
   loadWebglAddon,
   safeFit,
@@ -25,6 +26,21 @@ import {
 } from "./terminalShared";
 import { attachLinuxIMEFix, attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
+
+function themeForAgentTerminal(variant: ThemeVariant, container: HTMLElement) {
+  const theme = themeFor(variant);
+  const background = window.getComputedStyle(container).getPropertyValue("--bg-panel").trim();
+  return background ? { ...theme, background } : theme;
+}
+
+function applyAgentTerminalTheme(
+  term: Terminal,
+  variant: ThemeVariant,
+  container: HTMLElement,
+): void {
+  term.options.theme = themeForAgentTerminal(variant, container);
+  term.options.minimumContrastRatio = minimumContrastRatioFor(variant);
+}
 
 interface TerminalViewProps {
   onInput: (data: string) => void;
@@ -92,6 +108,7 @@ export function TerminalView({
       terminalFontSize,
       monoFontFamily,
     );
+    applyAgentTerminalTheme(term, themeVariant, container);
     terminalRef.current = term;
     fitAddonRef.current = fitAddon;
     let disposed = false;
@@ -246,9 +263,8 @@ export function TerminalView({
   }, [isActive]);
 
   useEffect(() => {
-    if (terminalRef.current) {
-      applyTerminalTheme(terminalRef.current, themeVariant);
-    }
+    if (!terminalRef.current || !containerRef.current) return;
+    applyAgentTerminalTheme(terminalRef.current, themeVariant, containerRef.current);
   }, [themeVariant]);
 
   useEffect(() => {
@@ -291,6 +307,7 @@ export function TerminalView({
         height: "100%",
         overflow: "hidden",
         cursor: "text",
+        background: "inherit",
       }}
     />
   );
