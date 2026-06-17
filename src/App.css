@@ -300,13 +300,17 @@ body {
 }
 
 .nezha-xterm-host {
-  --xterm-scrollbar-edge-offset: 0px;
+  --xterm-scrollbar-width: 12px;
   --xterm-scrollbar-thumb: rgba(126, 136, 153, 0.48);
   --xterm-scrollbar-thumb-hover: rgba(148, 158, 176, 0.68);
 }
 
-.nezha-xterm-host.nezha-shell-xterm-host {
-  --xterm-scrollbar-edge-offset: 6px;
+.nezha-xterm-host .xterm .xterm-screen {
+  margin-right: var(--xterm-scrollbar-width);
+}
+
+.nezha-xterm-host:not(.nezha-shell-xterm-host) .xterm-screen {
+  margin-left: auto;
 }
 
 .nezha-xterm-host .xterm .xterm-viewport {
@@ -327,10 +331,10 @@ body {
 }
 
 .nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical {
-  width: 12px !important;
-  right: calc(-1 * var(--xterm-scrollbar-edge-offset)) !important;
+  width: var(--xterm-scrollbar-width) !important;
+  right: 0 !important;
   background: transparent !important;
-  transition: opacity 140ms ease-out;
+  pointer-events: auto !important;
 }
 
 .nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical.invisible.fade {
@@ -343,6 +347,14 @@ body {
   width: 6px !important;
   border-radius: 999px;
   background: var(--xterm-scrollbar-thumb) !important;
+  opacity: 0;
+  transition: opacity 140ms ease-out, background 140ms ease-out;
+}
+
+.nezha-xterm-host.nezha-xterm-scrolling .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider,
+.nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
+.nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  opacity: 1;
 }
 
 .nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
