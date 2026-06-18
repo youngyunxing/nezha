@@ -23,6 +23,7 @@ import {
   applyTerminalFontSize,
   applyTerminalFontFamily,
   applyDomCharSizeOverride,
+  refreshTerminalDisplay,
 } from "./terminalShared";
 import { attachLinuxIMEFix, attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
@@ -120,7 +121,7 @@ export function TerminalView({
     const disposeCharSizeOverride = applyDomCharSizeOverride(term);
     const disposeScrollbarAutoHide = attachTerminalScrollbarAutoHide(term, container);
     const disposeInputFix = attachMacWebKitShiftInputFix(term);
-    loadWebglAddon(term);
+    const webglHandle = loadWebglAddon(term);
 
     const size = safeFit(fitAddon, term, container);
     if (size) notifyResize(size.cols, size.rows);
@@ -185,6 +186,7 @@ export function TerminalView({
       window.requestAnimationFrame(() => {
         const s = safeFit(fitAddon, term, container);
         if (s) notifyResize(s.cols, s.rows);
+        refreshTerminalDisplay(term);
         term.focus();
       });
     };
@@ -213,6 +215,7 @@ export function TerminalView({
       onRegisterRef.current(null);
       fitAddonRef.current = null;
       disposeCharSizeOverride();
+      webglHandle.dispose();
       disposeScrollbarAutoHide();
       disposeMacWebKitGuard();
       disposeInputFix();
@@ -252,6 +255,7 @@ export function TerminalView({
       if (!fitAddonRef.current || !terminalRef.current || !containerRef.current) return;
       const s = safeFit(fitAddonRef.current, terminalRef.current, containerRef.current);
       if (s) notifyResize(s.cols, s.rows);
+      refreshTerminalDisplay(terminalRef.current);
       terminalRef.current.focus();
     });
   }, [isActive, notifyResize]);
@@ -265,6 +269,9 @@ export function TerminalView({
   useEffect(() => {
     if (!terminalRef.current || !containerRef.current) return;
     applyAgentTerminalTheme(terminalRef.current, themeVariant, containerRef.current);
+    // 主题/对比度变化后 xterm 算出的最终前景色变了，但 WebGL atlas 仍缓存
+    // 旧色的 glyph 纹理，不刷新会看到颜色和字形错位。
+    refreshTerminalDisplay(terminalRef.current);
   }, [themeVariant]);
 
   useEffect(() => {
