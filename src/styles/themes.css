@@ -134,7 +134,7 @@
   --radius-lg: 12px;
 
   --font-ui: "SF Pro Display", "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, ui-monospace, monospace;
 }
 
 /* Design tokens: eye-care theme (warm sepia, low-contrast) */

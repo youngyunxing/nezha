@@ -24,7 +24,8 @@ import {
 } from "./types";
 import {
   DEFAULT_UI_FONT,
-  DEFAULT_MONO_FONT,
+  getDefaultMonoFont,
+  isAutoDefaultMonoFont,
 } from "./types";
 import type { FontFamily } from "./types";
 import { quoteFontName } from "./utils/fonts";
@@ -175,6 +176,12 @@ function getInitialAttentionBadge(): boolean {
 function getInitialFontFamily(key: string, fallback: FontFamily): FontFamily {
   const stored = localStorage.getItem(key);
   if (!stored) return fallback;
+  // 老版本 useEffect 无差别把当时的 DEFAULT_MONO_FONT 写进 localStorage,
+  // 导致默认更新对老用户无效。识别到历史自动默认值就清掉,改用当前平台默认。
+  if (key === "nezha:monoFontFamily" && isAutoDefaultMonoFont(stored)) {
+    localStorage.removeItem(key);
+    return fallback;
+  }
   // 旧版本写入的裸字体名（如 "Maple Mono NF CN"）在 Canvas 2D 下会被
   // tokenize 成多个 family 全部 miss；读出时统一 normalize 一次。
   return quoteFontName(stored);
@@ -198,7 +205,7 @@ function App() {
     getInitialFontFamily("nezha:uiFontFamily", DEFAULT_UI_FONT),
   );
   const [monoFontFamily, setMonoFontFamily] = useState<FontFamily>(() =>
-    getInitialFontFamily("nezha:monoFontFamily", DEFAULT_MONO_FONT),
+    getInitialFontFamily("nezha:monoFontFamily", getDefaultMonoFont()),
   );
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -332,9 +339,16 @@ function App() {
   }, [uiFontFamily]);
 
   useEffect(() => {
-    const value = monoFontFamily.trim() || DEFAULT_MONO_FONT;
-    localStorage.setItem("nezha:monoFontFamily", value);
-    document.documentElement.style.setProperty("--font-mono", value);
+    const trimmed = monoFontFamily.trim();
+    const effective = trimmed || getDefaultMonoFont();
+    // 用户没显式自定义时不写入 localStorage,避免把默认值固化、
+    // 导致后续改默认对老用户失效（这正是历史 bug 的根因）。
+    if (!trimmed || isAutoDefaultMonoFont(trimmed)) {
+      localStorage.removeItem("nezha:monoFontFamily");
+    } else {
+      localStorage.setItem("nezha:monoFontFamily", trimmed);
+    }
+    document.documentElement.style.setProperty("--font-mono", effective);
   }, [monoFontFamily]);
 
   const handleToggleTheme = useCallback(() => {
