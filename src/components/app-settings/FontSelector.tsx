@@ -113,10 +113,7 @@ export function FontSelector({ value, onChange, label, hint, defaultFont, previe
             <button
               type="button"
               onClick={() => onChange(defaultFont)}
-              style={{
-                ...s.fontSelectorResetBtn,
-                visibility: value !== defaultFont ? "visible" : "hidden",
-              }}
+              style={s.fontSelectorResetBtn}
             >
               <RotateCcw size={11} />
               {t("common.reset")}
