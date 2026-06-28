@@ -24,6 +24,7 @@ import {
   applyTerminalFontFamily,
   applyDomCharSizeOverride,
   refreshTerminalDisplay,
+  unregisterActiveTerminal,
 } from "./terminalShared";
 import { attachLinuxIMEFix, attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
@@ -204,6 +205,9 @@ export function TerminalView({
 
     return () => {
       disposed = true;
+      // 必须最先 unregister:后续任一 dispose 调用抛错会中断 cleanup,
+      // 让 term 永久滞留 activeTerminals,下次 sibling 广播命中 zombie。
+      unregisterActiveTerminal(term);
       try {
         const snapshot = serializeAddon.serialize();
         if (snapshot) onSnapshotRef.current?.(snapshot);
