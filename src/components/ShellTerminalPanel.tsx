@@ -33,6 +33,8 @@ interface ShellOutputEvent {
 
 export interface ShellTerminalPanelHandle {
   sendCommand: (cmd: string) => void;
+  openPath: (projectPath: string) => boolean;
+  sendCommandToPath: (projectPath: string, cmd: string) => boolean;
 }
 
 interface ShellTerminalInstanceHandle {
@@ -42,6 +44,7 @@ interface ShellTerminalInstanceHandle {
 interface ShellSession {
   id: string;
   title: string;
+  projectPath: string;
 }
 
 interface Props {
@@ -59,10 +62,11 @@ interface Props {
 
 const MAX_SHELLS = 5;
 
-function createShellSession(projectId: string, index: number): ShellSession {
+function createShellSession(projectId: string, index: number, projectPath: string): ShellSession {
   return {
     id: `shell:${projectId}:${index}:${Date.now()}`,
     title: `Terminal ${index}`,
+    projectPath,
   };
 }
 
@@ -356,15 +360,52 @@ export const ShellTerminalPanel = forwardRef<ShellTerminalPanelHandle, Props>(
     const { t } = useI18n();
     const initialShellRef = useRef<ShellSession | null>(null);
     if (!initialShellRef.current) {
-      initialShellRef.current = createShellSession(projectId, 1);
+      initialShellRef.current = createShellSession(projectId, 1, projectPath);
     }
 
     const nextShellIndexRef = useRef(2);
     const shellRefs = useRef<Record<string, ShellTerminalInstanceHandle | null>>({});
+    const pendingShellCommandsRef = useRef<Record<string, string[]>>({});
     const [shells, setShells] = useState<ShellSession[]>(() => [initialShellRef.current!]);
     const [activeShellId, setActiveShellId] = useState<string | null>(() => initialShellRef.current!.id);
+    const shellsRef = useRef(shells);
     const activeShellIdRef = useRef(activeShellId);
+    shellsRef.current = shells;
     activeShellIdRef.current = activeShellId;
+
+    const openPath = useCallback(
+      (nextProjectPath: string): string | null => {
+        const existingShell = shellsRef.current.find((shell) => shell.projectPath === nextProjectPath);
+        if (existingShell) {
+          setActiveShellId(existingShell.id);
+          return existingShell.id;
+        }
+
+        if (shellsRef.current.length >= MAX_SHELLS) return null;
+
+        const nextShell = createShellSession(projectId, nextShellIndexRef.current++, nextProjectPath);
+        const nextShells = [...shellsRef.current, nextShell];
+        shellsRef.current = nextShells;
+        setShells(nextShells);
+        setActiveShellId(nextShell.id);
+        return nextShell.id;
+      },
+      [projectId],
+    );
+
+    const handleShellReady = useCallback(
+      (shellId: string) => {
+        const pendingCommands = pendingShellCommandsRef.current[shellId];
+        if (pendingCommands?.length) {
+          delete pendingShellCommandsRef.current[shellId];
+          for (const cmd of pendingCommands) {
+            shellRefs.current[shellId]?.sendCommand(cmd);
+          }
+        }
+        onReady?.();
+      },
+      [onReady],
+    );
 
     useImperativeHandle(
       ref,
@@ -374,16 +415,33 @@ export const ShellTerminalPanel = forwardRef<ShellTerminalPanelHandle, Props>(
           if (!currentShellId) return;
           shellRefs.current[currentShellId]?.sendCommand(cmd);
         },
+        openPath: (nextProjectPath: string) => {
+          return openPath(nextProjectPath) !== null;
+        },
+        sendCommandToPath: (nextProjectPath: string, cmd: string) => {
+          const shellId = openPath(nextProjectPath);
+          if (!shellId) return false;
+          const shell = shellRefs.current[shellId];
+          if (shell) {
+            shell.sendCommand(cmd);
+            return true;
+          }
+          pendingShellCommandsRef.current[shellId] = [
+            ...(pendingShellCommandsRef.current[shellId] ?? []),
+            cmd,
+          ];
+          return true;
+        },
       }),
-      [],
+      [openPath],
     );
 
     const handleAddShell = useCallback(() => {
       if (shells.length >= MAX_SHELLS) return;
-      const nextShell = createShellSession(projectId, nextShellIndexRef.current++);
+      const nextShell = createShellSession(projectId, nextShellIndexRef.current++, projectPath);
       setShells((prev) => [...prev, nextShell]);
       setActiveShellId(nextShell.id);
-    }, [projectId, shells.length]);
+    }, [projectId, projectPath, shells.length]);
 
     const handleCloseShell = useCallback(
       (shellId: string) => {
@@ -391,8 +449,10 @@ export const ShellTerminalPanel = forwardRef<ShellTerminalPanelHandle, Props>(
         if (closingIndex === -1) return;
 
         const nextShells = shells.filter((shell) => shell.id !== shellId);
+        shellsRef.current = nextShells;
         setShells(nextShells);
         delete shellRefs.current[shellId];
+        delete pendingShellCommandsRef.current[shellId];
 
         if (nextShells.length === 0) {
           onClose();
@@ -477,12 +537,12 @@ export const ShellTerminalPanel = forwardRef<ShellTerminalPanelHandle, Props>(
                   shellRefs.current[shell.id] = instance;
                 }}
                 shellId={shell.id}
-                projectPath={projectPath}
+                projectPath={shell.projectPath}
                 isActive={isActive && activeShellId === shell.id}
                 themeVariant={themeVariant}
                 terminalFontSize={terminalFontSize}
                 monoFontFamily={monoFontFamily}
-                onReady={onReady}
+                onReady={() => handleShellReady(shell.id)}
               />
             ))}
           </div>

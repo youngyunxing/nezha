@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  Terminal as TerminalIcon,
 } from "lucide-react";
 
 interface SessionMetrics {
@@ -92,6 +93,7 @@ export function RunningView({
   onResume,
   onMergeWorktree,
   onDiscardWorktree,
+  onOpenWorktreeTerminal,
   onReconnect,
   onMarkDone,
   onInput,
@@ -116,6 +118,7 @@ export function RunningView({
   onResume?: () => void;
   onMergeWorktree?: () => Promise<void>;
   onDiscardWorktree?: () => Promise<void>;
+  onOpenWorktreeTerminal?: () => void;
   onReconnect: () => void;
   onMarkDone: () => void;
   onInput: (data: string) => void;
@@ -423,6 +426,12 @@ export function RunningView({
         </div>
         {isActive && (
           <>
+            {task.worktreePath && !task.worktreeDiscarded && onOpenWorktreeTerminal && (
+              <button style={s.cancelBtn} onClick={onOpenWorktreeTerminal}>
+                <TerminalIcon size={12} strokeWidth={2.5} />
+                <span>{t("running.worktreeTerminal")}</span>
+              </button>
+            )}
             <button style={s.doneBtn} onClick={onMarkDone}>
               <CheckCircle2 size={12} strokeWidth={2.5} />
               <span>{t("running.markDone")}</span>
