@@ -270,11 +270,16 @@ export function TerminalView({
 
   useEffect(() => {
     if (!terminalRef.current || !containerRef.current) return;
+    // 后台 task 的 RunningView 容器是 visibility:hidden,此时设置
+    // term.options.theme 虽同步生效,但 xterm WebGL renderer 不会把新主题色
+    // 提交到不可见的 canvas;等用户切回该 task 时这个 effect 不会再跑,看到的
+    // 还是旧主题色。守在 isActive,切回前台 (isActive false→true) 时补 apply 一次。
+    if (!isActive) return;
     applyTerminalThemeOnPanel(terminalRef.current, themeVariant, containerRef.current);
     // 主题/对比度变化后 xterm 算出的最终前景色变了，但 WebGL atlas 仍缓存
     // 旧色的 glyph 纹理，不刷新会看到颜色和字形错位。
     refreshTerminalDisplay(terminalRef.current);
-  }, [themeVariant]);
+  }, [themeVariant, isActive]);
 
   useEffect(() => {
     if (!terminalRef.current || !fitAddonRef.current || !containerRef.current) return;

@@ -269,13 +269,17 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
     }, [isActive, shellId]);
 
     useEffect(() => {
-      if (terminalRef.current && containerRef.current) {
-        applyTerminalThemeOnPanel(terminalRef.current, themeVariant, containerRef.current);
-        // 主题/对比度变化后 xterm 算出的最终前景色变了，但 WebGL atlas 仍缓存
-        // 旧色的 glyph 纹理，不刷新会看到颜色和字形错位。
-        refreshTerminalDisplay(terminalRef.current);
-      }
-    }, [themeVariant]);
+      if (!terminalRef.current || !containerRef.current) return;
+      // 同一 panel 内多个 shell 用 visibility 切换前后台,后台 shell 的 canvas
+      // 不可见,xterm WebGL renderer 不会把新主题色提交到 GPU;等切回该 shell
+      // 这个 effect 不会再跑,看到的还是旧主题色。守在 isActive 上,切回前台
+      // (isActive false→true) 时补 apply 一次。
+      if (!isActive) return;
+      applyTerminalThemeOnPanel(terminalRef.current, themeVariant, containerRef.current);
+      // 主题/对比度变化后 xterm 算出的最终前景色变了，但 WebGL atlas 仍缓存
+      // 旧色的 glyph 纹理，不刷新会看到颜色和字形错位。
+      refreshTerminalDisplay(terminalRef.current);
+    }, [themeVariant, isActive]);
 
     useEffect(() => {
       if (!terminalRef.current || !fitAddonRef.current || !containerRef.current) return;
