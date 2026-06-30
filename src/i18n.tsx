@@ -440,6 +440,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "terminal.title": "Terminal",
     "terminal.closeTerminals": "Close terminals",
     "terminal.limitReached": "Terminal limit reached",
+    "terminal.limitReachedWithCloseHint": "Terminal limit reached. Close one terminal first.",
     "terminal.newTerminal": "New terminal",
     "terminal.closeShell": "Close {title}",
     "running.cancel": "Cancel",
@@ -453,6 +454,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "running.reconnectTask": "Reconnect task",
     "running.cancelTask": "Cancel task",
     "running.markDone": "Mark completed",
+    "running.worktreeTerminal": "Worktree terminal",
     "running.resumeUnavailable": "This task has no session ID, so it cannot be resumed.",
     "running.detachedTitle": "Terminal connection lost",
     "running.detachedNoSession":
@@ -936,6 +938,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "terminal.title": "终端",
     "terminal.closeTerminals": "关闭终端",
     "terminal.limitReached": "终端数量已达上限",
+    "terminal.limitReachedWithCloseHint": "终端数量已达上限，请先关闭一个终端。",
     "terminal.newTerminal": "新建终端",
     "terminal.closeShell": "关闭 {title}",
     "running.cancel": "取消",
@@ -949,6 +952,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "running.reconnectTask": "重新连接",
     "running.cancelTask": "取消任务",
     "running.markDone": "标记已完成",
+    "running.worktreeTerminal": "工作树终端",
     "running.resumeUnavailable": "这个任务没有保存会话 ID，无法恢复。",
     "running.detachedTitle": "终端连接已断开",
     "running.detachedNoSession":

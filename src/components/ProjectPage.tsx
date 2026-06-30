@@ -27,6 +27,7 @@ import { RightToolbar } from "./RightToolbar";
 import { TodoTaskView } from "./TodoTaskView";
 import { ShellTerminalPanel, type ShellTerminalPanelHandle } from "./ShellTerminalPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { useToast } from "./Toast";
 import { useProjectPanels } from "../hooks/useProjectPanels";
 import { useI18n } from "../i18n";
 import s from "../styles";
@@ -160,6 +161,7 @@ export function ProjectPage({
   onExitSkillHub?: () => void;
 }) {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const {
     rightPanel,
     openFiles,
@@ -186,6 +188,7 @@ export function ProjectPage({
   } = useProjectPanels();
 
   const [showShellTerminal, setShowShellTerminal] = useState(false);
+  const [shellProjectPath, setShellProjectPath] = useState(project.path);
   const [showSettings, setShowSettings] = useState(false);
   const [showFileSearch, setShowFileSearch] = useState(false);
   const [taskPanelCollapsed, setTaskPanelCollapsed] = useState(false);
@@ -252,14 +255,47 @@ export function ProjectPage({
     (target: string) => {
       const cmd = `make ${target}\n`;
       if (showShellTerminal && shellRef.current) {
-        shellRef.current.sendCommand(cmd);
+        const sent = shellRef.current.sendCommandToPath(project.path, cmd);
+        if (!sent) {
+          showToast(t("terminal.limitReachedWithCloseHint"), "warning");
+        }
       } else {
+        setShellProjectPath(project.path);
         pendingCmdRef.current = cmd;
         setShowShellTerminal(true);
       }
     },
-    [showShellTerminal],
+    [project.path, showShellTerminal, showToast, t],
   );
+
+  const handleOpenWorktreeTerminal = useCallback(
+    (worktreePath: string) => {
+      if (showShellTerminal && shellRef.current) {
+        const opened = shellRef.current.openPath(worktreePath);
+        if (!opened) {
+          showToast(t("terminal.limitReachedWithCloseHint"), "warning");
+        }
+        return;
+      }
+      setShellProjectPath(worktreePath);
+      setShowShellTerminal(true);
+    },
+    [showShellTerminal, showToast, t],
+  );
+
+  const handleToggleShellTerminal = useCallback(() => {
+    setShowShellTerminal((currentlyVisible) => {
+      if (!currentlyVisible) {
+        setShellProjectPath(project.path);
+      }
+      return !currentlyVisible;
+    });
+  }, [project.path]);
+
+  useEffect(() => {
+    if (showShellTerminal) return;
+    setShellProjectPath(project.path);
+  }, [project.id, project.path, showShellTerminal]);
 
   const handleShellReady = useCallback(() => {
     if (pendingCmdRef.current) {
@@ -267,6 +303,11 @@ export function ProjectPage({
       pendingCmdRef.current = null;
     }
   }, []);
+
+  const handleShellClose = useCallback(() => {
+    setShowShellTerminal(false);
+    setShellProjectPath(project.path);
+  }, [project.path]);
 
   const handleNewTask = useCallback(() => {
     clearFileAndDiff();
@@ -472,6 +513,8 @@ export function ProjectPage({
                 !!selectedTask &&
                 task.id === selectedTaskId &&
                 task.status !== "todo";
+              const worktreePath =
+                task.worktreePath && !task.worktreeDiscarded ? task.worktreePath : null;
               return (
                 <RunningView
                   key={task.id}
@@ -484,6 +527,9 @@ export function ProjectPage({
                   onResume={() => onResumeTask(task.id)}
                   onMergeWorktree={() => onMergeWorktree(task.id)}
                   onDiscardWorktree={() => onDiscardWorktree(task.id)}
+                  onOpenWorktreeTerminal={
+                    worktreePath ? () => handleOpenWorktreeTerminal(worktreePath) : undefined
+                  }
                   onReconnect={() => onReconnectTask(task.id)}
                   onMarkDone={() => onMarkTaskDone(task.id)}
                   onInput={(data) => onInput(task.id, data)}
@@ -505,10 +551,10 @@ export function ProjectPage({
         {showShellTerminal && (
           <ShellTerminalPanel
             ref={shellRef}
-            projectPath={project.path}
+            projectPath={shellProjectPath}
             projectId={project.id}
             isActive={visible}
-            onClose={() => setShowShellTerminal(false)}
+            onClose={handleShellClose}
             themeVariant={themeVariant}
             terminalFontSize={terminalFontSize}
             monoFontFamily={monoFontFamily}
@@ -571,7 +617,7 @@ export function ProjectPage({
         activePanel={rightPanel}
         onToggle={handleTogglePanel}
         terminalActive={showShellTerminal}
-        onToggleTerminal={() => setShowShellTerminal((v) => !v)}
+        onToggleTerminal={handleToggleShellTerminal}
         onOpenSearch={() => setShowFileSearch(true)}
         onOpenSettings={() => setShowSettings(true)}
       />
