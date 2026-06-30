@@ -50,6 +50,10 @@ const IGNORED_DIRS: &[&str] = &[
 const MAX_IMAGE_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_FILE_SEARCH_RESULTS: usize = 200;
 
+fn path_to_string(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
 /// Validate that `target` is an absolute path within `allowed_root` (prevents directory traversal).
 /// Validate that `target` is reachable within `allowed_root`.
 ///
@@ -318,73 +322,172 @@ pub async fn open_in_system_file_manager(path: String, project_path: String) -> 
 pub async fn read_dir_entries(path: String, project_path: String) -> Result<Vec<FsEntry>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         validate_path_within(&path, &project_path, true)?;
-        let entries = std::fs::read_dir(&path).map_err(|e| e.to_string())?;
-        let mut result: Vec<FsEntry> = entries
-            .flatten()
-            .filter(|entry| {
-                let p = entry.path();
-                if p.is_dir() {
-                    let name = entry.file_name();
-                    let name_str = name.to_string_lossy();
-                    !IGNORED_DIRS.contains(&name_str.as_ref())
-                } else {
-                    true
-                }
-            })
-            .map(|entry| {
-                let p = entry.path();
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let is_dir = p.is_dir();
-                let extension =
-                    p.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase());
-                FsEntry { name, path: p.to_string_lossy().into_owned(), is_dir, extension, is_gitignored: false }
-            })
-            .collect();
-        result.sort_by(|a, b| match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        });
-
-        // Mark gitignored entries via `git check-ignore --stdin`
-        if !result.is_empty() {
-            let ignored_set: std::collections::HashSet<String> = {
-                use std::io::Write;
-                let mut cmd = std::process::Command::new("git");
-                crate::subprocess::configure_background_command(&mut cmd);
-                cmd.args(["check-ignore", "--stdin"])
-                    .current_dir(&project_path)
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::null());
-                match cmd.spawn() {
-                    Ok(mut child) => {
-                        if let Some(ref mut stdin) = child.stdin {
-                            for entry in &result {
-                                let _ = writeln!(stdin, "{}", entry.path);
-                            }
-                        }
-                        match child.wait_with_output() {
-                            Ok(output) => String::from_utf8_lossy(&output.stdout)
-                                .lines()
-                                .filter(|l| !l.is_empty())
-                                .map(|l| l.to_string())
-                                .collect(),
-                            Err(_) => std::collections::HashSet::new(),
-                        }
-                    }
-                    Err(_) => std::collections::HashSet::new(),
-                }
-            };
-            for entry in &mut result {
-                entry.is_gitignored = ignored_set.contains(&entry.path);
-            }
-        }
-
-        Ok(result)
+        read_dir_entries_blocking(&path, &project_path)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn read_compact_dir_entries(
+    path: String,
+    project_path: String,
+) -> Result<Vec<FsEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_path_within(&path, &project_path, true)?;
+        let entries = read_dir_entries_raw(&path)?;
+        read_compact_dir_entries_blocking(entries, &project_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn read_dir_entries_blocking(path: &str, project_path: &str) -> Result<Vec<FsEntry>, String> {
+    let mut result = read_dir_entries_raw(path)?;
+    mark_gitignored(&mut result, project_path);
+    Ok(result)
+}
+
+fn read_dir_entries_raw(path: &str) -> Result<Vec<FsEntry>, String> {
+    let entries = std::fs::read_dir(path).map_err(|e| e.to_string())?;
+    let mut result: Vec<FsEntry> = entries
+        .flatten()
+        .filter(|entry| {
+            let p = entry.path();
+            if p.is_dir() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                !IGNORED_DIRS.contains(&name_str.as_ref())
+            } else {
+                true
+            }
+        })
+        .map(|entry| {
+            let p = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let is_dir = p.is_dir();
+            let extension = p.extension().and_then(|e| e.to_str()).map(|s| s.to_lowercase());
+            FsEntry {
+                name,
+                path: path_to_string(&p),
+                is_dir,
+                extension,
+                is_gitignored: false,
+            }
+        })
+        .collect();
+    result.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+
+    Ok(result)
+}
+
+fn mark_gitignored(result: &mut [FsEntry], project_path: &str) {
+    if result.is_empty() {
+        return;
+    }
+
+    let paths: Vec<String> = result.iter().map(|entry| entry.path.clone()).collect();
+    let ignored_set = git_ignored_paths(&paths, project_path);
+    for entry in result {
+        entry.is_gitignored = ignored_set.contains(&entry.path);
+    }
+}
+
+fn git_ignored_paths(paths: &[String], project_path: &str) -> std::collections::HashSet<String> {
+    if paths.is_empty() {
+        return std::collections::HashSet::new();
+    }
+
+    use std::io::Write;
+    let mut cmd = std::process::Command::new("git");
+    crate::subprocess::configure_background_command(&mut cmd);
+    cmd.args(["check-ignore", "--stdin"])
+        .current_dir(project_path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    match cmd.spawn() {
+        Ok(mut child) => {
+            if let Some(ref mut stdin) = child.stdin {
+                for path in paths {
+                    let _ = writeln!(stdin, "{}", path);
+                }
+            }
+            match child.wait_with_output() {
+                Ok(output) => String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| l.to_string())
+                    .collect(),
+                Err(_) => std::collections::HashSet::new(),
+            }
+        }
+        Err(_) => std::collections::HashSet::new(),
+    }
+}
+
+struct CompactFsEntry {
+    entry: FsEntry,
+    gitignore_paths: Vec<String>,
+}
+
+fn read_compact_dir_entries_blocking(
+    entries: Vec<FsEntry>,
+    project_path: &str,
+) -> Result<Vec<FsEntry>, String> {
+    let mut compacted: Vec<CompactFsEntry> = entries
+        .into_iter()
+        .map(|entry| {
+            if entry.is_dir {
+                compact_dir_entry(entry)
+            } else {
+                Ok(CompactFsEntry { gitignore_paths: vec![entry.path.clone()], entry })
+            }
+        })
+        .collect::<Result<_, _>>()?;
+
+    let gitignore_paths: Vec<String> = compacted
+        .iter()
+        .flat_map(|entry| entry.gitignore_paths.iter().cloned())
+        .collect();
+    let ignored_set = git_ignored_paths(&gitignore_paths, project_path);
+
+    Ok(compacted
+        .drain(..)
+        .map(|mut compacted_entry| {
+            compacted_entry.entry.is_gitignored = compacted_entry
+                .gitignore_paths
+                .iter()
+                .any(|path| ignored_set.contains(path));
+            compacted_entry.entry
+        })
+        .collect())
+}
+
+fn compact_dir_entry(mut entry: FsEntry) -> Result<CompactFsEntry, String> {
+    let mut names = vec![entry.name.clone()];
+    let mut path = entry.path.clone();
+    let mut gitignore_paths = vec![entry.path.clone()];
+
+    loop {
+        let children = read_dir_entries_raw(&path)?;
+        if children.len() != 1 || !children[0].is_dir {
+            entry.name = names.join("/");
+            entry.path = path;
+            return Ok(CompactFsEntry { entry, gitignore_paths });
+        }
+
+        let Some(child) = children.into_iter().next() else {
+            return Ok(CompactFsEntry { entry, gitignore_paths });
+        };
+        names.push(child.name.clone());
+        path = child.path.clone();
+        gitignore_paths.push(child.path);
+    }
 }
 
 #[tauri::command]
