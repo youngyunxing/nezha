@@ -61,6 +61,10 @@ export function updateNode(
   return changed ? nextItems : items;
 }
 
+function isCompactBridge(children: TreeNode[] | null): children is [TreeNode] {
+  return children !== null && children.length === 1 && children[0].is_dir;
+}
+
 export async function loadTreeNodes(
   path: string,
   previousNodes: TreeNode[],
@@ -103,6 +107,37 @@ export async function loadTreeNodes(
   }
 
   return changed ? nextNodes : previousNodes;
+}
+
+function compactNode(node: TreeNode): TreeNode {
+  if (!node.is_dir || !node.children) return node;
+
+  const chain = [node];
+  let target = node;
+  while (isCompactBridge(target.children)) {
+    target = target.children[0];
+    chain.push(target);
+  }
+
+  const children = target.children ? compactTreeNodes(target.children) : target.children;
+  if (chain.length === 1 && children === target.children) return node;
+
+  return {
+    ...target,
+    name: chain.map((part) => part.name).join("/"),
+    is_gitignored: chain.some((part) => part.is_gitignored),
+    children,
+  };
+}
+
+export function compactTreeNodes(nodes: TreeNode[]): TreeNode[] {
+  let changed = false;
+  const nextNodes = nodes.map((node) => {
+    const nextNode = compactNode(node);
+    if (nextNode !== node) changed = true;
+    return nextNode;
+  });
+  return changed ? nextNodes : nodes;
 }
 
 export function flattenVisible(

@@ -569,7 +569,7 @@ export const panels = {
     textTransform: "uppercase" as const,
     flex: 1,
   },
-  fileExplorerRefreshBtn: {
+  fileExplorerIconButton: {
     background: "none",
     border: "none",
     cursor: "pointer",
@@ -579,6 +579,10 @@ export const panels = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  fileExplorerIconButtonActive: {
+    background: "var(--bg-selected)",
+    color: "var(--accent)",
   },
   fileExplorerRootLabel: {
     display: "flex",

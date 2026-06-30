@@ -9,10 +9,11 @@ import {
 import { useCancellableInvoke } from "../hooks/useCancellableInvoke";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { RotateCcw } from "lucide-react";
+import { ListTree, RotateCcw } from "lucide-react";
 import s from "../styles";
 import { useToast } from "./Toast";
 import { useI18n } from "../i18n";
+import { load, save } from "../utils";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { FileExplorerContextMenu } from "./file-explorer/ContextMenu";
 import { CreateInputRow } from "./file-explorer/CreateInputRow";
@@ -28,6 +29,7 @@ import {
   type TreeNode,
 } from "./file-explorer/types";
 import {
+  compactTreeNodes,
   findNode,
   flattenVisible,
   joinPath,
@@ -36,6 +38,19 @@ import {
   pathSeparator,
   updateNode,
 } from "./file-explorer/treeUtils";
+
+const COMPACT_EMPTY_FOLDERS_KEY = "nezha.fileExplorer.compactEmptyFolders";
+
+function setIconButtonHoverStyle(element: HTMLElement, active: boolean, hovering: boolean) {
+  if (active) {
+    element.style.color = "var(--accent)";
+    element.style.background = "var(--bg-selected)";
+    return;
+  }
+
+  element.style.color = hovering ? "var(--text-primary)" : "var(--text-hint)";
+  element.style.background = hovering ? "var(--bg-hover)" : "none";
+}
 
 export function FileExplorer({
   projectPath,
@@ -54,6 +69,9 @@ export function FileExplorer({
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [compactEmptyFolders, setCompactEmptyFolders] = useState(() =>
+    load(COMPACT_EMPTY_FOLDERS_KEY, false),
+  );
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(500);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -156,9 +174,17 @@ export function FileExplorer({
   }, [nodes]);
 
   const readEntries = useCallback(
-    (path: string) => safeInvoke<FsEntry[]>("read_dir_entries", { path, projectPath }),
-    [projectPath, safeInvoke],
+    (path: string) =>
+      safeInvoke<FsEntry[]>(
+        compactEmptyFolders ? "read_compact_dir_entries" : "read_dir_entries",
+        { path, projectPath },
+      ),
+    [compactEmptyFolders, projectPath, safeInvoke],
   );
+
+  useEffect(() => {
+    save(COMPACT_EMPTY_FOLDERS_KEY, compactEmptyFolders);
+  }, [compactEmptyFolders]);
 
   const refresh = useCallback(
     async (showLoading = false) => {
@@ -219,9 +245,14 @@ export function FileExplorer({
     return () => ro.disconnect();
   }, []);
 
+  const displayNodes = useMemo(
+    () => (compactEmptyFolders ? compactTreeNodes(nodes) : nodes),
+    [compactEmptyFolders, nodes],
+  );
+
   const flat = useMemo(
-    () => flattenVisible(nodes, projectPath, creating),
-    [nodes, projectPath, creating],
+    () => flattenVisible(displayNodes, projectPath, creating),
+    [displayNodes, projectPath, creating],
   );
 
   // The create-input row is rendered outside the virtualized slice (see render block) so its
@@ -589,17 +620,27 @@ export function FileExplorer({
       <div style={s.fileExplorerHeader}>
         <span style={s.fileExplorerHeaderTitle}>{t("file.files")}</span>
         <button
+          style={{
+            ...s.fileExplorerIconButton,
+            ...(compactEmptyFolders ? s.fileExplorerIconButtonActive : null),
+          }}
+          onClick={() => setCompactEmptyFolders((prev) => !prev)}
+          title={t("file.compactEmptyFolders")}
+          aria-label={t("file.compactEmptyFolders")}
+          aria-pressed={compactEmptyFolders}
+          data-active={compactEmptyFolders ? "true" : undefined}
+          onMouseEnter={(e) => setIconButtonHoverStyle(e.currentTarget, compactEmptyFolders, true)}
+          onMouseLeave={(e) => setIconButtonHoverStyle(e.currentTarget, compactEmptyFolders, false)}
+        >
+          <ListTree size={13} />
+        </button>
+        <button
+          style={s.fileExplorerIconButton}
           onClick={() => void refresh()}
           title={t("common.refresh")}
-          style={s.fileExplorerRefreshBtn}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-            (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "var(--text-hint)";
-            (e.currentTarget as HTMLElement).style.background = "none";
-          }}
+          aria-label={t("common.refresh")}
+          onMouseEnter={(e) => setIconButtonHoverStyle(e.currentTarget, false, true)}
+          onMouseLeave={(e) => setIconButtonHoverStyle(e.currentTarget, false, false)}
         >
           <RotateCcw size={13} />
         </button>
