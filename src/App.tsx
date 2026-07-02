@@ -35,8 +35,9 @@ import { quoteFontName } from "./utils/fonts";
 import { WelcomePage } from "./components/WelcomePage";
 import { ProjectPage } from "./components/ProjectPage";
 import { SKILL_HUB_CHANGED_EVENT } from "./components/app-settings/types";
+import { KanbanView, OPEN_KANBAN_VIEW_EVENT } from "./components/KanbanView";
 import { useToast } from "./components/Toast";
-import { isHideWindowShortcut } from "./shortcuts";
+import { isHideWindowShortcut, isToggleKanbanShortcut } from "./shortcuts";
 import { APP_PLATFORM } from "./platform";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
@@ -197,11 +198,19 @@ function normalizeInterruptedTasksOnStartup(
 }
 
 function shouldIgnoreTaskStatusTransition(current: TaskStatus, next: TaskStatus): boolean {
-  return current === "detached" && (next === "running" || next === "input_required");
+  return (
+    current === "detached" &&
+    (next === "running" || next === "input_required" || next === "awaiting_review")
+  );
 }
 
 function isLiveTerminalTaskStatus(status: TaskStatus): boolean {
-  return status === "pending" || status === "running" || status === "input_required";
+  return (
+    status === "pending" ||
+    status === "running" ||
+    status === "input_required" ||
+    status === "awaiting_review"
+  );
 }
 
 function getSystemPrefersDark() {
@@ -293,6 +302,7 @@ function App() {
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
   const [skillHubConfig, setSkillHubConfig] = useState<SkillHubConfig | null>(null);
   const [hubMode, setHubMode] = useState(false);
+  const [showKanban, setShowKanban] = useState(false);
 
   const tm = useTerminalManager();
   const pendingResumeStartsRef = useRef<Record<string, () => void>>({});
@@ -404,6 +414,19 @@ function App() {
     }
     window.addEventListener("keydown", handleHideWindow, true);
     return () => window.removeEventListener("keydown", handleHideWindow, true);
+  }, []);
+
+  useEffect(() => {
+    // Cmd+K (macOS) / Alt+K (其他平台) 切换看板浮层。全平台启用——平台差异由
+    // isToggleKanbanShortcut 内部处理（非 mac 用 Alt 以避开终端 Ctrl+K / Ctrl+Shift+C）。
+    // 捕获阶段拦截，先于 xterm 处理；浮层内的 Esc 关闭仍由 KanbanView 自己负责。
+    function handleToggleKanban(event: KeyboardEvent) {
+      if (!isToggleKanbanShortcut(event, APP_PLATFORM)) return;
+      event.preventDefault();
+      setShowKanban((prev) => !prev);
+    }
+    window.addEventListener("keydown", handleToggleKanban, true);
+    return () => window.removeEventListener("keydown", handleToggleKanban, true);
   }, []);
 
   useEffect(() => {
@@ -1198,7 +1221,9 @@ function App() {
         if (shouldIgnoreTaskStatusTransition(task.status, status)) return task;
 
         const attentionRequestedAt =
-          status === "input_required" ? (extra?.attentionRequestedAt ?? Date.now()) : undefined;
+          status === "input_required" || status === "awaiting_review"
+            ? (extra?.attentionRequestedAt ?? Date.now())
+            : undefined;
 
         if (task.status === status && task.attentionRequestedAt === attentionRequestedAt) {
           return task;
@@ -1296,6 +1321,29 @@ function App() {
     setActiveProject(null);
   }, []);
 
+  // 看板入口在 ProjectRail 底部触发,打开全屏浮层覆盖当前页面。
+  // 不切换 activeProject,关闭浮层后用户回到原先所在的任务上下文。
+  useEffect(() => {
+    const handle = () => setShowKanban(true);
+    window.addEventListener(OPEN_KANBAN_VIEW_EVENT, handle);
+    return () => window.removeEventListener(OPEN_KANBAN_VIEW_EVENT, handle);
+  }, []);
+
+  // 从看板跳转到某个项目（可选定位到具体 task）。关浮层 + 切活动项目（或进入 hub）
+  // + 在该项目的本地视图状态里选中 task。三步必须一起做,任何一步漏掉都会让用户看到
+  // 错位的页面状态。
+  function enterProjectFromKanban(project: Project, taskId?: string) {
+    setShowKanban(false);
+    if (project.id === hubProjectId) {
+      handleEnterSkillHub();
+    } else {
+      handleProjectClick(project);
+    }
+    if (taskId) {
+      updateProjectView(project.id, { selectedTaskId: taskId, isNewTask: false });
+    }
+  }
+
   return (
     <div style={{ ...s.root, position: "relative" }}>
       <div
@@ -1378,6 +1426,20 @@ function App() {
           );
         })}
       </div>
+      {showKanban && (
+        <div style={s.kanbanOverlay}>
+          <KanbanView
+            projects={sortedProjects}
+            tasks={tasks}
+            onClose={() => setShowKanban(false)}
+            onTaskClick={(task) => {
+              const project = projects.find((p) => p.id === task.projectId);
+              if (project) enterProjectFromKanban(project, task.id);
+            }}
+            onProjectClick={(project) => enterProjectFromKanban(project)}
+          />
+        </div>
+      )}
       {!activeProject && (
         <div
           style={{

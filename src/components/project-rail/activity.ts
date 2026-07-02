@@ -25,7 +25,7 @@ export function buildProjectActivityMap(tasks: Task[]): Map<string, ProjectActiv
       activityByProjectId.set(task.projectId, activity);
     }
 
-    if (task.status === "input_required") {
+    if (task.status === "input_required" || task.status === "awaiting_review") {
       activity.attentionCount += 1;
       activity.status = "attention";
     } else if (task.status === "detached" || task.status === "interrupted") {
