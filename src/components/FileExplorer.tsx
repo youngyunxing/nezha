@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useCancellableInvoke } from "../hooks/useCancellableInvoke";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { ListTree, RotateCcw } from "lucide-react";
 import s from "../styles";
@@ -21,7 +22,8 @@ import { FileIcon } from "./file-explorer/FileIcon";
 import { TreeItem } from "./file-explorer/TreeItem";
 import { dispatchFileTreePointerDrag } from "./pathDrop";
 import {
-  AUTO_REFRESH_MS,
+  FALLBACK_REFRESH_MS,
+  FS_CHANGED_EVENT,
   ROW_HEIGHT,
   type ContextMenuState,
   type CreateKind,
@@ -29,11 +31,13 @@ import {
   type TreeNode,
 } from "./file-explorer/types";
 import {
+  collectWatchTargets,
   compactTreeNodes,
   findNode,
   flattenVisible,
   joinPath,
   loadTreeNodes,
+  mergeDirLevel,
   parentPathOf,
   pathSeparator,
   updateNode,
@@ -168,6 +172,10 @@ export function FileExplorer({
   const { safeInvoke, isCancelled } = useCancellableInvoke();
   const nodesRef = useRef<TreeNode[]>([]);
   const refreshIdRef = useRef(0);
+  // 已注册到后端 fs_watcher 的目录集合(项目根 + 可见的已展开目录)。
+  const watchedRef = useRef<Set<string>>(new Set());
+  // 后端 watcher 不可用(平台不支持等)时置 true,回退到固定间隔轮询。
+  const [watcherFailed, setWatcherFailed] = useState(false);
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -208,10 +216,91 @@ export function FileExplorer({
     [isCancelled, projectPath, readEntries],
   );
 
+  /**
+   * 定点刷新单个目录(fs-changed 事件驱动)。fetch 在外、合并放进 setNodes 的
+   * 函数式更新里,保证合并基于最新 state,不会覆盖 await 期间的展开/折叠操作。
+   */
+  const refreshDir = useCallback(
+    async (dirPath: string) => {
+      // 紧凑模式下链路中间目录(name 为 "a/b/c" 的压缩条目的中段)不是树节点;
+      // 向上回退到最近的真实层级整层重拉,让后端重新计算压缩链。
+      let target = dirPath;
+      while (target !== projectPath && !findNode(nodesRef.current, target)) {
+        const parent = parentPathOf(target);
+        if (parent === target) return;
+        target = parent;
+      }
+      try {
+        const entries = await readEntries(target);
+        if (entries === null || isCancelled()) return;
+        if (target === projectPath) {
+          setNodes((prev) => mergeDirLevel(entries, prev));
+          return;
+        }
+        setNodes((prev) =>
+          updateNode(prev, target, (node) => {
+            if (!node.children) return node;
+            const merged = mergeDirLevel(entries, node.children);
+            return merged === node.children ? node : { ...node, children: merged };
+          }),
+        );
+      } catch {
+        // 目录可能刚被删除;父目录的 fs-changed 会把它从树里移除。
+      }
+    },
+    [isCancelled, projectPath, readEntries],
+  );
+
   useEffect(() => {
     if (!active) return;
     void refresh(true);
   }, [active, projectPath, refresh]);
+
+  // 把 watch 集合同步为「项目根 + 可见的已展开目录」:展开即挂 watch,折叠/
+  // 删除/面板隐藏即摘除。后端按引用计数容忍多实例重复注册。
+  useEffect(() => {
+    const targets = active ? collectWatchTargets(nodes, projectPath) : new Set<string>();
+    const watched = watchedRef.current;
+    for (const dir of targets) {
+      if (watched.has(dir)) continue;
+      watched.add(dir);
+      invoke<boolean>("watch_dir", { path: dir, projectPath })
+        .then((ok) => {
+          if (!ok) setWatcherFailed(true);
+        })
+        .catch(() => {
+          watched.delete(dir);
+        });
+    }
+    for (const dir of [...watched]) {
+      if (targets.has(dir)) continue;
+      watched.delete(dir);
+      invoke("unwatch_dir", { path: dir }).catch(() => {});
+    }
+  }, [active, nodes, projectPath]);
+
+  // 卸载时摘除全部 watch,避免后端残留引用计数。
+  useEffect(() => {
+    const watched = watchedRef.current;
+    return () => {
+      for (const dir of watched) {
+        invoke("unwatch_dir", { path: dir }).catch(() => {});
+      }
+      watched.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const unlistenPromise = listen<{ dir: string }>(FS_CHANGED_EVENT, (event) => {
+      // 事件是全局广播;只处理本实例 watch 的目录(其他项目的实例各自过滤)。
+      if (!watchedRef.current.has(event.payload.dir)) return;
+      void refreshDir(event.payload.dir);
+    });
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, [active, refreshDir]);
 
   useEffect(() => {
     if (!active) return;
@@ -221,20 +310,23 @@ export function FileExplorer({
       void refresh();
     };
 
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void refresh();
-    }, AUTO_REFRESH_MS);
+    // 事件驱动为主;固定间隔轮询仅在后端 watcher 不可用时兜底。
+    const timer = watcherFailed
+      ? window.setInterval(() => {
+          if (document.visibilityState !== "visible") return;
+          void refresh();
+        }, FALLBACK_REFRESH_MS)
+      : null;
 
     window.addEventListener("focus", handleVisibilityRefresh);
     document.addEventListener("visibilitychange", handleVisibilityRefresh);
 
     return () => {
-      window.clearInterval(timer);
+      if (timer !== null) window.clearInterval(timer);
       window.removeEventListener("focus", handleVisibilityRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityRefresh);
     };
-  }, [active, refresh]);
+  }, [active, refresh, watcherFailed]);
 
   useEffect(() => {
     const el = scrollRef.current;

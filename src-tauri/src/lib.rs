@@ -11,6 +11,7 @@ mod app_settings;
 mod config;
 mod event_watcher;
 mod fs;
+mod fs_watcher;
 mod git;
 mod hooks;
 mod notification;
@@ -117,6 +118,8 @@ pub fn run() {
             });
             // 启动 hook 事件文件 watcher
             crate::event_watcher::start(app.handle().clone());
+            // 文件树的 fs 事件监听(watch_dir/unwatch_dir 的托管状态与防抖线程)
+            crate::fs_watcher::init(app);
             Ok(())
         })
         .manage(TaskManager {
@@ -158,6 +161,8 @@ pub fn run() {
             pty::kill_shell,
             fs::read_dir_entries,
             fs::read_compact_dir_entries,
+            fs_watcher::watch_dir,
+            fs_watcher::unwatch_dir,
             fs::open_in_system_file_manager,
             fs::read_file_content,
             fs::read_image_preview,

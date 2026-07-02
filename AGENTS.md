@@ -84,7 +84,8 @@ ErrorBoundary  (全局兜底)
 | `pty.rs` | 任务 / Shell 的 PTY 创建/读写、生命周期（`run_task` / `resume_task` / `cancel_task` / `complete_task` / `send_input` / `resize_pty` / `open_shell` / `kill_shell` / `reset_task_process` / `get_active_task_ids`） |
 | `session.rs` | Claude & Codex 的会话文件监听；终端输出兜底提取；`read_session_messages` / `export_session_markdown` |
 | `storage.rs` | 基于文件的持久化（`load_projects` / `save_projects` / `load_project_tasks` / `save_project_tasks`） |
-| `fs.rs` | 文件系统命令（`read_dir_entries` / `read_file_content` / `read_image_preview` / `write_file_content` / `create_file` / `create_directory` / `delete_path` / `list_project_files` / `search_project_files` / `open_in_system_file_manager`） |
+| `fs.rs` | 文件系统命令（`read_dir_entries` / `read_file_content` / `read_image_preview` / `write_file_content` / `create_file` / `create_directory` / `delete_path` / `list_project_files` / `search_project_files` / `open_in_system_file_manager`），gitignore 标灰走进程内 `ignore` crate 匹配 |
+| `fs_watcher.rs` | 文件树的 fs 事件监听（`watch_dir` / `unwatch_dir`）：按「项目根 + 可见展开目录」挂**非递归** watch，防抖合并后按目录 emit `fs-changed`；watcher 不可用时前端回退固定间隔轮询。**禁止改成对项目根递归 watch**——Linux inotify 会给 node_modules 数万子目录各挂一个 watch 撞 `max_user_watches` 上限 |
 | `git.rs` | 完整 Git 集成：状态 / 分支 / 日志 / 差异 / 暂存 / 提交 / 推送 / 拉取 / `generate_commit_message`，以及 worktree 系列（`create_task_worktree` / `merge_task_worktree` / `remove_task_worktree` / `worktree_diff_stats`） |
 | `analytics.rs` | 解析会话 JSONL 获取 token / 工具调用指标（`read_session_metrics`，供 RunningView 轮询） |
 | `config.rs` | 项目级 `.nezha/config.toml` 管理（`init_project_config` / `read_project_config` / `write_project_config` / `read_agent_config_file` / `write_agent_config_file` / `get_agent_config_file_path`） |
