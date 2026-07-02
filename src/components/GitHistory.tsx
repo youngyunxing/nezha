@@ -225,79 +225,34 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
 
   return (
     <div
-      style={{
-        width,
-        flexShrink: 0,
-        background: "var(--bg-sidebar)",
-        borderLeft: "1px solid var(--border-dim)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
+      className="git-history-root"
+      style={{ "--git-history-width": `${width}px` } as React.CSSProperties}
     >
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          borderBottom: "1px solid var(--border-dim)",
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            padding: "0 10px",
-            gap: 4,
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 650, color: "var(--text-primary)", flex: 1 }}>
-            {t("git.history")}
-          </span>
+      <div className="git-history-header">
+        <div className="git-history-titlebar">
+          <span className="git-history-title">{t("git.history")}</span>
 
           <button
+            type="button"
             onClick={handlePull}
             disabled={pulling}
             title={t("git.pull")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 3,
-              padding: "3px 7px",
-              background: "none",
-              border: "1px solid var(--border-dim)",
-              borderRadius: 5,
-              fontSize: 11.5,
-              color: "var(--text-muted)",
-              cursor: pulling ? "not-allowed" : "pointer",
-              opacity: pulling ? 0.6 : 1,
-            }}
+            className="git-history-sync-btn"
           >
             {t("git.pull")} ↓{remoteCounts.behind}
           </button>
           <button
+            type="button"
             onClick={handlePush}
             disabled={pushing}
             title={t("git.push")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 3,
-              padding: "3px 7px",
-              background: pushing ? "var(--primary-action-bg)" : "none",
-              border: `1px solid ${pushing ? "var(--primary-action-bg)" : "var(--border-dim)"}`,
-              borderRadius: 5,
-              fontSize: 11.5,
-              color: pushing ? "var(--primary-action-fg)" : "var(--text-muted)",
-              cursor: pushing ? "not-allowed" : "pointer",
-              transition: "all 0.15s",
-            }}
+            className="git-history-sync-btn"
+            data-busy={pushing}
           >
             {pushing ? (
               <>
-                <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
+                <Loader2 size={11} className="git-history-spin" />
                 {t("git.pushing")}
               </>
             ) : (
@@ -305,83 +260,39 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
             )}
           </button>
           <button
+            type="button"
             onClick={() => refresh()}
             title={t("common.refresh")}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 4,
-              borderRadius: 4,
-              color: "var(--text-hint)",
-              display: "flex",
-              alignItems: "center",
-            }}
+            className="git-history-icon-btn"
           >
             <RefreshCw size={13} />
           </button>
         </div>
 
         {/* Branch selector */}
-        <div ref={branchDropRef} style={{ padding: "0 10px 8px", position: "relative" }}>
+        <div ref={branchDropRef} className="git-history-branch-wrap">
           <button
+            type="button"
             onClick={() => setBranchOpen((o) => !o)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              width: "100%",
-              padding: "5px 8px",
-              background: branchOpen ? "var(--bg-hover)" : "transparent",
-              border: "1px solid var(--border-dim)",
-              borderRadius: 6,
-              cursor: "pointer",
-              color: "var(--text-primary)",
-              fontSize: 12,
-              transition: "background 0.1s",
-            }}
+            className="git-history-branch-trigger"
+            data-open={branchOpen}
+            aria-expanded={branchOpen}
           >
-            <GitBranchIcon size={11} color="var(--text-hint)" style={{ flexShrink: 0 }} />
-            <span
-              style={{
-                flex: 1,
-                textAlign: "left",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                fontWeight: 500,
-              }}
-            >
+            <GitBranchIcon size={11} className="git-history-branch-icon" />
+            <span className="git-history-branch-label">
               {selectedBranch || "…"}
             </span>
             <ChevronDown
               size={11}
-              color="var(--text-hint)"
-              style={{
-                flexShrink: 0,
-                transition: "transform 0.15s",
-                transform: branchOpen ? "rotate(180deg)" : "rotate(0deg)",
-              }}
+              className="git-history-branch-chevron"
+              data-open={branchOpen}
             />
           </button>
 
           {branchOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% - 2px)",
-                left: 10,
-                right: 10,
-                background: "var(--bg-card)",
-                border: "1px solid var(--border-dim)",
-                borderRadius: 7,
-                boxShadow: "var(--shadow-popover)",
-                zIndex: 200,
-                overflow: "hidden",
-              }}
-            >
+            <div className="git-history-branch-menu">
               <div className="branch-popover-search">
-                <Search size={13} color="var(--text-hint)" />
+                <Search size={13} className="git-history-search-icon" />
                 <input
                   autoFocus
                   className="branch-popover-search-input"
@@ -427,70 +338,30 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
       </div>
 
       {/* Search */}
-      <div style={{ padding: "8px 10px 4px", flexShrink: 0 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "5px 9px",
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-dim)",
-            borderRadius: 6,
-          }}
-        >
-          <Search size={12} color="var(--text-hint)" />
+      <div className="git-history-search-shell">
+        <div className="git-history-search-box">
+          <Search size={12} className="git-history-search-icon" />
           <input
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder={t("git.searchCommits")}
-            style={{
-              flex: 1,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "var(--text-primary)",
-              fontSize: 12,
-            }}
+            className="git-history-search-input"
           />
-          <Filter size={12} color="var(--text-hint)" />
+          <Filter size={12} className="git-history-filter-icon" />
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div
-          style={{
-            margin: "0 10px 4px",
-            padding: "6px 10px",
-            background: "var(--danger-surface)",
-            border: "1px solid var(--danger-border)",
-            borderRadius: 6,
-            fontSize: 11.5,
-            color: "var(--danger-fg)",
-          }}
-        >
+        <div className="git-history-error">
           {error}
         </div>
       )}
 
       {/* Commit list */}
-      <div
-        style={{
-          flex: selectedDetail ? "0 0 auto" : 1,
-          overflowY: "auto",
-          maxHeight: selectedDetail ? "50%" : undefined,
-        }}
-      >
+      <div className="git-history-list" data-has-detail={Boolean(selectedDetail)}>
         {loading && commits.length === 0 && (
-          <div
-            style={{
-              padding: "20px 16px",
-              fontSize: 12,
-              color: "var(--text-hint)",
-              textAlign: "center",
-            }}
-          >
+          <div className="git-history-state">
             {t("common.loadingEllipsis")}
           </div>
         )}
@@ -506,14 +377,7 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
           );
         })}
         {!loading && commits.length === 0 && (
-          <div
-            style={{
-              padding: "20px 16px",
-              fontSize: 12,
-              color: "var(--text-hint)",
-              textAlign: "center",
-            }}
-          >
+          <div className="git-history-state">
             {t("git.noCommitsFound")}
           </div>
         )}
@@ -521,15 +385,7 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
 
       {/* Commit detail */}
       {selectedDetail && (
-        <div
-          style={{
-            borderTop: "1px solid var(--border-dim)",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-          }}
-        >
+        <div className="git-history-detail-wrap">
           <CommitDetailPanel
             detail={selectedDetail}
             loading={loadingDetail}
@@ -555,94 +411,48 @@ function CommitRow({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   const hasBranch = commit.refs.some((r) => !r.startsWith("tag:") && !r.includes("HEAD"));
   const branchNames = commit.refs
     .filter((r) => !r.startsWith("tag:") && !r.includes("HEAD ->"))
     .map((r) => r.trim());
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 8,
-        padding: "7px 12px",
-        cursor: "pointer",
-        background: isSelected
-          ? "var(--bg-selected, var(--bg-hover))"
-          : hovered
-            ? "var(--bg-hover)"
-            : "transparent",
-        transition: "background 0.1s",
-        borderLeft: isSelected ? "2px solid var(--accent)" : "2px solid transparent",
-      }}
+      className="git-history-commit-row"
+      data-selected={isSelected}
+      aria-pressed={isSelected}
     >
       {/* Dot indicator */}
-      <div style={{ flexShrink: 0, marginTop: 3 }}>
+      <div className="git-history-commit-dot-wrap">
         <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: isSelected
-              ? "var(--accent)"
-              : hasBranch
-                ? "var(--text-muted)"
-                : "var(--text-hint)",
-            border: isSelected
-              ? "none"
-              : `2px solid ${hasBranch ? "var(--text-muted)" : "var(--border-medium)"}`,
-          }}
+          className="git-history-commit-dot"
+          data-selected={isSelected}
+          data-branch={hasBranch}
         />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontSize: 12.5,
-              fontWeight: 500,
-              color: "var(--text-primary)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
+      <div className="git-history-commit-body">
+        <div className="git-history-commit-title-row">
+          <span className="git-history-commit-message">
             {commit.message}
           </span>
           {branchNames.map((ref) => (
-            <span
-              key={ref}
-              style={{
-                fontSize: 10.5,
-                fontWeight: 600,
-                padding: "1px 6px",
-                borderRadius: 4,
-                background: "var(--bg-hover)",
-                color: "var(--text-muted)",
-                flexShrink: 0,
-                whiteSpace: "nowrap",
-              }}
-            >
+            <span key={ref} className="git-history-ref-chip">
               {ref}
             </span>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 10.5, color: "var(--text-hint)", fontFamily: "var(--font-mono)" }}>
+        <div className="git-history-commit-meta">
+          <span className="git-history-commit-hash">
             {commit.short_hash}
           </span>
-          <span style={{ fontSize: 10.5, color: "var(--text-hint)" }}>{commit.author}</span>
-          <span style={{ fontSize: 10.5, color: "var(--text-hint)" }}>{commit.date}</span>
+          <span>{commit.author}</span>
+          <span>{commit.date}</span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -657,45 +467,26 @@ function BranchOption({
   active: boolean;
   onClick: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 10px",
-        cursor: "pointer",
-        background: hovered || active ? "var(--bg-hover)" : "transparent",
-        transition: "background 0.1s",
-      }}
+      className="git-history-branch-option"
+      data-active={active}
+      aria-selected={active}
     >
       <GitBranchIcon
         size={11}
-        color={active ? "var(--accent)" : "var(--text-hint)"}
-        style={{ flexShrink: 0 }}
+        className="git-history-branch-icon"
       />
-      <span
-        style={{
-          flex: 1,
-          fontSize: 12,
-          color: active ? "var(--accent)" : "var(--text-primary)",
-          fontWeight: active ? 600 : 400,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      <span className="git-history-branch-name">
         {name}
       </span>
       {current && (
-        <span style={{ fontSize: 10, color: "var(--text-hint)", flexShrink: 0 }}>HEAD</span>
+        <span className="git-history-branch-head">HEAD</span>
       )}
-      {active && <Check size={11} color="var(--accent)" style={{ flexShrink: 0 }} />}
-    </div>
+      {active && <Check size={11} className="git-history-branch-icon" />}
+    </button>
   );
 }
 
@@ -713,44 +504,36 @@ function CommitDetailPanel({
 
   if (loading) {
     return (
-      <div style={{ padding: 16, fontSize: 12, color: "var(--text-hint)" }}>
+      <div className="git-history-detail-loading">
         {t("common.loadingEllipsis")}
       </div>
     );
   }
 
   return (
-    <div style={{ overflowY: "auto", flex: 1 }}>
+    <div className="git-history-detail">
       {/* Commit meta */}
-      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border-dim)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-          <GitCommitIcon size={12} color="var(--text-hint)" />
-          <span style={{ fontSize: 11, color: "var(--text-hint)", fontFamily: "var(--font-mono)" }}>
+      <div className="git-history-detail-meta">
+        <div className="git-history-detail-line">
+          <GitCommitIcon size={12} className="git-history-commit-icon" />
+          <span className="git-history-detail-hash">
             {detail.short_hash}
           </span>
-          <span style={{ fontSize: 11, color: "var(--text-hint)" }}>{detail.author}</span>
-          <span style={{ fontSize: 11, color: "var(--text-hint)", marginLeft: "auto" }}>
+          <span className="git-history-detail-muted">{detail.author}</span>
+          <span className="git-history-detail-muted git-history-detail-date">
             {detail.date}
           </span>
         </div>
-        <div
-          style={{
-            fontSize: 12.5,
-            color: "var(--text-primary)",
-            fontWeight: 500,
-            lineHeight: 1.4,
-            marginBottom: 4,
-          }}
-        >
+        <div className="git-history-detail-message">
           {detail.message}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ flex: 1, fontSize: 11, color: "var(--text-hint)" }}>
+        <div className="git-history-detail-stats">
+          <div className="git-history-detail-file-count">
             {t(detail.files.length === 1 ? "common.fileChanged" : "common.filesChanged", {
               count: detail.files.length,
             })}{" "}
-            <span style={{ color: "var(--diff-add-fg)" }}>+{detail.total_additions}</span>{" "}
-            <span style={{ color: "var(--diff-delete-fg)" }}>-{detail.total_deletions}</span>
+            <span className="git-history-add">+{detail.total_additions}</span>{" "}
+            <span className="git-history-delete">-{detail.total_deletions}</span>
           </div>
           <GitFileViewToggle mode={fileViewMode} onChange={setFileViewMode} />
         </div>
