@@ -174,6 +174,10 @@ export function FileExplorer({
   const refreshIdRef = useRef(0);
   // 已注册到后端 fs_watcher 的目录集合(项目根 + 可见的已展开目录)。
   const watchedRef = useRef<Set<string>>(new Set());
+  // 各目录在途的 watch_dir 调用。unwatch 必须排在它之后发出,保证后端引用计数
+  // 严格按「先 +1 后 -1」配对——否则 watch 未落地时 unwatch 先到会空扣,
+  // 随后落地的 watch 变成泄漏,或反过来把其他实例的计数打到 0。
+  const pendingWatchRef = useRef<Map<string, Promise<unknown>>>(new Map());
   // 后端 watcher 不可用(平台不支持等)时置 true,回退到固定间隔轮询。
   const [watcherFailed, setWatcherFailed] = useState(false);
 
@@ -261,30 +265,39 @@ export function FileExplorer({
   useEffect(() => {
     const targets = active ? collectWatchTargets(nodes, projectPath) : new Set<string>();
     const watched = watchedRef.current;
+    const pending = pendingWatchRef.current;
     for (const dir of targets) {
       if (watched.has(dir)) continue;
       watched.add(dir);
-      invoke<boolean>("watch_dir", { path: dir, projectPath })
+      const request = invoke<boolean>("watch_dir", { path: dir, projectPath })
         .then((ok) => {
-          if (!ok) setWatcherFailed(true);
+          if (!ok && watchedRef.current.has(dir)) setWatcherFailed(true);
         })
         .catch(() => {
-          watched.delete(dir);
+          // invoke 本身失败(路径校验等):摘除后待下一次树更新重试。
+          watchedRef.current.delete(dir);
+        })
+        .finally(() => {
+          if (pending.get(dir) === request) pending.delete(dir);
         });
+      pending.set(dir, request);
     }
     for (const dir of [...watched]) {
       if (targets.has(dir)) continue;
       watched.delete(dir);
-      invoke("unwatch_dir", { path: dir }).catch(() => {});
+      const inflight = pending.get(dir) ?? Promise.resolve();
+      void inflight.then(() => invoke("unwatch_dir", { path: dir })).catch(() => {});
     }
   }, [active, nodes, projectPath]);
 
   // 卸载时摘除全部 watch,避免后端残留引用计数。
   useEffect(() => {
     const watched = watchedRef.current;
+    const pending = pendingWatchRef.current;
     return () => {
       for (const dir of watched) {
-        invoke("unwatch_dir", { path: dir }).catch(() => {});
+        const inflight = pending.get(dir) ?? Promise.resolve();
+        void inflight.then(() => invoke("unwatch_dir", { path: dir })).catch(() => {});
       }
       watched.clear();
     };

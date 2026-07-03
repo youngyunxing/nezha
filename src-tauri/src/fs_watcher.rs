@@ -55,12 +55,17 @@ pub fn init(app: &tauri::App) {
             let watched = handler_watched.lock();
             for path in &event.paths {
                 // 非递归 watch 的事件路径要么是被监听目录的直接子项,要么是目录自身。
+                let mut dirty = HashSet::new();
                 if watched.contains_key(path.as_path()) {
-                    let _ = tx.send(path.clone());
-                } else if let Some(parent) = path.parent() {
+                    dirty.insert(path.clone());
+                }
+                if let Some(parent) = path.parent() {
                     if watched.contains_key(parent) {
-                        let _ = tx.send(parent.to_path_buf());
+                        dirty.insert(parent.to_path_buf());
                     }
+                }
+                for dir in dirty {
+                    let _ = tx.send(dir);
                 }
             }
         },
