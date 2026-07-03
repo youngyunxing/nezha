@@ -27,25 +27,11 @@ pub(crate) struct ImagePreviewData {
     byte_length: u64,
 }
 
-const IGNORED_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    ".next",
-    ".nuxt",
-    "dist",
-    "build",
-    "target",
-    "__pycache__",
-    ".cache",
-    "coverage",
-    ".turbo",
-    ".expo",
-    "out",
-    ".output",
-    ".venv",
-    "venv",
-    ".tox",
-];
+/// Directories never shown in the file tree. Build artifacts and dependency dirs
+/// (node_modules, dist, target, …) are intentionally *not* listed here — they are
+/// shown greyed-out via gitignore matching instead, mirroring VS Code's
+/// `files.exclude` default (which only hides VCS metadata).
+const HIDDEN_DIRS: &[&str] = &[".git"];
 
 const MAX_IMAGE_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_FILE_SEARCH_RESULTS: usize = 200;
@@ -64,7 +50,7 @@ fn path_to_string(path: &Path) -> String {
 /// When true, a symlink whose *location* is inside the project but whose target
 /// is outside is also accepted (e.g. a symlinked CLAUDE.md / AGENTS.md). `../`
 /// traversal in the path itself stays rejected in both modes.
-fn validate_path_within(
+pub(crate) fn validate_path_within(
     target: &str,
     allowed_root: &str,
     allow_symlink_escape: bool,
@@ -357,7 +343,7 @@ fn read_dir_entries_raw(path: &str) -> Result<Vec<FsEntry>, String> {
             if p.is_dir() {
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                !IGNORED_DIRS.contains(&name_str.as_ref())
+                !HIDDEN_DIRS.contains(&name_str.as_ref())
             } else {
                 true
             }
@@ -385,108 +371,154 @@ fn read_dir_entries_raw(path: &str) -> Result<Vec<FsEntry>, String> {
     Ok(result)
 }
 
+/// In-process gitignore matcher replacing the previous per-directory-read
+/// `git check-ignore --stdin` subprocess (a spawn per tree refresh per directory).
+///
+/// Semantics: `.gitignore` files from the project root down to the entry's parent
+/// (deepest wins), then `.git/info/exclude`, then the user's global gitignore.
+/// Known divergence from git: a whitelist (`!pattern`) in a deeper file wins here
+/// even when a parent directory is excluded higher up, whereas git never
+/// re-includes below an excluded directory — acceptable for tree colouring.
+struct IgnoreMatcher {
+    project_root: std::path::PathBuf,
+    global: ignore::gitignore::Gitignore,
+    info_exclude: Option<ignore::gitignore::Gitignore>,
+    /// Memoized per-directory `.gitignore` matcher (None = directory has no `.gitignore`).
+    dir_matchers: std::collections::HashMap<
+        std::path::PathBuf,
+        Option<std::rc::Rc<ignore::gitignore::Gitignore>>,
+    >,
+}
+
+impl IgnoreMatcher {
+    fn new(project_path: &str) -> Self {
+        let project_root = std::path::PathBuf::from(project_path);
+        let (global, _) = ignore::gitignore::Gitignore::global();
+        // `.git` is a plain file in worktrees; `is_file()` then fails and we skip, matching git.
+        let exclude_path = project_root.join(".git").join("info").join("exclude");
+        let info_exclude = exclude_path
+            .is_file()
+            .then(|| {
+                let mut builder = ignore::gitignore::GitignoreBuilder::new(&project_root);
+                builder.add(&exclude_path);
+                builder.build().ok()
+            })
+            .flatten();
+        Self {
+            project_root,
+            global,
+            info_exclude,
+            dir_matchers: std::collections::HashMap::new(),
+        }
+    }
+
+    fn matcher_for_dir(&mut self, dir: &Path) -> Option<std::rc::Rc<ignore::gitignore::Gitignore>> {
+        if let Some(cached) = self.dir_matchers.get(dir) {
+            return cached.clone();
+        }
+        let gitignore_path = dir.join(".gitignore");
+        let matcher = gitignore_path
+            .is_file()
+            .then(|| {
+                let mut builder = ignore::gitignore::GitignoreBuilder::new(dir);
+                builder.add(&gitignore_path);
+                builder.build().ok().map(std::rc::Rc::new)
+            })
+            .flatten();
+        self.dir_matchers.insert(dir.to_path_buf(), matcher.clone());
+        matcher
+    }
+
+    fn is_ignored(&mut self, path: &Path, is_dir: bool) -> bool {
+        use ignore::Match;
+
+        let Some(parent) = path.parent() else {
+            return false;
+        };
+        let Ok(rel) = parent.strip_prefix(&self.project_root) else {
+            return false;
+        };
+        let mut dirs = Vec::with_capacity(rel.components().count() + 1);
+        let mut cur = self.project_root.clone();
+        dirs.push(cur.clone());
+        for component in rel.components() {
+            cur.push(component);
+            dirs.push(cur.clone());
+        }
+        for dir in dirs.iter().rev() {
+            if let Some(matcher) = self.matcher_for_dir(dir) {
+                match matcher.matched_path_or_any_parents(path, is_dir) {
+                    Match::Ignore(_) => return true,
+                    Match::Whitelist(_) => return false,
+                    Match::None => {}
+                }
+            }
+        }
+        if let Some(exclude) = &self.info_exclude {
+            match exclude.matched_path_or_any_parents(path, is_dir) {
+                Match::Ignore(_) => return true,
+                Match::Whitelist(_) => return false,
+                Match::None => {}
+            }
+        }
+        // Global gitignore has no root to resolve parents against; basename-style
+        // patterns (the common case, e.g. `.DS_Store`) still match.
+        matches!(self.global.matched(path, is_dir), Match::Ignore(_))
+    }
+}
+
 fn mark_gitignored(result: &mut [FsEntry], project_path: &str) {
     if result.is_empty() {
         return;
     }
-
-    let paths: Vec<String> = result.iter().map(|entry| entry.path.clone()).collect();
-    let ignored_set = git_ignored_paths(&paths, project_path);
+    let mut matcher = IgnoreMatcher::new(project_path);
     for entry in result {
-        entry.is_gitignored = ignored_set.contains(&entry.path);
+        entry.is_gitignored = matcher.is_ignored(Path::new(&entry.path), entry.is_dir);
     }
-}
-
-fn git_ignored_paths(paths: &[String], project_path: &str) -> std::collections::HashSet<String> {
-    if paths.is_empty() {
-        return std::collections::HashSet::new();
-    }
-
-    use std::io::Write;
-    let mut cmd = std::process::Command::new("git");
-    crate::subprocess::configure_background_command(&mut cmd);
-    cmd.args(["check-ignore", "--stdin"])
-        .current_dir(project_path)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
-    match cmd.spawn() {
-        Ok(mut child) => {
-            if let Some(ref mut stdin) = child.stdin {
-                for path in paths {
-                    let _ = writeln!(stdin, "{}", path);
-                }
-            }
-            match child.wait_with_output() {
-                Ok(output) => String::from_utf8_lossy(&output.stdout)
-                    .lines()
-                    .filter(|l| !l.is_empty())
-                    .map(|l| l.to_string())
-                    .collect(),
-                Err(_) => std::collections::HashSet::new(),
-            }
-        }
-        Err(_) => std::collections::HashSet::new(),
-    }
-}
-
-struct CompactFsEntry {
-    entry: FsEntry,
-    gitignore_paths: Vec<String>,
 }
 
 fn read_compact_dir_entries_blocking(
     entries: Vec<FsEntry>,
     project_path: &str,
 ) -> Result<Vec<FsEntry>, String> {
-    let mut compacted: Vec<CompactFsEntry> = entries
+    let mut matcher = IgnoreMatcher::new(project_path);
+    entries
         .into_iter()
-        .map(|entry| {
-            if entry.is_dir {
-                compact_dir_entry(entry)
+        .map(|mut entry| {
+            entry.is_gitignored = matcher.is_ignored(Path::new(&entry.path), entry.is_dir);
+            // Gitignored dirs (node_modules, dist, …) are rendered as plain grey folders;
+            // probing them for single-child chains would mean a readdir per package.
+            if entry.is_dir && !entry.is_gitignored {
+                compact_dir_entry(entry, &mut matcher)
             } else {
-                Ok(CompactFsEntry { gitignore_paths: vec![entry.path.clone()], entry })
+                Ok(entry)
             }
         })
-        .collect::<Result<_, _>>()?;
-
-    let gitignore_paths: Vec<String> = compacted
-        .iter()
-        .flat_map(|entry| entry.gitignore_paths.iter().cloned())
-        .collect();
-    let ignored_set = git_ignored_paths(&gitignore_paths, project_path);
-
-    Ok(compacted
-        .drain(..)
-        .map(|mut compacted_entry| {
-            compacted_entry.entry.is_gitignored = compacted_entry
-                .gitignore_paths
-                .iter()
-                .any(|path| ignored_set.contains(path));
-            compacted_entry.entry
-        })
-        .collect())
+        .collect()
 }
 
-fn compact_dir_entry(mut entry: FsEntry) -> Result<CompactFsEntry, String> {
+fn compact_dir_entry(mut entry: FsEntry, matcher: &mut IgnoreMatcher) -> Result<FsEntry, String> {
     let mut names = vec![entry.name.clone()];
     let mut path = entry.path.clone();
-    let mut gitignore_paths = vec![entry.path.clone()];
 
     loop {
-        let children = read_dir_entries_raw(&path)?;
+        let mut children = read_dir_entries_raw(&path)?;
         if children.len() != 1 || !children[0].is_dir {
             entry.name = names.join("/");
             entry.path = path;
-            return Ok(CompactFsEntry { entry, gitignore_paths });
+            return Ok(entry);
         }
 
-        let Some(child) = children.into_iter().next() else {
-            return Ok(CompactFsEntry { entry, gitignore_paths });
-        };
-        names.push(child.name.clone());
-        path = child.path.clone();
-        gitignore_paths.push(child.path);
+        let child = children.remove(0);
+        // Stop before folding an ignored dir into the chain: the compacted entry is
+        // not gitignored by construction, so an ignored tail must stay a separate node.
+        if matcher.is_ignored(Path::new(&child.path), true) {
+            entry.name = names.join("/");
+            entry.path = path;
+            return Ok(entry);
+        }
+        names.push(child.name);
+        path = child.path;
     }
 }
 
@@ -816,4 +848,51 @@ pub async fn search_project_files(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_project() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("nezha-fs-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn ignore_matcher_marks_entries_and_their_descendants() {
+        let root = temp_project();
+        std::fs::write(root.join(".gitignore"), "node_modules\ndist\n").unwrap();
+        std::fs::create_dir_all(root.join("node_modules").join("pkg")).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+
+        let mut matcher = IgnoreMatcher::new(root.to_str().unwrap());
+        assert!(matcher.is_ignored(&root.join("node_modules"), true));
+        // 目录被忽略 → 其内容一并视为忽略(展开 node_modules 后的层级也要标灰)
+        assert!(matcher.is_ignored(&root.join("node_modules").join("pkg"), true));
+        assert!(!matcher.is_ignored(&root.join("src"), true));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn ignore_matcher_respects_nested_gitignore_and_whitelist() {
+        let root = temp_project();
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join(".gitignore"), "*.log\n").unwrap();
+        std::fs::write(
+            root.join("sub").join(".gitignore"),
+            "!keep.log\ngenerated\n",
+        )
+        .unwrap();
+
+        let mut matcher = IgnoreMatcher::new(root.to_str().unwrap());
+        assert!(matcher.is_ignored(&root.join("sub").join("app.log"), false));
+        // 深层 .gitignore 的白名单覆盖浅层的忽略规则
+        assert!(!matcher.is_ignored(&root.join("sub").join("keep.log"), false));
+        assert!(matcher.is_ignored(&root.join("sub").join("generated"), true));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
 }
