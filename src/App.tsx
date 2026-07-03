@@ -78,12 +78,26 @@ function persistProjects(
   });
 }
 
+// 启动时任务加载失败(文件损坏/IO 错误)的项目。本次会话内禁止对这些项目
+// 覆盖写盘——此时内存 state 是空的,一旦写出去会把磁盘上尚可人工恢复的
+// 数据覆盖或清空。重启后重新加载成功即自动解除。
+const taskPersistBlockedProjectIds = new Set<string>();
+
 function persistProjectTasks(
   projectId: string,
   allTasks: Task[],
   onError: (msg: string) => void,
   formatError: (error: string, projectId: string) => string,
 ) {
+  if (taskPersistBlockedProjectIds.has(projectId)) {
+    onError(
+      formatError(
+        "tasks failed to load at startup; saving is disabled to protect on-disk data (restart to retry)",
+        projectId,
+      ),
+    );
+    return;
+  }
   invoke("save_project_tasks", {
     projectId,
     tasks: allTasks.filter((t) => t.projectId === projectId),
@@ -94,6 +108,7 @@ function persistProjectTasks(
 }
 
 function persistProjectTasksQuietly(projectId: string, allTasks: Task[]) {
+  if (taskPersistBlockedProjectIds.has(projectId)) return;
   invoke("save_project_tasks", {
     projectId,
     tasks: allTasks.filter((t) => t.projectId === projectId),
@@ -519,10 +534,25 @@ function App() {
       }
       setProjects(projectsForState);
 
-      // Load tasks for all known projects
-      const chunks = await Promise.all(
+      // Load tasks for all known projects。allSettled 隔离单项目失败:
+      // 一个 tasks.json 损坏不能让所有项目的任务在 UI 里消失(Promise.all
+      // 整体 reject 曾造成这个假象),失败项目单独提示并禁止写盘。
+      const results = await Promise.allSettled(
         loadedProjects.map((p) => invoke<Task[]>("load_project_tasks", { projectId: p.id })),
       );
+      const chunks: Task[][] = [];
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") {
+          chunks.push(result.value);
+          return;
+        }
+        const project = loadedProjects[i];
+        taskPersistBlockedProjectIds.add(project.id);
+        console.error(result.reason);
+        showToast(
+          t("toast.loadTasksFailed", { name: project.name, error: String(result.reason) }),
+        );
+      });
       const activeTaskIds = new Set(await invoke<string[]>("get_active_task_ids"));
       const { tasks: loadedTasks, changedProjectIds } = normalizeInterruptedTasksOnStartup(
         chunks.flat(),

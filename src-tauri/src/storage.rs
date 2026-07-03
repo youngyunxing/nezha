@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -120,28 +121,44 @@ pub fn load_project_tasks(project_id: String) -> Result<Vec<Task>, String> {
         return Ok(vec![]);
     }
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| e.to_string())
+    serde_json::from_str(&raw).map_err(|parse_err| {
+        // 系统崩溃(掉电/蓝屏)可能留下空或截断的 tasks.json。把损坏文件挪走
+        // 保留人工恢复现场,下次启动即回到正常空列表,不会永久卡死在解析报错上。
+        let secs = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let backup = path.with_file_name(format!("tasks.json.corrupt-{secs}"));
+        match fs::rename(&path, &backup) {
+            Ok(()) => format!(
+                "tasks.json is corrupted ({parse_err}); moved to {} for manual recovery",
+                backup.display()
+            ),
+            Err(mv_err) => {
+                format!("tasks.json is corrupted ({parse_err}); failed to move it aside: {mv_err}")
+            }
+        }
+    })
 }
 
 #[tauri::command]
 pub fn save_project_tasks(project_id: String, tasks: Vec<Task>) -> Result<(), String> {
     ensure_project_dir(&project_id)?;
-    let path = tasks_path(&project_id)?;
-    if tasks.is_empty() {
-        // Remove the file if no tasks left
-        if path.exists() {
-            fs::remove_file(&path).map_err(|e| e.to_string())?;
-        }
-        return Ok(());
-    }
+    // 空列表也照常写 "[]",不删文件:删除路径曾放大过崩溃后的数据丢失
+    // (加载失败 → 前端空 state → 空列表保存把磁盘上仅存的原始文件删掉)。
     let raw = serde_json::to_string_pretty(&tasks).map_err(|e| e.to_string())?;
-    atomic_write(&path, &raw)
+    atomic_write(&tasks_path(&project_id)?, &raw)
 }
 
 // ── Atomic write (write to tmp then rename) ───────────────────────────────────
 
-/// 原子写入：先写入唯一临时文件，再 rename 到目标路径。
+/// 原子写入：先写入唯一临时文件，fsync 落盘后再 rename 到目标路径。
 /// 临时文件名包含 pid + 纳秒时间戳，避免并发写入时临时文件相互覆盖。
+///
+/// rename 只保证元数据原子性,不保证数据先于 rename 落盘——NTFS/APFS 都只
+/// journal 元数据,掉电/系统崩溃时会留下 0 字节或截断的目标文件(Windows 用户
+/// 实际踩过:突然重启后 tasks.json 清空)。rename 前必须 sync_all
+/// (Windows=FlushFileBuffers,macOS=F_FULLFSYNC)强制数据先持久化。
 pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     let uid = format!(
         "{}-{}",
@@ -153,6 +170,17 @@ pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
     );
     let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     let tmp = path.with_file_name(format!(".{file_name}.{uid}.tmp"));
-    fs::write(&tmp, content).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, path).map_err(|e| e.to_string())
+    let write_and_sync = || -> std::io::Result<()> {
+        let mut file = fs::File::create(&tmp)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()
+    };
+    if let Err(e) = write_and_sync() {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        e.to_string()
+    })
 }
