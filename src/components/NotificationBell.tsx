@@ -18,11 +18,6 @@ const notificationBodyStyle: CSSProperties = {
   WebkitBoxOrient: "vertical",
 };
 
-const notificationBodyZhStyle: CSSProperties = {
-  ...notificationBodyStyle,
-  marginTop: 4,
-};
-
 function LevelIcon({ level }: { level: string }) {
   switch (level) {
     case "warning":
@@ -30,7 +25,7 @@ function LevelIcon({ level }: { level: string }) {
     case "error":
       return <AlertCircle size={14} strokeWidth={2} color="var(--danger)" />;
     default:
-      return <Info size={14} strokeWidth={2} color="var(--accent)" />;
+      return <Info size={14} strokeWidth={2} color="var(--text-muted)" />;
   }
 }
 
@@ -41,8 +36,9 @@ function NotificationEntry({
   item: NotificationItem;
   onMarkRead: (id: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [hov, setHov] = useState(false);
+  const body = language === "zh" && item.bodyZh ? item.bodyZh : item.body;
 
   const handleClick = async () => {
     if (!item.isRead) onMarkRead(item.id);
@@ -102,8 +98,7 @@ function NotificationEntry({
             />
           )}
         </div>
-        <div style={notificationBodyStyle}>{item.body}</div>
-        {item.bodyZh && <div style={notificationBodyZhStyle}>{item.bodyZh}</div>}
+        <div style={notificationBodyStyle}>{body}</div>
         <div
           style={{
             fontSize: 10.5,
