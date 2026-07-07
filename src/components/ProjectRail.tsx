@@ -3,7 +3,6 @@ import type { Project, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import {
   RAIL_ITEM_SIZE,
-  RAIL_ITEM_STRIDE,
   railDragPreviewAvatarWrap,
   railDragPreviewStyle,
 } from "../styles/rail-drag";
@@ -21,6 +20,7 @@ import {
   RAIL_SUPPRESS_CLICK_MS,
   type DragOrigin,
   type DragViz,
+  computeRailDropIndex,
   getRailItemTranslateY,
 } from "./project-rail/drag";
 
@@ -117,10 +117,15 @@ export function ProjectRail({
       const container = railContainerRef.current;
       if (!container || !dragOrigin) return;
       const rect = container.getBoundingClientRect();
-      const relativeY = event.clientY - rect.top - RAIL_PADDING_TOP;
-      const rawIndex = Math.round(relativeY / RAIL_ITEM_STRIDE);
-      const visibleLen = railProjectsRef.current.length;
-      const dropIndex = Math.max(0, Math.min(visibleLen, rawIndex));
+      const visible = railProjectsRef.current;
+      const draggedVisibleIdx = visible.findIndex((p) => p.id === dragOrigin.draggedId);
+      const dropIndex = computeRailDropIndex(
+        event.clientX,
+        event.clientY,
+        rect,
+        visible.length,
+        draggedVisibleIdx,
+      );
 
       const nextViz: DragViz = {
         dropIndex,
@@ -130,13 +135,15 @@ export function ProjectRail({
       scheduleDragViz(nextViz);
     }
 
-    // pointerup 后会有 click 派发,dragMovedRef 留给 click 守卫读完再清;
-    // pointercancel / blur 不会派发 click,如果不在此时清,ref 会停在 true 上,
-    // 下次键盘 Tab+Enter 派发的 synthetic click 会被静默吞掉。
-    function handleEnd(clearMovedNow: boolean) {
+    // isAbort = pointercancel / blur:手势被外界打断(OS 接管、窗口失焦),按取消
+    // 处理而不提交——被打断瞬间的 dropIndex 往往不是用户想要的落点。
+    // click 派发语义也随之分叉:pointerup 后会有 click 派发,dragMovedRef 留给
+    // click 守卫读完再清;pointercancel / blur 不会派发 click,如果不在此时清,
+    // ref 会停在 true 上,下次键盘 Tab+Enter 派发的 synthetic click 会被静默吞掉。
+    function handleEnd(isAbort: boolean) {
       const moved = dragMovedRef.current;
       const viz = dragVizRef.current;
-      if (moved && viz && dragOrigin) {
+      if (!isAbort && moved && viz && dragOrigin) {
         const visible = railProjectsRef.current;
         const draggedVisibleIdx = visible.findIndex((p) => p.id === dragOrigin.draggedId);
         const dropIdx = viz.dropIndex;
@@ -169,7 +176,7 @@ export function ProjectRail({
       dragVizRef.current = null;
       setDragViz(null);
       setDragOrigin(null);
-      if (clearMovedNow || !moved || !dragOrigin) {
+      if (isAbort || !moved || !dragOrigin) {
         dragMovedRef.current = false;
       } else {
         if (suppressClickResetTimerRef.current !== null) {
