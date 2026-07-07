@@ -50,6 +50,19 @@ impl TaskManager {
         writers.remove(id);
         children.remove(id);
     }
+
+    /// 退出前终止所有仍在运行的任务/Shell 子进程。
+    /// 托盘「退出」走 `app.exit(0)`(即 `std::process::exit`,不跑 Drop),
+    /// 没有这一步会把正在跑的 claude/codex 子进程留成孤儿,继续占用 CPU / API 额度。
+    /// 先 clone 出 Arc 再逐个 kill,避免持有 `child_handles` 锁期间做阻塞调用。
+    pub(crate) fn kill_all_children(&self) {
+        let children: Vec<_> = self.child_handles.lock().values().cloned().collect();
+        for arc in children {
+            if let Ok(mut child) = arc.lock() {
+                let _ = child.kill();
+            }
+        }
+    }
 }
 
 /// macOS: 把主窗口收起到 Dock(hide 而非退出)。
@@ -99,9 +112,141 @@ fn hide_main_window(window: tauri::Window) {
     let _ = window;
 }
 
+/// 把主窗口重新显示并聚焦(唤回)。
+/// 窗口可能同时处于 hidden + minimized,故先 unminimize 再 show + focus。
+/// Windows: 托盘左键 / 托盘菜单「显示」/ 单实例第二实例唤回都走这里。
+/// macOS: 点 Dock 图标(Reopen)唤回走这里。
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Windows 托盘菜单构建。文案由调用方提供,翻译唯一事实源保持在前端 src/i18n.tsx:
+/// 启动时用英文兜底(见 TRAY_FALLBACK_LABELS),webview 挂载后与语言切换时由
+/// update_tray_menu 命令传入当前语言文案整体重建。
+/// 菜单项 id("show"/"quit")固定不变,事件处理无需随语言调整。
+#[cfg(target_os = "windows")]
+fn build_tray_menu(
+    app: &tauri::AppHandle,
+    show_label: &str,
+    quit_label: &str,
+) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{Menu, MenuItem};
+
+    let show_item = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
+    Menu::with_items(app, &[&show_item, &quit_item])
+}
+
+/// 托盘创建时的兜底文案(英文,与 i18n.tsx 词典缺失时回退 en 的约定一致)。
+/// 后端无法读取 webview localStorage 中的语言偏好,启动时只能兜底;
+/// I18nProvider 挂载后会立即通过 update_tray_menu 覆盖为实际语言,
+/// 兜底文案仅在 webview 加载完成前的短暂窗口(或前端加载失败时)可见。
+#[cfg(target_os = "windows")]
+const TRAY_FALLBACK_LABELS: (&str, &str) = ("Show Nezha", "Quit");
+
+/// 前端在语言初始化/切换时调用(见 src/i18n.tsx 的 language effect),
+/// 用当前语言文案重建 Windows 托盘菜单;其他平台为 no-op。
+/// 文案由前端 t() 词典生成后作为参数传入,Rust 侧不持有 zh/en 翻译。
+/// 原生菜单是线程亲和对象,统一切回主线程重建,不在命令线程直接操作。
+#[tauri::command]
+fn update_tray_menu(app: tauri::AppHandle, show_label: String, quit_label: String) {
+    #[cfg(target_os = "windows")]
+    {
+        let handle = app.clone();
+        let dispatched = app.run_on_main_thread(move || {
+            let Some(tray) = handle.tray_by_id("main") else {
+                // setup_tray 构建失败时托盘不存在(setup 阶段会直接报错),此处无可更新对象。
+                return;
+            };
+            let applied = build_tray_menu(&handle, &show_label, &quit_label)
+                .and_then(|menu| tray.set_menu(Some(menu)));
+            if let Err(_e) = applied {
+                #[cfg(debug_assertions)]
+                eprintln!("[tray] 更新托盘菜单失败: {_e}");
+            }
+        });
+        if let Err(_e) = dispatched {
+            #[cfg(debug_assertions)]
+            eprintln!("[tray] 无法调度到主线程更新托盘菜单: {_e}");
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (app, show_label, quit_label);
+}
+
+/// Windows: 创建系统托盘图标。
+/// 左键点击托盘图标唤回窗口;右键菜单提供「显示/退出」。
+/// 关闭按钮(X)只隐藏窗口(见 on_window_event),真正退出走托盘菜单的「退出」。
+#[cfg(target_os = "windows")]
+fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    use tauri::Manager;
+
+    let menu = build_tray_menu(app, TRAY_FALLBACK_LABELS.0, TRAY_FALLBACK_LABELS.1)?;
+
+    let mut builder = TrayIconBuilder::with_id("main")
+        .tooltip("Nezha")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "quit" => {
+                // 关闭按钮只隐藏窗口,「退出」是关到托盘后的主要退出路径。
+                // app.exit(0) 走 std::process::exit 不跑 Drop,先显式杀掉任务子进程,
+                // 否则正在跑的 claude/codex 会变孤儿。
+                app.state::<TaskManager>().kill_all_children();
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    } else {
+        // icon 缺失时托盘无图标 → 窗口 hide 后通知区几乎不可见、难以找回。
+        // 正常 bundle 里 default_window_icon() 恒为 Some(见 tauri.conf.json icons),
+        // 这里只在异常配置/加载失败时留一条 dev 日志,避免变成静默黑箱。
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "[tray] default_window_icon() 返回 None:托盘将无图标,关到托盘后窗口可能难以找回"
+        );
+    }
+
+    builder.build(app)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Windows: 单实例守卫必须作为第一个插件注册。关闭到托盘后进程仍常驻,用户从开始
+    // 菜单/桌面图标再次打开会启动第二个完整后端实例——两套 fs_watcher/event_watcher/
+    // hook watcher 对同一批 ~/.nezha 文件并发运行,导致通知重复、tasks.json 被
+    // last-writer-wins 写坏。第二个实例通过此回调把已有窗口唤回并聚焦后自动退出。
+    // macOS 由 LaunchServices 天然单实例,无需此守卫。
+    #[cfg(target_os = "windows")]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        show_main_window(app);
+    }));
+
+    builder
         .setup(|app| {
             // 后台预热 login shell 环境，避免第一次启动任务时阻塞
             std::thread::spawn(|| {
@@ -120,6 +265,9 @@ pub fn run() {
             crate::event_watcher::start(app.handle().clone());
             // 文件树的 fs 事件监听(watch_dir/unwatch_dir 的托管状态与防抖线程)
             crate::fs_watcher::init(app);
+            // Windows: 创建系统托盘图标(关闭窗口时收起到托盘,而非退出)
+            #[cfg(target_os = "windows")]
+            setup_tray(app.handle())?;
             Ok(())
         })
         .manage(TaskManager {
@@ -142,13 +290,22 @@ pub fn run() {
                 hide_window_to_dock(window.clone());
                 api.prevent_close();
             }
-            #[cfg(not(target_os = "macos"))]
+            // Windows: 点关闭按钮(X)时隐藏窗口到托盘而非退出;
+            // 从托盘图标左键点击或右键菜单「显示 Nezha」唤回,「退出」才真正结束进程。
+            #[cfg(target_os = "windows")]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
+            // 其他平台(Linux)没有托盘唤回入口,保持默认退出行为,避免窗口隐藏后无法找回。
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             let _ = (window, event);
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             hide_main_window,
+            update_tray_menu,
             pty::run_task,
             pty::resume_task,
             pty::cancel_task,
@@ -246,15 +403,10 @@ pub fn run() {
         .run(|_app_handle, _event| {
             // macOS: 当窗口被 Cmd+W 隐藏（hide）后，点击 Dock 图标会触发 Reopen，
             // 此时没有可见窗口，需要手动把主窗口重新显示并聚焦。
+            // 复用 show_main_window(与托盘唤回同一实现),避免两处唤回逻辑分叉。
             #[cfg(target_os = "macos")]
-            {
-                use tauri::Manager;
-                if let tauri::RunEvent::Reopen { .. } = _event {
-                    if let Some(window) = _app_handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                show_main_window(_app_handle);
             }
         });
 }

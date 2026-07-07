@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 export type AppLanguage = "en" | "zh";
 
@@ -515,6 +516,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "notification.loadingFailed": "Failed to load notifications",
     "notification.unread": "unread",
     "notification.noNotifications": "No notifications",
+    "tray.showApp": "Show Nezha",
+    "tray.quit": "Quit",
     "toolbar.fileExplorer": "File Explorer",
     "toolbar.gitChanges": "Git Changes",
     "toolbar.gitHistory": "Git History",
@@ -1030,6 +1033,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     "notification.loadingFailed": "加载通知失败",
     "notification.unread": "未读",
     "notification.noNotifications": "暂无通知",
+    "tray.showApp": "显示 Nezha",
+    "tray.quit": "退出",
     "toolbar.fileExplorer": "文件浏览器",
     "toolbar.gitChanges": "Git 变更",
     "toolbar.gitHistory": "Git 历史",
@@ -1092,6 +1097,15 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+    // 同步当前语言的托盘菜单文案(Windows)。文案在前端词典生成,保持 i18n.tsx
+    // 是唯一翻译源;Rust 侧只应用文案,不持有 zh/en 字典。
+    // 非 Tauri 环境(单测 jsdom)没有 IPC 桥,直接跳过。
+    if ("__TAURI_INTERNALS__" in window) {
+      invoke("update_tray_menu", {
+        showLabel: translations[language]["tray.showApp"],
+        quitLabel: translations[language]["tray.quit"],
+      }).catch((err) => console.warn("[i18n] update_tray_menu failed:", err));
+    }
   }, [language]);
 
   const t = useCallback(
