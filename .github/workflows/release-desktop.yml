@@ -109,6 +109,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      # 侧载 ConPTY 资源按架构分目录 vendor(见 src-tauri/resources/conpty/README.md),
+      # 而 tauri.windows.conf.json 的 resources glob 无法按构建目标过滤;
+      # 打包前删掉非目标架构目录,避免每个安装包多带一套 ~1.2MB 的无用二进制。
+      # continue-on-error:此步只是包体优化,失败(如杀软扫描锁文件)就回到
+      # "两套都打入"的现状,不值得中断整个 release 构建。
+      - name: Prune non-target ConPTY arch (Windows)
+        if: contains(matrix.target, 'windows')
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $keep = if ("${{ matrix.target }}".StartsWith("aarch64")) { "arm64" } else { "x64" }
+          Get-ChildItem src-tauri/resources/conpty -Directory |
+            Where-Object { $_.Name -ne $keep } |
+            Remove-Item -Recurse -Force
+          Write-Host "保留架构: $keep"
+
       - name: Build ${{ matrix.name }}
         run: pnpm tauri build --target ${{ matrix.target }} ${{ matrix.bundle_args }}
 

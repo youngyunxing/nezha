@@ -6,8 +6,6 @@ import * as Select from "@radix-ui/react-select";
 import { useI18n } from "../../i18n";
 import { APP_PLATFORM } from "../../platform";
 import {
-  DEFAULT_SEND_SHORTCUT,
-  DEFAULT_SHIFT_ENTER_NEWLINE,
   getAltEnterNewlineKeys,
   getKanbanShortcutKeys,
   getNewlineShortcutKeys,
@@ -16,10 +14,9 @@ import {
   normalizeSendShortcut,
   normalizeShiftEnterNewline,
 } from "../../shortcuts";
-import { DEFAULT_TERMINAL_SCROLLBACK } from "../../types";
 import s from "../../styles";
 import { renderShortcutKeys } from "./shared";
-import { APP_SETTINGS_CHANGED_EVENT, type AppSettings } from "./types";
+import { APP_SETTINGS_CHANGED_EVENT, DEFAULT_APP_SETTINGS, type AppSettings } from "./types";
 
 interface ShortcutOption {
   value: string;
@@ -100,14 +97,7 @@ function normalizeSettings(loaded: AppSettings): AppSettings {
 
 export function ShortcutsPanel() {
   const { t } = useI18n();
-  const [settings, setSettings] = useState<AppSettings>({
-    claude_path: "",
-    codex_path: "",
-    send_shortcut: DEFAULT_SEND_SHORTCUT,
-    terminal_shift_enter_newline: DEFAULT_SHIFT_ENTER_NEWLINE,
-    claude_force_default_tui: true,
-    terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
-  });
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

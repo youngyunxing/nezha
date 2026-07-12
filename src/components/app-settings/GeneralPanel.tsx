@@ -1,4 +1,5 @@
-import type React from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronDown, AlertTriangle } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { useI18n, type AppLanguage } from "../../i18n";
@@ -12,7 +13,9 @@ import {
   type TaskDisplayWindow,
   type TerminalScrollback,
 } from "../../types";
+import { APP_PLATFORM } from "../../platform";
 import s from "../../styles";
+import { APP_SETTINGS_CHANGED_EVENT, type AppSettings } from "./types";
 
 export function GeneralPanel({
   taskDisplayWindow,
@@ -31,30 +34,58 @@ export function GeneralPanel({
 }) {
   const { language, setLanguage, t } = useI18n();
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: 12,
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-    marginBottom: 5,
-    display: "block",
+  // 侧载 ConPTY 开关:仅 Windows 可改,其他平台展示为禁用态(让全平台用户
+  // 知道有此能力)。仅后端启动时读取,面板内自包含加载/保存,不经由 App.tsx
+  // 透传 props(其他面板拿到的 AppSettings 由 CHANGED 事件自行刷新)。
+  const isConptyEditable = APP_PLATFORM === "windows";
+  // null = 尚未从后端读到真实值(仅 Windows 需要读):渲染为关闭态,避免磁盘值
+  // 为 false 时先闪一下「开启」。非 Windows 固定展示默认值 true 的禁用态。
+  const [sideloadedConpty, setSideloadedConpty] = useState<boolean | null>(
+    isConptyEditable ? null : true,
+  );
+  // 加载或保存进行中:禁用开关,防止保存期间连点(stale 闭包会连发同一值)
+  const [conptyBusy, setConptyBusy] = useState(isConptyEditable);
+
+  useEffect(() => {
+    if (!isConptyEditable) return;
+    let cancelled = false;
+    invoke<AppSettings>("load_app_settings")
+      .then((loaded) => {
+        if (!cancelled) setSideloadedConpty(loaded.use_sideloaded_conpty);
+      })
+      .catch(() => {
+        // 读取失败按后端默认值展示,保持开关可操作
+        if (!cancelled) setSideloadedConpty(true);
+      })
+      .finally(() => {
+        if (!cancelled) setConptyBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isConptyEditable]);
+
+  const handleSideloadedConptyToggle = async () => {
+    if (!isConptyEditable || conptyBusy || sideloadedConpty === null) return;
+    const enabled = !sideloadedConpty;
+    setSideloadedConpty(enabled);
+    setConptyBusy(true);
+    try {
+      const next = await invoke<AppSettings>("save_use_sideloaded_conpty", { enabled });
+      setSideloadedConpty(next.use_sideloaded_conpty);
+      window.dispatchEvent(new Event(APP_SETTINGS_CHANGED_EVENT));
+    } catch {
+      setSideloadedConpty(!enabled);
+    } finally {
+      setConptyBusy(false);
+    }
   };
 
-  const fieldStyle: React.CSSProperties = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 5,
-  };
-
-  const hintStyle: React.CSSProperties = {
-    fontSize: 11,
-    color: "var(--text-hint)",
-    marginTop: 3,
-  };
-
-  const selectTriggerStyle: React.CSSProperties = {
-    ...s.settingsSelectTrigger,
-    width: 220,
-  };
+  const conptyOn = sideloadedConpty === true;
+  const conptyDisabled = !isConptyEditable || conptyBusy;
+  const conptyHint = isConptyEditable
+    ? t("appSettings.sideloadedConptyHint")
+    : t("appSettings.sideloadedConptyWindowsOnly") + t("appSettings.sideloadedConptyHint");
 
   const languageOptions: Array<{ value: AppLanguage; label: string }> = [
     { value: "en", label: t("language.english") },
@@ -80,19 +111,11 @@ export function GeneralPanel({
   };
 
   return (
-    <div
-      style={{
-        ...s.settingsBody,
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        padding: "20px",
-      }}
-    >
-      <div style={fieldStyle}>
-        <label style={labelStyle}>{t("appSettings.appLanguage")}</label>
+    <div style={s.settingsBodyColumn}>
+      <div style={s.settingField}>
+        <label style={s.settingFieldLabel}>{t("appSettings.appLanguage")}</label>
         <Select.Root value={language} onValueChange={(value) => setLanguage(value as AppLanguage)}>
-          <Select.Trigger aria-label={t("appSettings.appLanguage")} style={selectTriggerStyle}>
+          <Select.Trigger aria-label={t("appSettings.appLanguage")} style={s.settingsSelectTriggerCompact}>
             <Select.Value>{selectedLanguageLabel}</Select.Value>
             <Select.Icon>
               <ChevronDown size={13} strokeWidth={2.2} color="var(--text-hint)" />
@@ -122,18 +145,18 @@ export function GeneralPanel({
             </Select.Content>
           </Select.Portal>
         </Select.Root>
-        <span style={hintStyle}>{t("appSettings.languageHint")}</span>
+        <span style={s.settingFieldHint}>{t("appSettings.languageHint")}</span>
       </div>
 
-      <div style={{ ...fieldStyle, marginTop: 18 }}>
-        <label style={labelStyle}>{t("appSettings.taskDisplayWindow")}</label>
+      <div style={s.settingFieldSpaced}>
+        <label style={s.settingFieldLabel}>{t("appSettings.taskDisplayWindow")}</label>
         <Select.Root
           value={String(taskDisplayWindow)}
           onValueChange={(value) => onTaskDisplayWindowChange(normalizeTaskDisplayWindow(value))}
         >
           <Select.Trigger
             aria-label={t("appSettings.taskDisplayWindow")}
-            style={selectTriggerStyle}
+            style={s.settingsSelectTriggerCompact}
           >
             <Select.Value>{selectedTaskDisplayWindowLabel}</Select.Value>
             <Select.Icon>
@@ -165,11 +188,11 @@ export function GeneralPanel({
             </Select.Content>
           </Select.Portal>
         </Select.Root>
-        <span style={hintStyle}>{t("appSettings.taskDisplayWindowHint")}</span>
+        <span style={s.settingFieldHint}>{t("appSettings.taskDisplayWindowHint")}</span>
       </div>
 
-      <div style={{ ...fieldStyle, marginTop: 18 }}>
-        <label style={labelStyle}>{t("appSettings.attentionBadge")}</label>
+      <div style={s.settingFieldSpaced}>
+        <label style={s.settingFieldLabel}>{t("appSettings.attentionBadge")}</label>
         <button
           type="button"
           role="switch"
@@ -179,25 +202,15 @@ export function GeneralPanel({
           style={s.settingToggle}
         >
           <span style={s.settingToggleLabel}>{t("appSettings.attentionBadgeToggle")}</span>
-          <span
-            style={{
-              ...s.settingToggleTrack,
-              background: attentionBadge ? "var(--primary-action-bg)" : "var(--border-medium)",
-            }}
-          >
-            <span
-              style={{
-                ...s.settingToggleKnob,
-                transform: attentionBadge ? "translateX(16px)" : "translateX(0)",
-              }}
-            />
+          <span style={attentionBadge ? s.settingToggleTrackOn : s.settingToggleTrack}>
+            <span style={attentionBadge ? s.settingToggleKnobOn : s.settingToggleKnob} />
           </span>
         </button>
-        <span style={hintStyle}>{t("appSettings.attentionBadgeHint")}</span>
+        <span style={s.settingFieldHint}>{t("appSettings.attentionBadgeHint")}</span>
       </div>
 
-      <div style={{ ...fieldStyle, marginTop: 18 }}>
-        <label style={labelStyle}>{t("appSettings.terminalScrollback")}</label>
+      <div style={s.settingFieldSpaced}>
+        <label style={s.settingFieldLabel}>{t("appSettings.terminalScrollback")}</label>
         <div style={s.fontSizeControls}>
           <input
             type="number"
@@ -233,13 +246,32 @@ export function GeneralPanel({
           />
           <span style={s.fontSizeUnit}>{t("appSettings.terminalScrollbackUnit")}</span>
         </div>
-        <span style={hintStyle}>{t("appSettings.terminalScrollbackHint")}</span>
+        <span style={s.settingFieldHint}>{t("appSettings.terminalScrollbackHint")}</span>
         {terminalScrollback > 3000 && (
           <div style={s.settingsFieldWarning} role="alert">
             <AlertTriangle size={13} strokeWidth={2} style={s.settingsFieldWarningIcon} />
             <span>{t("appSettings.terminalScrollbackWarning")}</span>
           </div>
         )}
+      </div>
+
+      <div style={s.settingFieldSpaced}>
+        <label style={s.settingFieldLabel}>{t("appSettings.sideloadedConpty")}</label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={conptyOn}
+          aria-label={t("appSettings.sideloadedConpty")}
+          disabled={conptyDisabled}
+          onClick={() => void handleSideloadedConptyToggle()}
+          style={conptyDisabled ? s.settingToggleDisabled : s.settingToggle}
+        >
+          <span style={s.settingToggleLabel}>{t("appSettings.sideloadedConptyToggle")}</span>
+          <span style={conptyOn ? s.settingToggleTrackOn : s.settingToggleTrack}>
+            <span style={conptyOn ? s.settingToggleKnobOn : s.settingToggleKnob} />
+          </span>
+        </button>
+        <span style={s.settingFieldHint}>{conptyHint}</span>
       </div>
     </div>
   );

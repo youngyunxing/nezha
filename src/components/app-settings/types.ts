@@ -1,5 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import type { SendShortcut } from "../../shortcuts";
+import {
+  DEFAULT_SEND_SHORTCUT,
+  DEFAULT_SHIFT_ENTER_NEWLINE,
+  type SendShortcut,
+} from "../../shortcuts";
+import { DEFAULT_TERMINAL_SCROLLBACK } from "../../types";
 
 export type NavKey =
   | "general"
@@ -39,7 +44,23 @@ export interface AppSettings {
   terminal_shift_enter_newline: boolean;
   claude_force_default_tui: boolean;
   terminal_scrollback: number;
+  /** Windows：优先使用随包侧载的新版 ConPTY（重启后生效），其余平台无效果 */
+  use_sideloaded_conpty: boolean;
 }
+
+/**
+ * 后端加载完成前的占位默认值,与 app_settings.rs 各 default_* 保持一致。
+ * 各面板统一引用此常量,新增字段只改这一处(组件内不要再写字面量)。
+ */
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  claude_path: "",
+  codex_path: "",
+  send_shortcut: DEFAULT_SEND_SHORTCUT,
+  terminal_shift_enter_newline: DEFAULT_SHIFT_ENTER_NEWLINE,
+  claude_force_default_tui: true,
+  terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
+  use_sideloaded_conpty: true,
+};
 
 export interface AgentVersions {
   claude_version: string;

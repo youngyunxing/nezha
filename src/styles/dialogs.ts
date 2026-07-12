@@ -1,5 +1,25 @@
 import type React from "react";
 
+// 设置面板 Select 触发器的共用定义:全宽版与固定 220px 紧凑版(GeneralPanel)
+// 仅宽度不同,组件内在两个完整样式间切换,不做行内合并(AGENTS.md 样式规范)。
+const settingsSelectTriggerBase: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  padding: "8px 28px 8px 10px",
+  background: "var(--bg-input)",
+  border: "1px solid var(--border-medium)",
+  borderRadius: 8,
+  color: "var(--text-primary)",
+  fontSize: 13,
+  fontFamily: "var(--font-ui)",
+  cursor: "pointer",
+  textAlign: "left" as const,
+  outline: "none",
+};
+
 export const dialogs = {
   modalOverlay: {
     position: "fixed" as const,
@@ -87,6 +107,15 @@ export const dialogs = {
   },
   settingsContentTitle: { fontSize: 15, fontWeight: 700, color: "var(--text-primary)" },
   settingsBody: { flex: 1, overflowY: "auto" as const, padding: "18px 20px" },
+  // settingsBody 的纵向布局变体(GeneralPanel:字段区块自上而下排列)
+  settingsBodyColumn: {
+    flex: 1,
+    overflowY: "auto" as const,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 0,
+    padding: "20px",
+  },
   shortcutsPanelBody: {
     flex: 1,
     overflowY: "auto" as const,
@@ -185,22 +214,11 @@ export const dialogs = {
     textAlign: "center" as const,
     outline: "none",
   },
-  settingsSelectTrigger: {
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    padding: "8px 28px 8px 10px",
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 8,
-    color: "var(--text-primary)",
-    fontSize: 13,
-    fontFamily: "var(--font-ui)",
-    cursor: "pointer",
-    textAlign: "left" as const,
-    outline: "none",
+  settingsSelectTrigger: settingsSelectTriggerBase,
+  // 通用设置面板的固定宽度下拉(语言 / 任务窗口等)
+  settingsSelectTriggerCompact: {
+    ...settingsSelectTriggerBase,
+    width: 220,
   },
   settingsSelectIcon: {
     flexShrink: 0,

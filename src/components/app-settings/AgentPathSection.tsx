@@ -3,14 +3,15 @@ import type React from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, RefreshCw } from "lucide-react";
 import { useI18n } from "../../i18n";
-import {
-  DEFAULT_SEND_SHORTCUT,
-  DEFAULT_SHIFT_ENTER_NEWLINE,
-  normalizeSendShortcut,
-} from "../../shortcuts";
-import { DEFAULT_TERMINAL_SCROLLBACK } from "../../types";
+import { normalizeSendShortcut } from "../../shortcuts";
 import s from "../../styles";
-import { APP_SETTINGS_CHANGED_EVENT, type AgentVersions, type AppSettings, type AgentKey } from "./types";
+import {
+  APP_SETTINGS_CHANGED_EVENT,
+  DEFAULT_APP_SETTINGS,
+  type AgentVersions,
+  type AppSettings,
+  type AgentKey,
+} from "./types";
 import { getAgentExecutablePlaceholder } from "./shared";
 
 const AUTO_VERSION_DETECT_DELAY_MS = 350;
@@ -69,16 +70,8 @@ export function AgentPathSection({ agentKey }: { agentKey: AgentKey }) {
   const pathLabel = t(agentKey === "claude" ? "appSettings.claudePath" : "appSettings.codexPath");
   const pathHint = t(agentKey === "claude" ? "appSettings.claudePathHint" : "appSettings.codexPathHint");
 
-  const emptySettings: AppSettings = {
-    claude_path: "",
-    codex_path: "",
-    send_shortcut: DEFAULT_SEND_SHORTCUT,
-    terminal_shift_enter_newline: DEFAULT_SHIFT_ENTER_NEWLINE,
-    claude_force_default_tui: true,
-    terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
-  };
-  const [settings, setSettings] = useState<AppSettings>(emptySettings);
-  const [originalSettings, setOriginalSettings] = useState<AppSettings>(emptySettings);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [originalSettings, setOriginalSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [versions, setVersions] = useState<AgentVersions>({
     claude_version: "",
     codex_version: "",
