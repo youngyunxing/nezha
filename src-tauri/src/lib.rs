@@ -55,6 +55,9 @@ impl TaskManager {
     /// 托盘「退出」走 `app.exit(0)`(即 `std::process::exit`,不跑 Drop),
     /// 没有这一步会把正在跑的 claude/codex 子进程留成孤儿,继续占用 CPU / API 额度。
     /// 先 clone 出 Arc 再逐个 kill,避免持有 `child_handles` 锁期间做阻塞调用。
+    /// 唯一调用方是 Windows 托盘的「退出」菜单(setup_tray),与其保持同一 cfg,
+    /// 避免非 Windows 构建报 dead_code。
+    #[cfg(target_os = "windows")]
     pub(crate) fn kill_all_children(&self) {
         let children: Vec<_> = self.child_handles.lock().values().cloned().collect();
         for arc in children {
@@ -248,6 +251,20 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // Windows:后台线程预加载随包侧载的新版 ConPTY(读 settings + LoadLibrary
+            // + 拉起 OpenConsole.exe 自检共 50-150ms,不能阻塞窗口首帧)。
+            // 部分系统内置 ConPTY 不把全屏 TUI 输出送入 scrollback(滚轮无法回滚);
+            // portable-pty 创建 PTY 时会优先复用预加载的 conpty.dll,缺失/失败/
+            // 自检不过均自动回退系统版。pty.rs 在首次 openpty 前通过
+            // wait_conpty_preload() 等待完成,保证时序。详见 platform/windows.rs 与
+            // src-tauri/resources/conpty/README.md。
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    crate::platform::spawn_conpty_preload(resource_dir);
+                }
+            }
             // 后台预热 login shell 环境，避免第一次启动任务时阻塞
             std::thread::spawn(|| {
                 crate::app_settings::get_login_shell_path();
@@ -376,6 +393,7 @@ pub fn run() {
             app_settings::save_send_shortcut,
             app_settings::save_shift_enter_newline,
             app_settings::save_claude_force_default_tui,
+            app_settings::save_use_sideloaded_conpty,
             app_settings::save_terminal_scrollback,
             app_settings::detect_agent_paths,
             app_settings::detect_agent_versions_for_settings,

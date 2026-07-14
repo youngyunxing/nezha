@@ -3,6 +3,51 @@ import type React from "react";
 import { ROW_HEIGHT } from "../components/file-explorer/types";
 
 // 感谢页卡片名称的共用排版，thanksName / thanksNameCopied 仅颜色不同。
+// 通用设置开关(toggle switch)的共用基样式。On / Disabled 变体是完整样式对象,
+// 组件内用三元在模块样式间切换,不做行内合并(AGENTS.md 样式规范)。
+const settingToggleBase: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 14,
+  width: "100%",
+  padding: "12px 14px",
+  borderRadius: 10,
+  border: "1px solid var(--border-dim)",
+  background: "var(--bg-subtle)",
+  cursor: "pointer",
+  textAlign: "left" as const,
+};
+
+const settingToggleTrackBase: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  flexShrink: 0,
+  width: 40,
+  height: 24,
+  borderRadius: 999,
+  padding: 3,
+  boxSizing: "border-box" as const,
+  transition: "background 0.12s",
+};
+
+const settingToggleKnobBase: React.CSSProperties = {
+  display: "block",
+  flexShrink: 0,
+  width: 18,
+  height: 18,
+  borderRadius: 999,
+  background: "var(--control-knob-bg)",
+  transition: "transform 0.12s ease",
+};
+
+// 通用设置字段区块(标签 + 控件 + 提示的纵向布局),Spaced 变体带区块间距。
+const settingFieldBase: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 5,
+};
+
 const thanksNameBase: React.CSSProperties = {
   maxWidth: "100%",
   fontSize: 11.5,
@@ -165,19 +210,31 @@ export const panels = {
     // 必须高于 railAvatarStacked(zIndex:1),否则被抬层的头像盖住
     zIndex: 2,
   },
+  // 通用设置：字段区块(标签 + 控件 + 提示)
+  settingField: settingFieldBase,
+  settingFieldSpaced: {
+    ...settingFieldBase,
+    marginTop: 18,
+  },
+  settingFieldLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--text-secondary)",
+    marginBottom: 5,
+    display: "block",
+  },
+  settingFieldHint: {
+    fontSize: 11,
+    color: "var(--text-hint)",
+    marginTop: 3,
+  },
   // 通用设置：开关(toggle switch)
-  settingToggle: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-    width: "100%",
-    padding: "12px 14px",
-    borderRadius: 10,
-    border: "1px solid var(--border-dim)",
-    background: "var(--bg-subtle)",
-    cursor: "pointer",
-    textAlign: "left" as const,
+  settingToggle: settingToggleBase,
+  // 平台不适用(如 macOS 上的 Windows 专属项)或加载中:置灰且不可点
+  settingToggleDisabled: {
+    ...settingToggleBase,
+    cursor: "default",
+    opacity: 0.55,
   },
   settingToggleLabel: {
     fontSize: 13,
@@ -185,24 +242,17 @@ export const panels = {
     color: "var(--text-primary)",
   },
   settingToggleTrack: {
-    display: "inline-flex",
-    alignItems: "center",
-    flexShrink: 0,
-    width: 40,
-    height: 24,
-    borderRadius: 999,
-    padding: 3,
-    boxSizing: "border-box" as const,
-    transition: "background 0.12s",
+    ...settingToggleTrackBase,
+    background: "var(--border-medium)",
   },
-  settingToggleKnob: {
-    display: "block",
-    flexShrink: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    background: "var(--control-knob-bg)",
-    transition: "transform 0.12s ease",
+  settingToggleTrackOn: {
+    ...settingToggleTrackBase,
+    background: "var(--primary-action-bg)",
+  },
+  settingToggleKnob: settingToggleKnobBase,
+  settingToggleKnobOn: {
+    ...settingToggleKnobBase,
+    transform: "translateX(16px)",
   },
   composeTextarea: {
     display: "block",

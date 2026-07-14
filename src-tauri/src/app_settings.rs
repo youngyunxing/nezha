@@ -34,6 +34,10 @@ fn default_terminal_scrollback() -> u32 {
     1000
 }
 
+fn default_use_sideloaded_conpty() -> bool {
+    true
+}
+
 /// scrollback 必须在 [500, 5000] 之间且为 500 的倍数；越界或非整步则就近 snap。
 fn clamp_terminal_scrollback(value: u32) -> u32 {
     let clamped = value.clamp(500, 5000);
@@ -69,6 +73,11 @@ pub struct AppSettings {
     pub claude_force_default_tui: bool,
     #[serde(default = "default_terminal_scrollback")]
     pub terminal_scrollback: u32,
+    /// Windows：优先使用随包侧载的新版 ConPTY（修复部分系统全屏 TUI 输出不进
+    /// scrollback、滚轮无法回滚）。侧载版异常时的手动兜底：改为 false 并重启，
+    /// 回到系统内置 ConPTY。详见 platform/windows.rs::preload_sideloaded_conpty。
+    #[serde(default = "default_use_sideloaded_conpty")]
+    pub use_sideloaded_conpty: bool,
 }
 
 impl Default for AppSettings {
@@ -80,6 +89,7 @@ impl Default for AppSettings {
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
+            use_sideloaded_conpty: default_use_sideloaded_conpty(),
         }
     }
 }
@@ -129,6 +139,12 @@ fn nezha_dir() -> Result<PathBuf, String> {
 
 fn settings_path() -> Result<PathBuf, String> {
     Ok(nezha_dir()?.join("settings.json"))
+}
+
+/// ConPTY 预加载 crash-loop 标记的唯一路径来源:platform/windows.rs 的预加载
+/// 与下方 save_use_sideloaded_conpty 的清除必须指向同一文件,不要各自拼路径。
+pub(crate) fn conpty_preload_marker_path() -> Option<PathBuf> {
+    nezha_dir().ok().map(|dir| dir.join(".conpty-preload-inflight"))
 }
 
 fn detect_path(binary: &str) -> String {
@@ -339,6 +355,7 @@ fn normalize_settings(settings: AppSettings) -> AppSettings {
         terminal_shift_enter_newline: settings.terminal_shift_enter_newline,
         claude_force_default_tui: settings.claude_force_default_tui,
         terminal_scrollback: clamp_terminal_scrollback(settings.terminal_scrollback),
+        use_sideloaded_conpty: settings.use_sideloaded_conpty,
     }
 }
 
@@ -356,6 +373,7 @@ fn load_settings_unlocked() -> AppSettings {
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
+            use_sideloaded_conpty: default_use_sideloaded_conpty(),
         });
         if let Ok(dir) = nezha_dir() {
             let _ = fs::create_dir_all(&dir);
@@ -517,6 +535,38 @@ pub async fn save_claude_force_default_tui(enabled: bool) -> Result<AppSettings,
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// 侧载 ConPTY 开关(仅 Windows 有实际效果)。切换后需重启应用才会生效:
+/// portable-pty 的 CONPTY 是 lazy_static,进程内首次创建 PTY 后无法再切换实现。
+#[tauri::command]
+pub async fn save_use_sideloaded_conpty(enabled: bool) -> Result<AppSettings, String> {
+    tokio::task::spawn_blocking(move || {
+        // 切换视为显式重试:清除 crash-loop 标记(见 platform/windows.rs),
+        // 让下次启动重新尝试预加载。非 Windows 上文件不存在,删除是无操作。
+        if let Some(marker) = conpty_preload_marker_path() {
+            let _ = fs::remove_file(marker);
+        }
+        let _guard = settings_lock().lock();
+        let mut settings = load_settings_unlocked();
+        settings.use_sideloaded_conpty = enabled;
+
+        let dir = nezha_dir()?;
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = settings_path()?;
+        let normalized = normalize_settings(settings);
+        let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
+        atomic_write(&path, &raw)?;
+        Ok::<AppSettings, String>(normalized)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 读取侧载 ConPTY 开关(仅 Windows 预加载后台线程使用,见 platform/windows.rs)。
+#[cfg(windows)]
+pub(crate) fn use_sideloaded_conpty_enabled() -> bool {
+    load_settings_internal().use_sideloaded_conpty
 }
 
 #[tauri::command]
