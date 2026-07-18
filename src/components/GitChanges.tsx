@@ -12,6 +12,16 @@ import {
 } from "lucide-react";
 import { useCancellableInvoke } from "../hooks/useCancellableInvoke";
 import s from "../styles";
+import {
+  gitChangesCommitButtonStyle,
+  gitChangesCommitInputStyle,
+  gitChangesGenerateButtonStyle,
+  gitChangesHeaderIconStyle,
+  gitChangesPanelStyle,
+  gitChangesSectionActionStyle,
+  gitChangesSectionCountStyle,
+  gitChangesTopSectionStyle,
+} from "../styles/git-diff";
 import { useI18n } from "../i18n";
 import {
   GitFileBrowser,
@@ -28,7 +38,8 @@ interface GitFileChange {
 }
 
 interface Props {
-  projectPath: string;
+  projectRoot: string;
+  repoPath: string;
   currentTaskCreatedAt: number | null;
   onFileSelect: (filePath: string, staged: boolean, label: string) => void;
   width?: number;
@@ -39,13 +50,27 @@ function fileName(path: string): string {
 }
 
 export function GitChanges({
-  projectPath,
+  projectRoot,
+  repoPath,
   currentTaskCreatedAt,
   onFileSelect,
   width = 280,
 }: Props) {
   const { t } = useI18n();
-  const [changes, setChanges] = useState<GitFileChange[]>([]);
+  const repoKey = `${projectRoot}\0${repoPath}`;
+  const activeRepoKeyRef = useRef(repoKey);
+  activeRepoKeyRef.current = repoKey;
+  const refreshSequenceRef = useRef(0);
+  const generateSequenceRef = useRef(0);
+  const commitSequenceRef = useRef(0);
+  const [changeState, setChangeState] = useState<{
+    repoKey: string;
+    changes: GitFileChange[];
+  }>({ repoKey: "", changes: [] });
+  const changes = useMemo(
+    () => (changeState.repoKey === repoKey ? changeState.changes : []),
+    [changeState, repoKey],
+  );
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"task" | "all">("all");
   const [commitMsg, setCommitMsg] = useState("");
@@ -82,24 +107,58 @@ export function GitChanges({
 
   const refresh = useCallback(
     async (options?: { clearError?: boolean }) => {
+      const sequence = ++refreshSequenceRef.current;
       setLoading(true);
       if (options?.clearError !== false) setError(null);
       try {
-        const result = await safeInvoke<GitFileChange[]>("git_status", { projectPath });
-        if (result === null) return; // Component unmounted
-        setChanges(result);
+        const requestRepoKey = repoKey;
+        const result = await safeInvoke<GitFileChange[]>("git_status", {
+          projectPath: projectRoot,
+          repoPath,
+        });
+        if (
+          result === null ||
+          activeRepoKeyRef.current !== requestRepoKey ||
+          refreshSequenceRef.current !== sequence
+        ) {
+          return;
+        }
+        setChangeState({ repoKey: requestRepoKey, changes: result });
       } catch (e) {
-        if (!isCancelled()) setError(String(e));
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === repoKey &&
+          refreshSequenceRef.current === sequence
+        ) {
+          setError(String(e));
+        }
       } finally {
-        if (!isCancelled()) setLoading(false);
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === repoKey &&
+          refreshSequenceRef.current === sequence
+        ) {
+          setLoading(false);
+        }
       }
     },
-    [projectPath, safeInvoke, isCancelled],
+    [projectRoot, repoPath, repoKey, safeInvoke, isCancelled],
   );
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    // 切仓后允许新仓库立即发起操作，并让旧仓库尚未完成的响应失效。
+    generateSequenceRef.current += 1;
+    commitSequenceRef.current += 1;
+    setCommitMsg("");
+    setCommitMsgError(false);
+    setGeneratingMsg(false);
+    setCommitting(false);
+    setError(null);
+  }, [repoKey]);
 
   // "Current Task" tab: files modified after task start
   const taskChanges = useMemo(
@@ -152,9 +211,9 @@ export function GitChanges({
     e.stopPropagation();
     try {
       if (c.staged) {
-        await invoke("git_unstage", { projectPath, filePath: c.path });
+        await invoke("git_unstage", { projectPath: projectRoot, repoPath, filePath: c.path });
       } else {
-        await invoke("git_stage", { projectPath, filePath: c.path });
+        await invoke("git_stage", { projectPath: projectRoot, repoPath, filePath: c.path });
       }
       refresh();
     } catch (err) {
@@ -171,9 +230,17 @@ export function GitChanges({
     try {
       setError(null);
       if (directory.staged) {
-        await invoke("git_unstage_files", { projectPath, filePaths: directory.filePaths });
+        await invoke("git_unstage_files", {
+          projectPath: projectRoot,
+          repoPath,
+          filePaths: directory.filePaths,
+        });
       } else {
-        await invoke("git_stage_files", { projectPath, filePaths: directory.filePaths });
+        await invoke("git_stage_files", {
+          projectPath: projectRoot,
+          repoPath,
+          filePaths: directory.filePaths,
+        });
       }
       refresh();
     } catch (err) {
@@ -184,7 +251,7 @@ export function GitChanges({
   const handleStageAll = async () => {
     try {
       setError(null);
-      await invoke("git_stage_all", { projectPath });
+      await invoke("git_stage_all", { projectPath: projectRoot, repoPath });
       refresh();
     } catch (err) {
       setError(String(err));
@@ -194,7 +261,7 @@ export function GitChanges({
   const handleUnstageAll = async () => {
     try {
       setError(null);
-      await invoke("git_unstage_all", { projectPath });
+      await invoke("git_unstage_all", { projectPath: projectRoot, repoPath });
       refresh();
     } catch (err) {
       setError(String(err));
@@ -218,7 +285,8 @@ export function GitChanges({
     try {
       setError(null);
       await invoke("git_discard_file", {
-        projectPath,
+        projectPath: projectRoot,
+        repoPath,
         filePath: c.path,
         untracked,
       });
@@ -249,7 +317,8 @@ export function GitChanges({
     try {
       setError(null);
       await invoke("git_discard_files", {
-        projectPath,
+        projectPath: projectRoot,
+        repoPath,
         filePaths: directory.filePaths,
         untracked: directory.untracked,
       });
@@ -269,7 +338,7 @@ export function GitChanges({
     if (!ok) return;
     try {
       setError(null);
-      await invoke("git_discard_all", { projectPath });
+      await invoke("git_discard_all", { projectPath: projectRoot, repoPath });
     } catch (err) {
       setError(t("git.discardFailed", { error: String(err) }));
     } finally {
@@ -278,17 +347,40 @@ export function GitChanges({
   };
 
   const handleGenerateMsg = async () => {
+    const requestRepoKey = repoKey;
+    const sequence = ++generateSequenceRef.current;
     setGeneratingMsg(true);
     setError(null);
     try {
-      const msg = await safeInvoke<string>("generate_commit_message", { projectPath });
-      if (msg === null) return; // Component unmounted
+      const msg = await safeInvoke<string>("generate_commit_message", {
+        projectPath: projectRoot,
+        repoPath,
+      });
+      if (
+        msg === null ||
+        activeRepoKeyRef.current !== requestRepoKey ||
+        generateSequenceRef.current !== sequence
+      ) {
+        return;
+      }
       setCommitMsg(msg);
       if (commitMsgError) setCommitMsgError(false);
     } catch (err) {
-      if (!isCancelled()) setError(String(err));
+      if (
+        !isCancelled() &&
+        activeRepoKeyRef.current === requestRepoKey &&
+        generateSequenceRef.current === sequence
+      ) {
+        setError(String(err));
+      }
     } finally {
-      if (!isCancelled()) setGeneratingMsg(false);
+      if (
+        !isCancelled() &&
+        activeRepoKeyRef.current === requestRepoKey &&
+        generateSequenceRef.current === sequence
+      ) {
+        setGeneratingMsg(false);
+      }
     }
   };
 
@@ -297,17 +389,30 @@ export function GitChanges({
       setCommitMsgError(true);
       return;
     }
+    const requestRepoKey = repoKey;
+    const sequence = ++commitSequenceRef.current;
     setCommitMsgError(false);
     setCommitting(true);
     setError(null);
     try {
-      await invoke("git_commit", { projectPath, message: commitMsg.trim() });
+      await invoke("git_commit", {
+        projectPath: projectRoot,
+        repoPath,
+        message: commitMsg.trim(),
+      });
+      if (activeRepoKeyRef.current !== requestRepoKey || commitSequenceRef.current !== sequence) {
+        return;
+      }
       setCommitMsg("");
       refresh();
     } catch (err) {
-      setError(String(err));
+      if (activeRepoKeyRef.current === requestRepoKey && commitSequenceRef.current === sequence) {
+        setError(String(err));
+      }
     } finally {
-      setCommitting(false);
+      if (activeRepoKeyRef.current === requestRepoKey && commitSequenceRef.current === sequence) {
+        setCommitting(false);
+      }
     }
   };
 
@@ -315,45 +420,14 @@ export function GitChanges({
   const allCount = allChanges.length;
 
   return (
-    <div
-      style={{
-        width,
-        flexShrink: 0,
-        background: "var(--bg-sidebar)",
-        borderLeft: "1px solid var(--border-dim)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
+    <div style={gitChangesPanelStyle(width)}>
       {/* Header */}
-      <div
-        style={{
-          height: 48,
-          display: "flex",
-          alignItems: "center",
-          padding: "0 12px",
-          borderBottom: "1px solid var(--border-dim)",
-          flexShrink: 0,
-          gap: 6,
-        }}
-      >
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 650, color: "var(--text-primary)" }}>
-          {t("git.changes")}
-        </span>
+      <div style={s.gitChangesHeader}>
+        <span style={s.gitChangesTitle}>{t("git.changes")}</span>
         <button
           onClick={() => refresh()}
           title={t("common.refresh")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 4,
-            borderRadius: 4,
-            color: "var(--text-hint)",
-            display: "flex",
-            alignItems: "center",
-          }}
+          style={s.gitChangesHeaderIconBtn}
         >
           <RefreshCw size={13} className={loading ? "spin" : ""} />
         </button>
@@ -361,110 +435,41 @@ export function GitChanges({
           onClick={handleDiscardAll}
           disabled={allChanges.length === 0}
           title={t("git.discardAll")}
-          style={
-            allChanges.length === 0
-              ? { ...s.gitChangesHeaderIconBtn, ...s.gitChangesHeaderIconBtnDisabled }
-              : s.gitChangesHeaderIconBtn
-          }
+          style={gitChangesHeaderIconStyle(allChanges.length === 0)}
         >
           <Undo2 size={13} />
         </button>
-        <button
-          title={t("git.filter")}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: 4,
-            borderRadius: 4,
-            color: "var(--text-hint)",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
+        <button title={t("git.filter")} style={s.gitChangesHeaderIconBtn}>
           <Filter size={13} />
         </button>
       </div>
 
       {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "8px 12px 4px",
-          flexShrink: 0,
-        }}
-      >
+      <div style={s.gitChangesTabs}>
         <button
           onClick={() => setTab("task")}
-          style={{
-            padding: "3px 10px",
-            borderRadius: 5,
-            fontSize: 12,
-            fontWeight: tab === "task" ? 600 : 500,
-            border: "none",
-            cursor: "pointer",
-            background: tab === "task" ? "var(--control-selected-bg)" : "none",
-            color: tab === "task" ? "var(--control-selected-fg)" : "var(--text-muted)",
-          }}
+          style={tab === "task" ? s.gitChangesTabActive : s.gitChangesTabInactive}
         >
           {t("git.currentTask")} {taskCount}
         </button>
         <button
           onClick={() => setTab("all")}
-          style={{
-            padding: "3px 10px",
-            borderRadius: 5,
-            fontSize: 12,
-            fontWeight: tab === "all" ? 600 : 500,
-            border: "none",
-            cursor: "pointer",
-            background: tab === "all" ? "var(--control-selected-bg)" : "none",
-            color: tab === "all" ? "var(--control-selected-fg)" : "var(--text-muted)",
-          }}
+          style={tab === "all" ? s.gitChangesTabActive : s.gitChangesTabInactive}
         >
           {t("git.all")} {allCount}
         </button>
-        <div style={{ marginLeft: "auto" }}>
+        <div style={s.gitChangesViewToggleWrap}>
           <GitFileViewToggle mode={fileViewMode} onChange={setFileViewMode} />
         </div>
       </div>
 
       {/* Error */}
-      {error && (
-        <div
-          style={{
-            margin: "0 12px 4px",
-            padding: "6px 10px",
-            background: "var(--danger-surface)",
-            border: "1px solid var(--danger-border)",
-            borderRadius: 6,
-            fontSize: 11.5,
-            color: "var(--danger-fg)",
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div style={s.gitChangesError}>{error}</div>}
 
       {/* File list */}
-      <div
-        ref={fileListScrollRef}
-        onScroll={handleFileListScroll}
-        style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
-      >
+      <div ref={fileListScrollRef} onScroll={handleFileListScroll} style={s.gitChangesFileList}>
         {displayed.length === 0 && !loading && (
-          <div
-            style={{
-              padding: "24px 16px",
-              fontSize: 12,
-              color: "var(--text-hint)",
-              textAlign: "center",
-            }}
-          >
-            {t("git.noChanges")}
-          </div>
+          <div style={s.gitChangesEmpty}>{t("git.noChanges")}</div>
         )}
 
         {/* ── Tracked changes section ── */}
@@ -556,8 +561,8 @@ export function GitChanges({
       </div>
 
       {/* Commit area */}
-      <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border-dim)", flexShrink: 0 }}>
-        <div style={{ position: "relative" }}>
+      <div style={s.gitChangesCommitArea}>
+        <div style={s.gitChangesCommitInputWrap}>
           <textarea
             value={commitMsg}
             onChange={(e) => {
@@ -568,21 +573,7 @@ export function GitChanges({
             onBlur={() => setTextareaFocused(false)}
             placeholder={t("git.commitMessage")}
             rows={3}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              paddingRight: 36,
-              background: "var(--bg-card)",
-              border: `1px solid ${commitMsgError ? "var(--danger-fg)" : textareaFocused ? "var(--control-active-fg)" : "var(--border-medium)"}`,
-              borderRadius: 6,
-              color: "var(--text-primary)",
-              fontSize: 12.5,
-              resize: "none",
-              outline: "none",
-              fontFamily: "var(--font-ui)",
-              boxSizing: "border-box",
-              transition: "border-color 0.15s",
-            }}
+            style={gitChangesCommitInputStyle(commitMsgError, textareaFocused)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleCommit();
             }}
@@ -591,47 +582,17 @@ export function GitChanges({
             onClick={handleGenerateMsg}
             disabled={generatingMsg}
             title={t("git.generateCommitMessage")}
-            style={{
-              position: "absolute",
-              top: 6,
-              right: 6,
-              background: "none",
-              border: "none",
-              cursor: generatingMsg ? "default" : "pointer",
-              padding: 3,
-              borderRadius: 4,
-              color: generatingMsg ? "var(--accent)" : "var(--text-hint)",
-              display: "flex",
-              alignItems: "center",
-              transition: "color 0.15s",
-            }}
+            style={gitChangesGenerateButtonStyle(generatingMsg)}
           >
             <Sparkles size={14} className={generatingMsg ? "spin" : ""} />
           </button>
         </div>
-        {commitMsgError && (
-          <div style={{ fontSize: 11.5, color: "var(--danger-fg)", marginTop: 3, paddingLeft: 2 }}>
-            {t("git.enterCommitMessage")}
-          </div>
-        )}
-        <div style={{ marginTop: 3, display: "flex" }}>
+        {commitMsgError && <div style={s.gitChangesCommitError}>{t("git.enterCommitMessage")}</div>}
+        <div style={s.gitChangesCommitActions}>
           <button
             onClick={handleCommit}
             disabled={committing || generatingMsg}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "5px 12px",
-              background: "var(--primary-action-bg)",
-              color: "var(--primary-action-fg)",
-              border: "none",
-              borderRadius: 6,
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: committing || generatingMsg ? "default" : "pointer",
-              opacity: committing || generatingMsg ? 0.7 : 1,
-            }}
+            style={gitChangesCommitButtonStyle(committing || generatingMsg)}
           >
             <GitCommit size={13} />
             {committing ? t("git.committing") : t("git.commit")}
@@ -660,46 +621,13 @@ function TopSectionHeader({
       onClick={onToggleCollapse}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "8px 10px 6px 8px",
-        cursor: "pointer",
-        background: hovered ? "var(--bg-hover)" : "transparent",
-        transition: "background 0.1s",
-        userSelect: "none",
-      }}
+      style={gitChangesTopSectionStyle(hovered)}
     >
-      <span
-        style={{ color: "var(--text-hint)", display: "flex", alignItems: "center", marginRight: 4 }}
-      >
+      <span style={s.gitChangesTopSectionIcon}>
         {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
       </span>
-      <span
-        style={{
-          flex: 1,
-          fontSize: 12,
-          fontWeight: 650,
-          color: "var(--text-primary)",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: "var(--text-hint)",
-          background: "var(--bg-card)",
-          border: "1px solid var(--border-dim)",
-          borderRadius: 10,
-          padding: "0 6px",
-          minWidth: 18,
-          textAlign: "center",
-        }}
-      >
-        {count}
-      </span>
+      <span style={s.gitChangesTopSectionLabel}>{label}</span>
+      <span style={s.gitChangesTopSectionCount}>{count}</span>
     </div>
   );
 }
@@ -723,28 +651,10 @@ function SectionHeader({
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "6px 8px 2px 12px",
-        fontSize: 11,
-        fontWeight: 700,
-        color: "var(--text-hint)",
-        letterSpacing: 0.4,
-        textTransform: "uppercase",
-      }}
+      style={s.gitChangesSectionHeader}
     >
-      <span style={{ flex: 1 }}>{label}</span>
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: "var(--text-hint)",
-          marginRight: onAction ? 4 : 0,
-        }}
-      >
-        {count}
-      </span>
+      <span style={s.gitChangesSectionLabel}>{label}</span>
+      <span style={gitChangesSectionCountStyle(Boolean(onAction))}>{count}</span>
       {onAction && (
         <button
           onClick={(e) => {
@@ -752,18 +662,7 @@ function SectionHeader({
             onAction();
           }}
           title={actionTitle}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "2px 5px",
-            borderRadius: 4,
-            fontSize: 14,
-            lineHeight: 1,
-            color: hovered ? "var(--text-primary)" : "transparent",
-            transition: "color 0.1s",
-            fontWeight: 600,
-          }}
+          style={gitChangesSectionActionStyle(hovered)}
         >
           {actionIcon}
         </button>

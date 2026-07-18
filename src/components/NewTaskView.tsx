@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TriangleAlert, Sparkles } from "lucide-react";
-import type { Project, AgentType, PermissionMode } from "../types";
+import type { Project, AgentType, PermissionMode, GitRoot } from "../types";
 import type { HookAgentReadiness } from "./app-settings/types";
 import { useToast } from "./Toast";
 import {
@@ -10,11 +10,7 @@ import {
   type CrossProjectRef,
   type MentionItem,
 } from "./new-task/MentionPopover";
-import {
-  PromptEditor,
-  usePromptEditor,
-  type PromptEditorContent,
-} from "./new-task/PromptEditor";
+import { PromptEditor, usePromptEditor, type PromptEditorContent } from "./new-task/PromptEditor";
 import { ImageAttachments } from "./new-task/ImageAttachments";
 import { TextAttachments, type PastedText } from "./new-task/TextAttachments";
 import { AgentPermSelector } from "./new-task/AgentPermSelector";
@@ -67,12 +63,21 @@ function parseCrossProject(search: string, projects: Project[]): CrossProjectRef
 
 export function NewTaskView({
   project,
+  repoPath,
+  roots,
+  onSetRepoPath,
   otherProjects = [],
   onSubmit,
   initialDraft,
   onCacheDraft,
 }: {
   project: Project;
+  /** 当前活动 git 根的绝对路径（单仓库 = project.path，多仓库 = 选中的 sub-repo） */
+  repoPath: string;
+  /** 项目下所有 git 根，用于 worktree 模式下的 sub-repo picker 与校验 */
+  roots: GitRoot[];
+  /** 切换 sub-repo —— 直接代理到全局 useGitRoots.setSelectedRoot，让 BranchBar / Git 面板跟着切 */
+  onSetRepoPath: (path: string) => void;
   otherProjects?: Project[];
   onSubmit: (t: {
     prompt: string;
@@ -102,12 +107,9 @@ export function NewTaskView({
 
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [pastedImages, setPastedImages] = useState<PastedImage[]>(
-    initialDraft?.pastedImages ?? [],
-  );
-  const [pastedTexts, setPastedTexts] = useState<PastedText[]>(
-    initialDraft?.pastedTexts ?? [],
-  );
+  const [pastedImages, setPastedImages] = useState<PastedImage[]>(initialDraft?.pastedImages ?? []);
+  const [initButtonHovered, setInitButtonHovered] = useState(false);
+  const [pastedTexts, setPastedTexts] = useState<PastedText[]>(initialDraft?.pastedTexts ?? []);
   const [isEmpty, setIsEmpty] = useState(
     () =>
       !(initialDraft?.promptHtml ?? "").replace(/<[^>]+>/g, "").trim() &&
@@ -139,9 +141,25 @@ export function NewTaskView({
   // Cache draft on unmount so reopening the new-task view restores work in progress.
   // Cleared after submit to avoid re-restoring the just-sent prompt.
   const submittedRef = useRef(false);
-  const draftDataRef = useRef({ agent, permMode, planMode, pastedImages, pastedTexts, launchMode, baseBranch });
+  const draftDataRef = useRef({
+    agent,
+    permMode,
+    planMode,
+    pastedImages,
+    pastedTexts,
+    launchMode,
+    baseBranch,
+  });
   useEffect(() => {
-    draftDataRef.current = { agent, permMode, planMode, pastedImages, pastedTexts, launchMode, baseBranch };
+    draftDataRef.current = {
+      agent,
+      permMode,
+      planMode,
+      pastedImages,
+      pastedTexts,
+      launchMode,
+      baseBranch,
+    };
   }, [agent, permMode, planMode, pastedImages, pastedTexts, launchMode, baseBranch]);
   useEffect(() => {
     return () => {
@@ -152,7 +170,12 @@ export function NewTaskView({
       }
       const data = draftDataRef.current;
       const editorContent = editorContentRef.current;
-      if (!editorContent.text.trim() && !editorContent.hasChips && data.pastedImages.length === 0 && data.pastedTexts.length === 0) {
+      if (
+        !editorContent.text.trim() &&
+        !editorContent.hasChips &&
+        data.pastedImages.length === 0 &&
+        data.pastedTexts.length === 0
+      ) {
         onCacheDraft(null);
         return;
       }
@@ -263,10 +286,7 @@ export function NewTaskView({
         setAllFiles(files.map(parseFileEntry));
       })
       .catch((e: unknown) => {
-        showToast(
-          t("toast.loadProjectFilesFailed", { error: String(e) }),
-          "warning",
-        );
+        showToast(t("toast.loadProjectFilesFailed", { error: String(e) }), "warning");
       })
       .finally(() => setFilesLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -380,6 +400,18 @@ export function NewTaskView({
       showToast(t("newTask.worktreeMustSend"), "warning");
       return;
     }
+    if (launchMode === "worktree") {
+      // sub-repo 必须落在 roots 中：项目无 git 根（roots = []）或选错路径都拒绝启动。
+      // 单仓库（roots.length === 1）路径自然等于 project.path / 唯一 root，校验通过。
+      const hasValidRepo = roots.length > 0 && roots.some((r) => r.path === repoPath);
+      if (!hasValidRepo) {
+        showToast(
+          roots.length === 0 ? t("newTask.noGitRepoForWorktree") : t("newTask.subRepoRequired"),
+          "warning",
+        );
+        return;
+      }
+    }
     submittedRef.current = true;
     const finalPrompt = planMode && text ? `${text}\n\nPlease use plan mode.` : text;
     onSubmit({
@@ -424,38 +456,30 @@ export function NewTaskView({
     <div style={s.newTaskOuter}>
       {/* Header */}
       <div style={s.newTaskHeader}>
-        <img
-          src={agent === "claude" ? claudeGif : codexGif}
-          alt=""
-          style={s.newTaskClaudeGif}
-        />
+        <img src={agent === "claude" ? claudeGif : codexGif} alt="" style={s.newTaskClaudeGif} />
         <span style={s.newTaskTitle}>{t("newTask.title")}</span>
       </div>
 
       {/* Missing context file warning */}
       {hasMdFile === false && (
         <div style={s.agentMissingMdBanner}>
-          <TriangleAlert size={15} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 1 }} />
+          <TriangleAlert size={15} style={s.agentMissingMdIcon} />
           <div style={s.agentMissingMdBody}>
-            <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--text-secondary)" }}>
-              <span style={{ fontWeight: 650, color: "var(--text-primary)" }}>
-                {t("newTask.instructionsMissing", {
-                  file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
-                }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[0]}
-                <code
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 12,
-                    background: "var(--warning-code-bg)",
-                    padding: "0 4px",
-                    borderRadius: 3,
-                  }}
-                >
+            <div style={s.agentMissingMdText}>
+              <span style={s.agentMissingMdTitle}>
+                {
+                  t("newTask.instructionsMissing", {
+                    file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
+                  }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[0]
+                }
+                <code style={s.agentMissingMdCode}>
                   {agent === "claude" ? "CLAUDE.md" : "AGENTS.md"}
                 </code>{" "}
-                {t("newTask.instructionsMissing", {
-                  file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
-                }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[1]}
+                {
+                  t("newTask.instructionsMissing", {
+                    file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
+                  }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[1]
+                }
               </span>{" "}
               {t("newTask.addInstructions", {
                 file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
@@ -464,14 +488,10 @@ export function NewTaskView({
             </div>
             <button
               type="button"
-              style={s.agentMissingMdInitBtn}
+              style={initButtonHovered ? s.agentMissingMdInitBtnHovered : s.agentMissingMdInitBtn}
               onClick={handleInitializeMd}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--warning-surface)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
+              onMouseEnter={() => setInitButtonHovered(true)}
+              onMouseLeave={() => setInitButtonHovered(false)}
             >
               <Sparkles size={13} strokeWidth={2} />
               {t("newTask.initializeButton")}
@@ -489,7 +509,7 @@ export function NewTaskView({
       )}
 
       {/* Compose card */}
-      <div style={{ ...s.composeCard, position: "relative" }} onPaste={handleEditorPaste}>
+      <div style={s.composeCardRelative} onPaste={handleEditorPaste}>
         {/* Mention dropdown */}
         {mentionSearch !== null && (
           <MentionPopover
@@ -600,11 +620,14 @@ export function NewTaskView({
       {/* Launch mode + base branch (compose card 外、独立一栏) */}
       <div style={s.launchModeBar}>
         <LaunchModeSelector
-          projectPath={project.path}
+          projectRoot={project.path}
+          repoPath={repoPath}
+          roots={roots}
           launchMode={launchMode}
           baseBranch={baseBranch}
           onSetLaunchMode={setLaunchMode}
           onSetBaseBranch={setBaseBranch}
+          onSetRepoPath={onSetRepoPath}
         />
       </div>
     </div>

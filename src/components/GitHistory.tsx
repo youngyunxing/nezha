@@ -12,11 +12,8 @@ import {
   X,
 } from "lucide-react";
 import { useI18n } from "../i18n";
-import {
-  GitFileBrowser,
-  GitFileViewToggle,
-  useGitFileViewMode,
-} from "./git-view/GitFileBrowser";
+import { gitHistoryRootStyle } from "../styles/git-diff";
+import { GitFileBrowser, GitFileViewToggle, useGitFileViewMode } from "./git-view/GitFileBrowser";
 
 interface GitCommit {
   hash: string;
@@ -57,21 +54,45 @@ interface GitBranchInfo {
 }
 
 interface Props {
-  projectPath: string;
+  projectRoot: string;
+  repoPath: string;
   onCommitSelect: (hash: string, message: string) => void;
   onFileClick?: (hash: string, filePath: string, label: string) => void;
   width?: number;
 }
 
-export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 280 }: Props) {
+export function GitHistory({
+  projectRoot,
+  repoPath,
+  onCommitSelect,
+  onFileClick,
+  width = 280,
+}: Props) {
   const { t } = useI18n();
-  const [commits, setCommits] = useState<GitCommit[]>([]);
+  const repoKey = `${projectRoot}\0${repoPath}`;
+  const activeRepoKeyRef = useRef(repoKey);
+  activeRepoKeyRef.current = repoKey;
+  const branchSequenceRef = useRef(0);
+  const refreshSequenceRef = useRef(0);
+  const detailSequenceRef = useRef(0);
+  const [commitState, setCommitState] = useState<{
+    repoKey: string;
+    commits: GitCommit[];
+  }>({ repoKey: "", commits: [] });
+  const commits = commitState.repoKey === repoKey ? commitState.commits : [];
   const [remoteCounts, setRemoteCounts] = useState<GitRemoteCounts>({
     ahead: 0,
     behind: 0,
     branch: "",
   });
-  const [branches, setBranches] = useState<GitBranchInfo[]>([]);
+  const [branchState, setBranchState] = useState<{
+    repoKey: string;
+    branches: GitBranchInfo[];
+  }>({ repoKey: "", branches: [] });
+  const branches = useMemo(
+    () => (branchState.repoKey === repoKey ? branchState.branches : []),
+    [branchState, repoKey],
+  );
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<GitCommitDetail | null>(null);
@@ -105,10 +126,21 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
   }, [branchOpen]);
 
   const loadBranches = useCallback(async () => {
+    const sequence = ++branchSequenceRef.current;
+    const requestRepoKey = repoKey;
     try {
-      const list = await safeInvoke<GitBranchInfo[]>("git_list_branches", { projectPath });
-      if (list === null) return; // Component unmounted
-      setBranches(list);
+      const list = await safeInvoke<GitBranchInfo[]>("git_list_branches", {
+        projectPath: projectRoot,
+        repoPath,
+      });
+      if (
+        list === null ||
+        activeRepoKeyRef.current !== requestRepoKey ||
+        branchSequenceRef.current !== sequence
+      ) {
+        return;
+      }
+      setBranchState({ repoKey: requestRepoKey, branches: list });
       // Set initial branch to current if not yet set
       setSelectedBranch((prev) => {
         if (prev) return prev;
@@ -117,45 +149,68 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
     } catch {
       // ignore
     }
-  }, [projectPath, safeInvoke]);
+  }, [projectRoot, repoPath, repoKey, safeInvoke]);
 
   const refresh = useCallback(
     async (query?: string, branch?: string) => {
+      const sequence = ++refreshSequenceRef.current;
       setLoading(true);
       setError(null);
       const activeBranch = branch ?? selectedBranch;
+      const requestRepoKey = repoKey;
       try {
         const [log, remote] = await Promise.all([
           safeInvoke<GitCommit[]>("git_log", {
-            projectPath,
+            projectPath: projectRoot,
+            repoPath,
             limit: 50,
             search: query ?? searchQuery,
             branch: activeBranch || null,
           }),
           safeInvoke<GitRemoteCounts>("git_remote_counts", {
-            projectPath,
+            projectPath: projectRoot,
+            repoPath,
             branch: activeBranch || null,
           }).catch(() => ({ ahead: 0, behind: 0, branch: "" })),
         ]);
-        if (log === null) return; // Component unmounted
-        setCommits(log);
+        if (
+          log === null ||
+          activeRepoKeyRef.current !== requestRepoKey ||
+          refreshSequenceRef.current !== sequence
+        ) {
+          return;
+        }
+        setCommitState({ repoKey: requestRepoKey, commits: log });
         setRemoteCounts((remote as GitRemoteCounts) ?? { ahead: 0, behind: 0, branch: "" });
       } catch (e) {
-        if (!isCancelled()) setError(String(e));
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === requestRepoKey &&
+          refreshSequenceRef.current === sequence
+        ) {
+          setError(String(e));
+        }
       } finally {
-        if (!isCancelled()) setLoading(false);
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === requestRepoKey &&
+          refreshSequenceRef.current === sequence
+        ) {
+          setLoading(false);
+        }
       }
     },
-    [projectPath, searchQuery, selectedBranch, safeInvoke, isCancelled],
+    [projectRoot, repoPath, repoKey, searchQuery, selectedBranch, safeInvoke, isCancelled],
   );
 
   useEffect(() => {
     setSelectedBranch("");
     setBranchSearch("");
+    setRemoteCounts({ ahead: 0, behind: 0, branch: "" });
     loadBranches();
     setSelectedHash(null);
     setSelectedDetail(null);
-  }, [projectPath, loadBranches]);
+  }, [repoKey, loadBranches]);
 
   useEffect(() => {
     if (selectedBranch !== "") {
@@ -175,30 +230,51 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
 
   const handleSelectCommit = useCallback(
     async (commit: GitCommit) => {
+      const sequence = ++detailSequenceRef.current;
+      const requestRepoKey = repoKey;
       setSelectedHash(commit.hash);
       onCommitSelect(commit.hash, commit.message);
       setLoadingDetail(true);
       try {
         const detail = await safeInvoke<GitCommitDetail>("git_commit_detail", {
-          projectPath,
+          projectPath: projectRoot,
+          repoPath,
           commitHash: commit.hash,
         });
-        if (detail === null) return; // Component unmounted
+        if (
+          detail === null ||
+          activeRepoKeyRef.current !== requestRepoKey ||
+          detailSequenceRef.current !== sequence
+        ) {
+          return;
+        }
         setSelectedDetail(detail);
       } catch {
-        if (!isCancelled()) setSelectedDetail(null);
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === requestRepoKey &&
+          detailSequenceRef.current === sequence
+        ) {
+          setSelectedDetail(null);
+        }
       } finally {
-        if (!isCancelled()) setLoadingDetail(false);
+        if (
+          !isCancelled() &&
+          activeRepoKeyRef.current === requestRepoKey &&
+          detailSequenceRef.current === sequence
+        ) {
+          setLoadingDetail(false);
+        }
       }
     },
-    [projectPath, onCommitSelect, safeInvoke, isCancelled],
+    [projectRoot, repoPath, repoKey, onCommitSelect, safeInvoke, isCancelled],
   );
 
   const handlePull = async () => {
     setPulling(true);
     setError(null);
     try {
-      await safeInvoke("git_pull", { projectPath });
+      await safeInvoke("git_pull", { projectPath: projectRoot, repoPath });
       if (!isCancelled()) refresh();
     } catch (e) {
       if (!isCancelled()) setError(String(e));
@@ -211,7 +287,11 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
     setPushing(true);
     setError(null);
     try {
-      await safeInvoke("git_push", { projectPath, branch: selectedBranch || null });
+      await safeInvoke("git_push", {
+        projectPath: projectRoot,
+        repoPath,
+        branch: selectedBranch || null,
+      });
       if (!isCancelled()) {
         refresh();
         await loadBranches();
@@ -224,10 +304,7 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
   };
 
   return (
-    <div
-      className="git-history-root"
-      style={{ "--git-history-width": `${width}px` } as React.CSSProperties}
-    >
+    <div className="git-history-root" style={gitHistoryRootStyle(width)}>
       {/* Header */}
       <div className="git-history-header">
         <div className="git-history-titlebar">
@@ -256,7 +333,9 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
                 {t("git.pushing")}
               </>
             ) : (
-              <>{t("git.push")} ↑{remoteCounts.ahead}</>
+              <>
+                {t("git.push")} ↑{remoteCounts.ahead}
+              </>
             )}
           </button>
           <button
@@ -279,14 +358,8 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
             aria-expanded={branchOpen}
           >
             <GitBranchIcon size={11} className="git-history-branch-icon" />
-            <span className="git-history-branch-label">
-              {selectedBranch || "…"}
-            </span>
-            <ChevronDown
-              size={11}
-              className="git-history-branch-chevron"
-              data-open={branchOpen}
-            />
+            <span className="git-history-branch-label">{selectedBranch || "…"}</span>
+            <ChevronDown size={11} className="git-history-branch-chevron" data-open={branchOpen} />
           </button>
 
           {branchOpen && (
@@ -327,9 +400,7 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
                   );
                 })}
                 {filteredBranches.length === 0 && (
-                  <div className="branch-popover-empty">
-                    {t("branch.noBranchesFound")}
-                  </div>
+                  <div className="branch-popover-empty">{t("branch.noBranchesFound")}</div>
                 )}
               </div>
             </div>
@@ -352,18 +423,12 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
       </div>
 
       {/* Error */}
-      {error && (
-        <div className="git-history-error">
-          {error}
-        </div>
-      )}
+      {error && <div className="git-history-error">{error}</div>}
 
       {/* Commit list */}
       <div className="git-history-list" data-has-detail={Boolean(selectedDetail)}>
         {loading && commits.length === 0 && (
-          <div className="git-history-state">
-            {t("common.loadingEllipsis")}
-          </div>
+          <div className="git-history-state">{t("common.loadingEllipsis")}</div>
         )}
         {commits.map((commit) => {
           const isSelected = commit.hash === selectedHash;
@@ -377,9 +442,7 @@ export function GitHistory({ projectPath, onCommitSelect, onFileClick, width = 2
           );
         })}
         {!loading && commits.length === 0 && (
-          <div className="git-history-state">
-            {t("git.noCommitsFound")}
-          </div>
+          <div className="git-history-state">{t("git.noCommitsFound")}</div>
         )}
       </div>
 
@@ -435,9 +498,7 @@ function CommitRow({
 
       <div className="git-history-commit-body">
         <div className="git-history-commit-title-row">
-          <span className="git-history-commit-message">
-            {commit.message}
-          </span>
+          <span className="git-history-commit-message">{commit.message}</span>
           {branchNames.map((ref) => (
             <span key={ref} className="git-history-ref-chip">
               {ref}
@@ -445,9 +506,7 @@ function CommitRow({
           ))}
         </div>
         <div className="git-history-commit-meta">
-          <span className="git-history-commit-hash">
-            {commit.short_hash}
-          </span>
+          <span className="git-history-commit-hash">{commit.short_hash}</span>
           <span>{commit.author}</span>
           <span>{commit.date}</span>
         </div>
@@ -475,16 +534,9 @@ function BranchOption({
       data-active={active}
       aria-selected={active}
     >
-      <GitBranchIcon
-        size={11}
-        className="git-history-branch-icon"
-      />
-      <span className="git-history-branch-name">
-        {name}
-      </span>
-      {current && (
-        <span className="git-history-branch-head">HEAD</span>
-      )}
+      <GitBranchIcon size={11} className="git-history-branch-icon" />
+      <span className="git-history-branch-name">{name}</span>
+      {current && <span className="git-history-branch-head">HEAD</span>}
       {active && <Check size={11} className="git-history-branch-icon" />}
     </button>
   );
@@ -503,11 +555,7 @@ function CommitDetailPanel({
   const [fileViewMode, setFileViewMode] = useGitFileViewMode();
 
   if (loading) {
-    return (
-      <div className="git-history-detail-loading">
-        {t("common.loadingEllipsis")}
-      </div>
-    );
+    return <div className="git-history-detail-loading">{t("common.loadingEllipsis")}</div>;
   }
 
   return (
@@ -516,17 +564,11 @@ function CommitDetailPanel({
       <div className="git-history-detail-meta">
         <div className="git-history-detail-line">
           <GitCommitIcon size={12} className="git-history-commit-icon" />
-          <span className="git-history-detail-hash">
-            {detail.short_hash}
-          </span>
+          <span className="git-history-detail-hash">{detail.short_hash}</span>
           <span className="git-history-detail-muted">{detail.author}</span>
-          <span className="git-history-detail-muted git-history-detail-date">
-            {detail.date}
-          </span>
+          <span className="git-history-detail-muted git-history-detail-date">{detail.date}</span>
         </div>
-        <div className="git-history-detail-message">
-          {detail.message}
-        </div>
+        <div className="git-history-detail-message">{detail.message}</div>
         <div className="git-history-detail-stats">
           <div className="git-history-detail-file-count">
             {t(detail.files.length === 1 ? "common.fileChanged" : "common.filesChanged", {
