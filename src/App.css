@@ -1,6 +1,7 @@
 @import "./styles/themes.css";
 @import "./styles/font-selector.css";
 @import "./styles/git-history.css";
+@import "./styles/layout.css";
 
 /* ── Reset ─────────────────────────────────────────────────────── */
 *,
@@ -350,10 +351,16 @@ body {
   border-radius: 999px;
   background: var(--xterm-scrollbar-thumb) !important;
   opacity: 0;
-  transition: opacity 140ms ease-out, background 140ms ease-out;
+  transition:
+    opacity 140ms ease-out,
+    background 140ms ease-out;
 }
 
-.nezha-xterm-host.nezha-xterm-scrolling .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider,
+.nezha-xterm-host.nezha-xterm-scrolling
+  .xterm
+  .xterm-scrollable-element
+  > .scrollbar.vertical
+  > .slider,
 .nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:hover,
 .nezha-xterm-host .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
   opacity: 1;
