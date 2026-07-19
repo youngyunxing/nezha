@@ -1,16 +1,5 @@
 import { useState, useMemo } from "react";
-import {
-  Search,
-  FolderOpen,
-  GitBranch,
-  Layers,
-  Plus,
-  Trash2,
-  Clock,
-  Blocks,
-  Pin,
-  PinOff,
-} from "lucide-react";
+import { Search, FolderOpen, Layers, Plus, Clock, Blocks } from "lucide-react";
 import type {
   Project,
   Task,
@@ -22,12 +11,12 @@ import type {
   FontFamily,
   SkillHubConfig,
 } from "../types";
-import { getAvatarGradient, shortenPath } from "../utils";
-import { ProjectAvatar } from "./ProjectAvatar";
+import type { ProjectRenameResult } from "../projectName";
 import { SidebarFooterActions } from "./SidebarFooterActions";
 import { OPEN_APP_SETTINGS_EVENT } from "./app-settings/types";
 import { TimelineView } from "./TimelineView";
 import { SkillHubView } from "./skill-hub/SkillHubView";
+import { ProjectListItem } from "./welcome/ProjectListItem";
 import { useI18n, pluralKey } from "../i18n";
 import s from "../styles";
 
@@ -45,18 +34,16 @@ function SidebarItem({
   onClick?: () => void;
 }) {
   return (
-    <div
-      style={{
-        ...s.sidebarItem,
-        background: active ? "var(--bg-selected)" : "transparent",
-        color: active ? "var(--text-primary)" : "var(--text-muted)",
-      }}
+    <button
+      type="button"
+      className="welcome-sidebar-item"
+      data-active={Boolean(active)}
       onClick={onClick}
     >
-      <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>
-      <span style={{ marginLeft: 10, fontSize: 13, fontWeight: active ? 600 : 500 }}>{label}</span>
+      <span className="welcome-sidebar-item-icon">{icon}</span>
+      <span className="welcome-sidebar-item-label">{label}</span>
       {meta && <span style={s.sidebarItemMeta}>{meta}</span>}
-    </div>
+    </button>
   );
 }
 
@@ -64,19 +51,15 @@ function WelcomeEmpty({ hasProjects, onOpen }: { hasProjects: boolean; onOpen: (
   const { t } = useI18n();
   return (
     <div style={s.emptyState}>
-      <div style={{ marginBottom: 14, opacity: 0.4 }}>
+      <div className="welcome-empty-icon">
         <FolderOpen size={40} strokeWidth={1.2} color="var(--text-hint)" />
       </div>
-      <div
-        style={{ fontSize: 14, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 6 }}
-      >
+      <div className="welcome-empty-title">
         {hasProjects ? t("welcome.noMatchingProjects") : t("welcome.noProjectsYet")}
       </div>
       {!hasProjects && (
         <>
-          <div style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 20 }}>
-            {t("welcome.openLocalRepo")}
-          </div>
+          <div className="welcome-empty-description">{t("welcome.openLocalRepo")}</div>
           <button style={s.emptyOpenBtn} onClick={onOpen}>
             <FolderOpen size={14} strokeWidth={2} />
             {t("welcome.openProjectFolder")}
@@ -95,6 +78,7 @@ export function WelcomePage({
   onProjectClick,
   onDeleteProject,
   onToggleProjectHidden,
+  onRenameProject,
   themeVariant,
   themeMode,
   systemPrefersDark,
@@ -122,6 +106,7 @@ export function WelcomePage({
   onProjectClick: (p: Project) => void;
   onDeleteProject: (projectId: string) => void;
   onToggleProjectHidden: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
   themeVariant: ThemeVariant;
   themeMode: ThemeMode;
   systemPrefersDark: boolean;
@@ -144,8 +129,6 @@ export function WelcomePage({
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [hov, setHov] = useState<string | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
   const [view, setView] = useState<"projects" | "timeline" | "skills">("projects");
 
   const filtered = useMemo(() => {
@@ -233,33 +216,23 @@ export function WelcomePage({
             config={skillHubConfig}
             allProjects={projects}
             onEnterSkillHub={onEnterSkillHub}
-            onOpenAppSettings={() =>
-              window.dispatchEvent(new CustomEvent(OPEN_APP_SETTINGS_EVENT))
-            }
+            onOpenAppSettings={() => window.dispatchEvent(new CustomEvent(OPEN_APP_SETTINGS_EVENT))}
           />
         ) : (
           <div style={s.welcomePane}>
             <div style={s.searchRow}>
-              <div
-                style={{
-                  ...s.searchBox,
-                  borderColor: searchFocused ? "var(--border-focus)" : "var(--border-medium)",
-                  boxShadow: searchFocused ? "0 0 0 3px var(--accent-subtle)" : "none",
-                }}
-              >
+              <div className="welcome-search-box">
                 <Search
                   size={15}
                   strokeWidth={1.9}
                   color="var(--text-muted)"
-                  style={{ flexShrink: 0 }}
+                  className="welcome-search-icon"
                 />
                 <input
                   style={s.searchInput}
                   placeholder={t("welcome.searchProjects")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
                   autoFocus
                 />
               </div>
@@ -277,12 +250,26 @@ export function WelcomePage({
                 <div style={s.projectSectionTitle}>{t("welcome.projects")}</div>
                 <div style={s.projectSectionCaption}>
                   {query.trim()
-                    ? t(pluralKey("welcome.resultCount", "welcome.resultCountPlural", filtered.length), {
-                        count: filtered.length,
-                      })
-                    : t(pluralKey("welcome.projectCount", "welcome.projectCountPlural", projects.length), {
-                        count: projects.length,
-                      })}
+                    ? t(
+                        pluralKey(
+                          "welcome.resultCount",
+                          "welcome.resultCountPlural",
+                          filtered.length,
+                        ),
+                        {
+                          count: filtered.length,
+                        },
+                      )
+                    : t(
+                        pluralKey(
+                          "welcome.projectCount",
+                          "welcome.projectCountPlural",
+                          projects.length,
+                        ),
+                        {
+                          count: projects.length,
+                        },
+                      )}
                 </div>
               </div>
             </div>
@@ -291,107 +278,16 @@ export function WelcomePage({
               {filtered.length === 0 ? (
                 <WelcomeEmpty hasProjects={projects.length > 0} onOpen={onOpen} />
               ) : (
-                filtered.map((p) => {
-                  const [from] = getAvatarGradient(p.name);
-                  return (
-                    <button
-                      key={p.id}
-                      style={{
-                        ...s.projectItem,
-                        background: hov === p.id ? "var(--bg-hover)" : "transparent",
-                        borderColor: hov === p.id ? "var(--border-medium)" : "transparent",
-                      }}
-                      onMouseEnter={() => setHov(p.id)}
-                      onMouseLeave={() => setHov(null)}
-                      onClick={() => onProjectClick(p)}
-                    >
-                      <ProjectAvatar
-                        name={p.name}
-                        size={34}
-                        style={{ boxShadow: hov === p.id ? `0 10px 18px ${from}26` : "none" }}
-                      />
-
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={s.projectName}>{p.name}</div>
-                        <div style={s.projectMeta}>{shortenPath(p.path)}</div>
-                      </div>
-
-                      {p.branch ? (
-                        <span style={s.branchBadge}>
-                          <GitBranch size={10} strokeWidth={2} />
-                          {p.branch}
-                        </span>
-                      ) : (
-                        <span style={s.projectTag}>{t("welcome.local")}</span>
-                      )}
-
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        style={{
-                          ...s.projectPinBtn,
-                          ...(p.hiddenFromRail
-                            ? s.projectPinBtnHidden
-                            : s.projectPinBtnPinned),
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleProjectHidden(p.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Enter" && e.key !== " ") return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onToggleProjectHidden(p.id);
-                        }}
-                        title={
-                          p.hiddenFromRail
-                            ? t("welcome.pinToRail")
-                            : t("welcome.unpinFromRail")
-                        }
-                      >
-                        {p.hiddenFromRail ? (
-                          <PinOff size={11} strokeWidth={2} />
-                        ) : (
-                          <Pin size={11} strokeWidth={2} />
-                        )}
-                        {p.hiddenFromRail
-                          ? t("welcome.notPinnedToRail")
-                          : t("welcome.pinnedToRail")}
-                      </span>
-
-                      <button
-                        style={{
-                          marginLeft: 8,
-                          padding: "4px 6px",
-                          background: "transparent",
-                          border: "none",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          color: "var(--text-muted)",
-                          display: "flex",
-                          alignItems: "center",
-                          opacity: hov === p.id ? 1 : 0,
-                          transition: "opacity 0.15s, color 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color =
-                            "var(--danger)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.color = "var(--text-muted)";
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteProject(p.id);
-                        }}
-                        title={t("welcome.deleteProject")}
-                      >
-                        <Trash2 size={14} strokeWidth={1.8} />
-                      </button>
-                    </button>
-                  );
-                })
+                filtered.map((project) => (
+                  <ProjectListItem
+                    key={project.id}
+                    project={project}
+                    onOpen={() => onProjectClick(project)}
+                    onDelete={() => onDeleteProject(project.id)}
+                    onToggleHidden={() => onToggleProjectHidden(project.id)}
+                    onRename={(name) => onRenameProject(project.id, name)}
+                  />
+                ))
               )}
             </div>
           </div>

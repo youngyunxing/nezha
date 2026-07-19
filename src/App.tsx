@@ -39,6 +39,11 @@ import { useTerminalManager } from "./hooks/useTerminalManager";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import { useI18n } from "./i18n";
 import {
+  normalizeProjectNameInput,
+  validateProjectName,
+  type ProjectRenameResult,
+} from "./projectName";
+import {
   DARK_THEME_STORAGE_KEY,
   getNextThemeMode,
   getPreferredDarkTheme,
@@ -63,15 +68,19 @@ function deriveProjectName(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
-function persistProjects(
+async function persistProjects(
   projects: Project[],
   onError: (msg: string) => void,
   formatError: (error: string) => string,
-) {
-  invoke("save_projects", { projects }).catch((e: unknown) => {
+): Promise<boolean> {
+  try {
+    await invoke("save_projects", { projects });
+    return true;
+  } catch (e: unknown) {
     console.error(e);
     onError(formatError(String(e)));
-  });
+    return false;
+  }
 }
 
 // 启动时任务加载失败(文件损坏/IO 错误)的项目。本次会话内禁止对这些项目
@@ -1297,6 +1306,35 @@ function App() {
     });
   }
 
+  async function handleRenameProject(
+    projectId: string,
+    rawName: string,
+  ): Promise<ProjectRenameResult> {
+    const normalizedName = normalizeProjectNameInput(rawName);
+    const current = projects.find((project) => project.id === projectId);
+    if (current?.name === normalizedName) return { ok: true, name: current.name };
+
+    const renameableProjects = projects.filter(
+      (project) => project.id !== skillHubConfig?.hubProjectId,
+    );
+    const result = validateProjectName(rawName, renameableProjects, projectId);
+    if (!result.ok) return result;
+
+    const next = projects.map((project) =>
+      project.id === projectId ? { ...project, name: result.name } : project,
+    );
+    const saved = await persistProjects(next, showToast, formatSaveProjectsError);
+    if (!saved) return { ok: false, error: "save_failed" };
+
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === projectId ? { ...project, name: result.name } : project,
+      ),
+    );
+
+    return result;
+  }
+
   // 拖拽结束时一次性提交新顺序;beforeId === null 表示拖到 visible 末尾。
   // visibleIds 来自 ProjectRail 内部过滤后的 railProjects(去 hiddenFromRail/hub),
   // src/dst 必须在这个子集里算,否则会无声打乱隐藏项的相对位置。
@@ -1550,6 +1588,7 @@ function App() {
             onProjectClick={handleProjectClick}
             onDeleteProject={handleDeleteProject}
             onToggleProjectHidden={handleToggleProjectHidden}
+            onRenameProject={handleRenameProject}
             skillHubConfig={skillHubConfig}
             onEnterSkillHub={handleEnterSkillHub}
             themeVariant={themeVariant}

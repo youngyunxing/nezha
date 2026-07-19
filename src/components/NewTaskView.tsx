@@ -16,6 +16,7 @@ import { TextAttachments, type PastedText } from "./new-task/TextAttachments";
 import { AgentPermSelector } from "./new-task/AgentPermSelector";
 import { LaunchModeSelector, type LaunchMode } from "./new-task/LaunchModeSelector";
 import { useI18n } from "../i18n";
+import { findProjectByName } from "../projectName";
 import { APP_PLATFORM } from "../platform";
 import {
   DEFAULT_SEND_SHORTCUT,
@@ -57,7 +58,7 @@ function parseCrossProject(search: string, projects: Project[]): CrossProjectRef
   const slashIdx = search.indexOf("/");
   if (slashIdx < 0) return null;
   const prefix = search.substring(0, slashIdx);
-  const match = projects.find((p) => p.name.toLowerCase() === prefix.toLowerCase());
+  const match = findProjectByName(projects, prefix);
   return match ? { id: match.id, path: match.path, name: match.name } : null;
 }
 
