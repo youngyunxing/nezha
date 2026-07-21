@@ -34,6 +34,7 @@ export function ProjectRailActions({
 
       <button
         title={t("project.showAllProjects")}
+        data-rail-drawer-toggle=""
         onClick={onToggleDrawer}
         onMouseEnter={() => setExpandHov(true)}
         onMouseLeave={() => setExpandHov(false)}

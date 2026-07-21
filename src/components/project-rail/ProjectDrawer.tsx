@@ -34,9 +34,13 @@ export function ProjectDrawer({
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+      const target = e.target as Node;
+      if (!drawerRef.current || drawerRef.current.contains(target)) return;
+      // 展开/收起按钮在抽屉外:mousedown 若在此处先 onClose,随后按钮 click 的
+      // setDrawerOpen((v) => !v) 会把刚关掉的抽屉再次打开,表现为"收不起来"。
+      // 点在该按钮上时跳过 outside-close,关闭交给按钮自己的 onClick。
+      if (target instanceof Element && target.closest("[data-rail-drawer-toggle]")) return;
+      onClose();
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
