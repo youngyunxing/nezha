@@ -1,5 +1,7 @@
 import type { Terminal } from "@xterm/xterm";
+import { invoke } from "@tauri-apps/api/core";
 import { APP_PLATFORM } from "../platform";
+import { APP_SETTINGS_CHANGED_EVENT } from "./app-settings/types";
 
 /** Threshold below which we use the fast synchronous path. */
 const FAST_PATH_MAX_LINES = 200;
@@ -145,6 +147,7 @@ export async function smartCopy(terminal: Terminal): Promise<boolean> {
     await navigator.clipboard.writeText(text);
   } catch {
     // Fallback for older WebView or permission denial
+    const prevFocus = document.activeElement;
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.style.position = "fixed";
@@ -153,9 +156,81 @@ export async function smartCopy(terminal: Terminal): Promise<boolean> {
     textarea.select();
     document.execCommand("copy");
     document.body.removeChild(textarea);
+    // textarea.select() 抢走了焦点，归还给原持有者（终端 textarea 或别处输入框）。
+    if (prevFocus instanceof HTMLElement && prevFocus.isConnected) {
+      prevFocus.focus({ preventScroll: true });
+    }
   }
 
   return true;
+}
+
+// --- copy-on-select 应用级开关：懒启动的模块级单例,跟随设置弹窗的 CHANGED 事件刷新。
+// 默认 false(加载失败也回落 false),与后端 default 一致——功能宁可迟开不可误开。
+let copyOnSelectEnabled = false;
+let copyOnSelectWatcherStarted = false;
+
+function refreshCopyOnSelectSetting() {
+  invoke<{ terminal_copy_on_select?: unknown }>("load_app_settings")
+    .then((settings) => {
+      copyOnSelectEnabled = settings.terminal_copy_on_select === true;
+    })
+    .catch(() => {
+      copyOnSelectEnabled = false;
+    });
+}
+
+function ensureCopyOnSelectWatcher() {
+  if (copyOnSelectWatcherStarted) return;
+  copyOnSelectWatcherStarted = true;
+  refreshCopyOnSelectSetting();
+  window.addEventListener(APP_SETTINGS_CHANGED_EVENT, refreshCopyOnSelectSetting);
+}
+
+/**
+ * 框选松手后自动复制选区（copy-on-select）。
+ *
+ * 触发点必须是 pointerup 一次性动作，绝不能挂在 onSelectionChange 上：
+ * 拖选过程中 selection change 连续触发，大选区反复 getSelection() 会产生
+ * 长任务（smartCopy 的分块读取正是为规避它而存在）。
+ */
+export function attachCopyOnSelect(terminal: Terminal, container: HTMLElement): () => void {
+  ensureCopyOnSelectWatcher();
+
+  let selecting = false;
+  let copyInProgress = false;
+
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    selecting = true;
+  };
+
+  const completeSelection = () => {
+    // document 级监听：必须先确认拖选起点在终端容器内，否则会响应页面
+    // 其他区域的选择手势（与 attachMacWebKitTerminalGuard 同款守卫）。
+    if (!selecting) return;
+    selecting = false;
+    if (!copyOnSelectEnabled || copyInProgress || !terminal.hasSelection()) return;
+    copyInProgress = true;
+    smartCopy(terminal).finally(() => {
+      copyInProgress = false;
+    });
+  };
+
+  const handlePointerUp = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    completeSelection();
+  };
+
+  container.addEventListener("pointerdown", handlePointerDown);
+  document.addEventListener("pointerup", handlePointerUp);
+  document.addEventListener("pointercancel", completeSelection);
+
+  return () => {
+    container.removeEventListener("pointerdown", handlePointerDown);
+    document.removeEventListener("pointerup", handlePointerUp);
+    document.removeEventListener("pointercancel", completeSelection);
+  };
 }
 
 export interface TerminalKeyOptions {

@@ -397,6 +397,7 @@ pub fn run() {
             app_settings::save_claude_force_default_tui,
             app_settings::save_use_sideloaded_conpty,
             app_settings::save_terminal_scrollback,
+            app_settings::save_terminal_copy_on_select,
             app_settings::detect_agent_paths,
             app_settings::detect_agent_versions_for_settings,
             app_settings::get_system_fonts,
