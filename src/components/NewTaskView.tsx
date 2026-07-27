@@ -2,7 +2,12 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TriangleAlert, Sparkles } from "lucide-react";
 import type { Project, AgentType, PermissionMode, GitRoot } from "../types";
-import type { HookAgentReadiness } from "./app-settings/types";
+import {
+  APP_SETTINGS_CHANGED_EVENT,
+  DEFAULT_APP_SETTINGS,
+  type AppSettings,
+  type HookAgentReadiness,
+} from "./app-settings/types";
 import { useToast } from "./Toast";
 import {
   MentionPopover,
@@ -15,6 +20,7 @@ import { ImageAttachments } from "./new-task/ImageAttachments";
 import { TextAttachments, type PastedText } from "./new-task/TextAttachments";
 import { AgentPermSelector } from "./new-task/AgentPermSelector";
 import { LaunchModeSelector, type LaunchMode } from "./new-task/LaunchModeSelector";
+import { TaskModelSelector } from "./new-task/TaskModelSelector";
 import { useI18n } from "../i18n";
 import { findProjectByName } from "../projectName";
 import { APP_PLATFORM } from "../platform";
@@ -37,6 +43,8 @@ export interface NewTaskDraft {
   promptHtml: string;
   agent: AgentType;
   permMode: PermissionMode;
+  model?: string;
+  reasoningEffort?: string;
   planMode: boolean;
   pastedImages: PastedImage[];
   pastedTexts?: PastedText[];
@@ -84,6 +92,8 @@ export function NewTaskView({
     prompt: string;
     agent: AgentType;
     permissionMode: PermissionMode;
+    model?: string;
+    reasoningEffort?: string;
     images: string[];
     texts: string[];
     immediate: boolean;
@@ -97,6 +107,10 @@ export function NewTaskView({
   const { showToast } = useToast();
   const [agent, setAgent] = useState<AgentType>(initialDraft?.agent ?? "claude");
   const [permMode, setPermMode] = useState<PermissionMode>(initialDraft?.permMode ?? "ask");
+  const [model, setModel] = useState<string | undefined>(initialDraft?.model);
+  const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(
+    initialDraft?.reasoningEffort,
+  );
   const [planMode, setPlanMode] = useState(initialDraft?.planMode ?? false);
   const [launchMode, setLaunchMode] = useState<LaunchMode>(initialDraft?.launchMode ?? "local");
   const [baseBranch, setBaseBranch] = useState<string>(initialDraft?.baseBranch ?? "");
@@ -118,6 +132,7 @@ export function NewTaskView({
       (initialDraft?.pastedTexts?.length ?? 0) === 0,
   );
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(DEFAULT_SEND_SHORTCUT);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
 
   const { editorRef, isComposingRef, handle: editorHandle } = usePromptEditor();
   const editorContentRef = useRef<PromptEditorContent>({
@@ -145,6 +160,8 @@ export function NewTaskView({
   const draftDataRef = useRef({
     agent,
     permMode,
+    model,
+    reasoningEffort,
     planMode,
     pastedImages,
     pastedTexts,
@@ -155,13 +172,25 @@ export function NewTaskView({
     draftDataRef.current = {
       agent,
       permMode,
+      model,
+      reasoningEffort,
       planMode,
       pastedImages,
       pastedTexts,
       launchMode,
       baseBranch,
     };
-  }, [agent, permMode, planMode, pastedImages, pastedTexts, launchMode, baseBranch]);
+  }, [
+    agent,
+    permMode,
+    model,
+    reasoningEffort,
+    planMode,
+    pastedImages,
+    pastedTexts,
+    launchMode,
+    baseBranch,
+  ]);
   useEffect(() => {
     return () => {
       if (!onCacheDraft) return;
@@ -175,7 +204,9 @@ export function NewTaskView({
         !editorContent.text.trim() &&
         !editorContent.hasChips &&
         data.pastedImages.length === 0 &&
-        data.pastedTexts.length === 0
+        data.pastedTexts.length === 0 &&
+        !data.model &&
+        !data.reasoningEffort
       ) {
         onCacheDraft(null);
         return;
@@ -184,6 +215,8 @@ export function NewTaskView({
         promptHtml: editorContent.html,
         agent: data.agent,
         permMode: data.permMode,
+        model: data.model,
+        reasoningEffort: data.reasoningEffort,
         planMode: data.planMode,
         pastedImages: data.pastedImages,
         pastedTexts: data.pastedTexts,
@@ -195,15 +228,21 @@ export function NewTaskView({
   }, []);
 
   useEffect(() => {
-    function loadSendShortcut() {
-      invoke<{ send_shortcut?: string }>("load_app_settings")
-        .then((settings) => setSendShortcut(normalizeSendShortcut(settings.send_shortcut)))
-        .catch(() => setSendShortcut(DEFAULT_SEND_SHORTCUT));
+    function loadTaskSettings() {
+      invoke<AppSettings>("load_app_settings")
+        .then((settings) => {
+          setAppSettings(settings);
+          setSendShortcut(normalizeSendShortcut(settings.send_shortcut));
+        })
+        .catch(() => {
+          setAppSettings(DEFAULT_APP_SETTINGS);
+          setSendShortcut(DEFAULT_SEND_SHORTCUT);
+        });
     }
 
-    loadSendShortcut();
-    window.addEventListener("nezha:app-settings-changed", loadSendShortcut);
-    return () => window.removeEventListener("nezha:app-settings-changed", loadSendShortcut);
+    loadTaskSettings();
+    window.addEventListener(APP_SETTINGS_CHANGED_EVENT, loadTaskSettings);
+    return () => window.removeEventListener(APP_SETTINGS_CHANGED_EVENT, loadTaskSettings);
   }, []);
 
   // Load default agent and permission mode from project config when project changes
@@ -386,6 +425,8 @@ export function NewTaskView({
       prompt,
       agent,
       permissionMode: permMode,
+      model,
+      reasoningEffort,
       images: [],
       texts: [],
       immediate: true,
@@ -419,6 +460,8 @@ export function NewTaskView({
       prompt: finalPrompt,
       agent,
       permissionMode: permMode,
+      model,
+      reasoningEffort,
       images: pastedImages.map((img) => img.dataUrl),
       texts: pastedTexts.map((t) => t.text),
       immediate,
@@ -601,7 +644,26 @@ export function NewTaskView({
             launchMode === "worktree" ? t("newTask.worktreeMustSend") : undefined
           }
           sendShortcutKeys={getSendShortcutKeys(sendShortcut, APP_PLATFORM)}
-          onSetAgent={setAgent}
+          modelSelector={
+            <TaskModelSelector
+              catalog={
+                agent === "claude"
+                  ? appSettings.claude_model_catalog
+                  : appSettings.codex_model_catalog
+              }
+              model={model}
+              reasoningEffort={reasoningEffort}
+              onSetModel={setModel}
+              onSetReasoningEffort={setReasoningEffort}
+            />
+          }
+          onSetAgent={(nextAgent) => {
+            if (nextAgent !== agent) {
+              setModel(undefined);
+              setReasoningEffort(undefined);
+            }
+            setAgent(nextAgent);
+          }}
           onSetPermMode={setPermMode}
           onTogglePlanMode={() => setPlanMode((v) => !v)}
           onAddImages={(dataUrls) => {

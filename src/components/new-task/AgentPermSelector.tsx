@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import {
   BookmarkPlus,
   ChevronDown,
@@ -27,10 +27,6 @@ function agentLabel(agent: AgentType): string {
 
 function agentIcon(agent: AgentType): string {
   return agent === "claude" ? claudeLogo : chatgptLogo;
-}
-
-function setMenuItemHover(el: HTMLElement, hover: boolean) {
-  el.style.background = hover ? "var(--accent-subtle)" : "transparent";
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -74,6 +70,7 @@ export function AgentPermSelector({
   hasImages,
   saveAsTodoDisabledReason,
   sendShortcutKeys,
+  modelSelector,
   onSetAgent,
   onSetPermMode,
   onTogglePlanMode,
@@ -87,6 +84,7 @@ export function AgentPermSelector({
   hasImages: boolean;
   saveAsTodoDisabledReason?: string;
   sendShortcutKeys: string[];
+  modelSelector?: ReactNode;
   onSetAgent: (agent: AgentType) => void;
   onSetPermMode: (mode: PermissionMode) => void;
   onTogglePlanMode: () => void;
@@ -136,19 +134,16 @@ export function AgentPermSelector({
                 type="file"
                 accept="image/*"
                 multiple
-                style={{ display: "none" }}
+                style={s.toolbarHiddenInput}
                 onChange={(e) => {
                   void handleImageFiles(e.currentTarget.files);
                   e.currentTarget.value = "";
                 }}
               />
               <button
-                style={{ ...s.toolbarMenuItem, width: "100%", border: "none", background: "none" }}
+                className="branch-popover-item"
+                style={s.toolbarMenuButton}
                 onClick={() => imageInputRef.current?.click()}
-                onMouseEnter={(e) => setMenuItemHover(e.currentTarget, true)}
-                onMouseLeave={(e) => setMenuItemHover(e.currentTarget, false)}
-                onFocus={(e) => setMenuItemHover(e.currentTarget, true)}
-                onBlur={(e) => setMenuItemHover(e.currentTarget, false)}
               >
                 <ImageIcon size={15} strokeWidth={2} color="var(--text-muted)" />
                 {t("newTask.images")}
@@ -159,34 +154,19 @@ export function AgentPermSelector({
               <button
                 role="switch"
                 aria-checked={planMode}
-                style={{
-                  ...s.toolbarMenuItem,
-                  width: "100%",
-                  border: "none",
-                  background: "none",
-                  justifyContent: "space-between",
-                }}
+                className="branch-popover-item"
+                style={s.toolbarMenuSwitchItem}
                 onClick={onTogglePlanMode}
-                onMouseEnter={(e) => setMenuItemHover(e.currentTarget, true)}
-                onMouseLeave={(e) => setMenuItemHover(e.currentTarget, false)}
-                onFocus={(e) => setMenuItemHover(e.currentTarget, true)}
-                onBlur={(e) => setMenuItemHover(e.currentTarget, false)}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span style={s.toolbarMenuItemLead}>
                   <MapIcon size={15} strokeWidth={2} color="var(--text-muted)" />
                   {t("newTask.planMode")}
                 </span>
                 <span
-                  style={{
-                    ...s.toolbarSwitchTrack,
-                    background: planMode ? "var(--primary-action-bg)" : "var(--border-medium)",
-                  }}
+                  style={planMode ? s.toolbarSwitchTrackOn : s.toolbarSwitchTrack}
                 >
                   <span
-                    style={{
-                      ...s.toolbarSwitchThumb,
-                      transform: planMode ? "translateX(16px)" : "translateX(0)",
-                    }}
+                    style={planMode ? s.toolbarSwitchThumbOn : s.toolbarSwitchThumb}
                   />
                 </span>
               </button>
@@ -198,14 +178,15 @@ export function AgentPermSelector({
           <Select.Trigger style={s.toolbarBtn} aria-label={t("settings.agent")}>
             <img
               src={agentIcon(agent)}
-              style={{
-                ...s.toolbarMenuItemIcon,
-                opacity: agent === "claude" ? 1 : 0.72,
-              }}
+              style={
+                agent === "claude"
+                  ? s.toolbarMenuItemIcon
+                  : s.toolbarMenuItemIconMuted
+              }
             />
             <span>{agentLabel(agent)}</span>
             <Select.Icon>
-              <ChevronDown size={12} strokeWidth={2.5} style={{ opacity: 0.58 }} />
+              <ChevronDown size={12} strokeWidth={2.5} style={s.toolbarChevron} />
             </Select.Icon>
           </Select.Trigger>
           <Select.Portal>
@@ -215,18 +196,16 @@ export function AgentPermSelector({
                   <Select.Item
                     key={item}
                     value={item}
+                    className="branch-popover-item"
                     style={s.toolbarMenuItem}
-                    onFocus={(e) => setMenuItemHover(e.currentTarget, true)}
-                    onBlur={(e) => setMenuItemHover(e.currentTarget, false)}
-                    onMouseEnter={(e) => setMenuItemHover(e.currentTarget, true)}
-                    onMouseLeave={(e) => setMenuItemHover(e.currentTarget, false)}
                   >
                     <img
                       src={agentIcon(item)}
-                      style={{
-                        ...s.toolbarMenuItemIcon,
-                        opacity: item === "claude" ? 1 : 0.72,
-                      }}
+                      style={
+                        item === "claude"
+                          ? s.toolbarMenuItemIcon
+                          : s.toolbarMenuItemIconMuted
+                      }
                     />
                     <Select.ItemText>{agentLabel(item)}</Select.ItemText>
                   </Select.Item>
@@ -241,7 +220,7 @@ export function AgentPermSelector({
             <Hand size={14} strokeWidth={2} color="var(--text-muted)" />
             <Select.Value />
             <Select.Icon>
-              <ChevronDown size={12} strokeWidth={2.5} style={{ opacity: 0.58 }} />
+              <ChevronDown size={12} strokeWidth={2.5} style={s.toolbarChevron} />
             </Select.Icon>
           </Select.Trigger>
           <Select.Portal>
@@ -251,11 +230,8 @@ export function AgentPermSelector({
                   <Select.Item
                     key={perm}
                     value={perm}
+                    className="branch-popover-item"
                     style={s.toolbarMenuItem}
-                    onFocus={(e) => setMenuItemHover(e.currentTarget, true)}
-                    onBlur={(e) => setMenuItemHover(e.currentTarget, false)}
-                    onMouseEnter={(e) => setMenuItemHover(e.currentTarget, true)}
-                    onMouseLeave={(e) => setMenuItemHover(e.currentTarget, false)}
                   >
                     <Select.ItemText>{permissionModeLabel(perm, agent)}</Select.ItemText>
                   </Select.Item>
@@ -268,13 +244,11 @@ export function AgentPermSelector({
 
       <div style={s.toolbarSpacer} />
 
+      {modelSelector && <div style={s.toolbarModelSlot}>{modelSelector}</div>}
+
       <div style={s.sendSplit}>
         <button
-          style={{
-            ...s.sendBtn,
-            borderRadius: "6px 0 0 6px",
-            borderRight: "1px solid rgba(255,255,255,0.18)",
-          }}
+          style={s.sendBtnPrimary}
           onClick={() => {
             onSubmit(true);
           }}
@@ -287,14 +261,8 @@ export function AgentPermSelector({
         <Popover.Root>
           <Popover.Trigger asChild>
             <button
-              style={{
-                ...s.sendBtn,
-                minWidth: 22,
-                minHeight: 32,
-                padding: "6px 5px",
-                borderRadius: "0 6px 6px 0",
-                borderLeft: "none",
-              }}
+              style={s.sendBtnMenu}
+              aria-label={t("newTask.moreComposeActions")}
             >
               <ChevronDown size={12} strokeWidth={2.5} />
             </button>
@@ -303,15 +271,12 @@ export function AgentPermSelector({
             <Popover.Content side="bottom" align="end" sideOffset={6} style={s.toolbarMenuContent}>
               <Popover.Close asChild>
                 <button
-                  style={{
-                    ...s.toolbarMenuItem,
-                    gap: 8,
-                    width: "100%",
-                    border: "none",
-                    background: "transparent",
-                    cursor: saveAsTodoDisabled ? "not-allowed" : "pointer",
-                    opacity: saveAsTodoDisabled ? 0.4 : 1,
-                  }}
+                  className="branch-popover-item"
+                  style={
+                    saveAsTodoDisabled
+                      ? s.toolbarTodoMenuItemDisabled
+                      : s.toolbarTodoMenuItem
+                  }
                   disabled={saveAsTodoDisabled}
                   title={saveAsTodoTitle}
                   onClick={() => {

@@ -392,6 +392,8 @@ pub fn run() {
             app_settings::load_app_settings,
             app_settings::save_app_settings,
             app_settings::save_agent_paths,
+            app_settings::save_agent_model_catalog,
+            app_settings::initialize_agent_model_catalog,
             app_settings::save_send_shortcut,
             app_settings::save_shift_enter_newline,
             app_settings::save_claude_force_default_tui,

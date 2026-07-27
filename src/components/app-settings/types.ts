@@ -37,6 +37,25 @@ export interface HookAgentReadiness {
   minVersion: string;
 }
 
+export interface AgentModelOption {
+  model: string;
+  label?: string;
+  reasoningEfforts: string[];
+  defaultReasoningEffort?: string;
+}
+
+export interface AgentModelCatalog {
+  models: AgentModelOption[];
+  initialized: boolean;
+  initializedAt?: number;
+  sourceVersion?: string;
+}
+
+export const EMPTY_AGENT_MODEL_CATALOG: AgentModelCatalog = {
+  models: [],
+  initialized: false,
+};
+
 export interface AppSettings {
   claude_path: string;
   codex_path: string;
@@ -46,6 +65,8 @@ export interface AppSettings {
   terminal_scrollback: number;
   /** Windows：优先使用随包侧载的新版 ConPTY（重启后生效），其余平台无效果 */
   use_sideloaded_conpty: boolean;
+  claude_model_catalog: AgentModelCatalog;
+  codex_model_catalog: AgentModelCatalog;
 }
 
 /**
@@ -60,6 +81,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   claude_force_default_tui: true,
   terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
   use_sideloaded_conpty: true,
+  claude_model_catalog: EMPTY_AGENT_MODEL_CATALOG,
+  codex_model_catalog: EMPTY_AGENT_MODEL_CATALOG,
 };
 
 export interface AgentVersions {
