@@ -156,7 +156,10 @@ export function GeneralPanel({
       <div style={s.settingField}>
         <label style={s.settingFieldLabel}>{t("appSettings.appLanguage")}</label>
         <Select.Root value={language} onValueChange={(value) => setLanguage(value as AppLanguage)}>
-          <Select.Trigger aria-label={t("appSettings.appLanguage")} style={s.settingsSelectTriggerCompact}>
+          <Select.Trigger
+            aria-label={t("appSettings.appLanguage")}
+            style={s.settingsSelectTriggerCompact}
+          >
             <Select.Value>{selectedLanguageLabel}</Select.Value>
             <Select.Icon>
               <ChevronDown size={13} strokeWidth={2.2} color="var(--text-hint)" />
@@ -304,12 +307,14 @@ export function GeneralPanel({
           aria-checked={copyOnSelectOn}
           aria-label={t("appSettings.copyOnSelect")}
           disabled={copyOnSelectBusy}
+          data-checked={copyOnSelectOn}
+          data-disabled={copyOnSelectBusy}
           onClick={() => void handleCopyOnSelectToggle()}
-          style={copyOnSelectBusy ? s.settingToggleDisabled : s.settingToggle}
+          className="app-settings-toggle"
         >
-          <span style={s.settingToggleLabel}>{t("appSettings.copyOnSelectToggle")}</span>
-          <span style={copyOnSelectOn ? s.settingToggleTrackOn : s.settingToggleTrack}>
-            <span style={copyOnSelectOn ? s.settingToggleKnobOn : s.settingToggleKnob} />
+          <span className="app-settings-toggle-label">{t("appSettings.copyOnSelectToggle")}</span>
+          <span className="app-settings-toggle-track">
+            <span className="app-settings-toggle-knob" />
           </span>
         </button>
         <span style={s.settingFieldHint}>{t("appSettings.copyOnSelectHint")}</span>
