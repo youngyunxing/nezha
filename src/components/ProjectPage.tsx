@@ -109,6 +109,8 @@ export function ProjectPage({
     prompt: string;
     agent: AgentType;
     permissionMode: PermissionMode;
+    model?: string;
+    reasoningEffort?: string;
     images: string[];
     texts: string[];
     immediate: boolean;

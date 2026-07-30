@@ -15,6 +15,8 @@ const SESSION_WAIT_MAX: Duration = Duration::from_millis(500);
 const PTY_READ_BUFFER_SIZE: usize = 32 * 1024;
 const PTY_EMIT_FLUSH_INTERVAL: Duration = Duration::from_millis(16);
 const PTY_EMIT_MAX_BATCH_BYTES: usize = 64 * 1024;
+const MAX_MODEL_ID_BYTES: usize = 1024;
+const MAX_REASONING_EFFORT_BYTES: usize = 128;
 /// 有界 channel 容量：满时 reader 线程阻塞，反压传播至 OS 内核 PTY 缓冲区，
 /// 最终使写入进程（Claude/Codex）的 write() 系统调用阻塞，从源头限流。
 const PTY_EMIT_CHANNEL_CAPACITY: usize = 32;
@@ -450,8 +452,34 @@ fn spawn_exit_monitor(app: AppHandle, task_id: String, project_path: String, is_
     });
 }
 
-/// 为 Claude 命令构建 CommandBuilder，并根据 permission_mode 添加权限标志。
-fn build_claude_cmd(agent_bin: &str, permission_mode: &str) -> CommandBuilder {
+fn normalize_agent_cli_option(
+    value: Option<String>,
+    field: &str,
+    max_bytes: usize,
+) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.len() > max_bytes {
+        return Err(format!("{field} is too long (maximum {max_bytes} bytes)."));
+    }
+    if trimmed.chars().any(char::is_control) {
+        return Err(format!("{field} cannot contain control characters."));
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+/// 为 Claude 命令构建 CommandBuilder，并添加权限、模型与思考深度标志。
+fn build_claude_cmd(
+    agent_bin: &str,
+    permission_mode: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> CommandBuilder {
     let mut c = CommandBuilder::new(agent_bin);
     // 仅 macOS 注入：Claude Code v2.1.150+ 默认开 xterm 鼠标上报（mode 1002），
     // 会吞掉 macOS 端 xterm.js 的原生拖动框选；关掉后滚轮回退到 xterm scrollback。
@@ -473,11 +501,24 @@ fn build_claude_cmd(agent_bin: &str, permission_mode: &str) -> CommandBuilder {
         }
         _ => {}
     }
+    if let Some(model) = model {
+        c.arg("--model");
+        c.arg(model);
+    }
+    if let Some(reasoning_effort) = reasoning_effort {
+        c.arg("--effort");
+        c.arg(reasoning_effort);
+    }
     c
 }
 
-/// 为 Codex 命令构建 CommandBuilder，并根据 permission_mode 添加全局执行标志。
-fn build_codex_cmd(agent_bin: &str, permission_mode: &str) -> CommandBuilder {
+/// 为 Codex 命令构建 CommandBuilder，并添加权限、模型与思考深度全局标志。
+fn build_codex_cmd(
+    agent_bin: &str,
+    permission_mode: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
+) -> CommandBuilder {
     let mut c = CommandBuilder::new(agent_bin);
     match permission_mode {
         "auto_edit" => {
@@ -492,6 +533,17 @@ fn build_codex_cmd(agent_bin: &str, permission_mode: &str) -> CommandBuilder {
             c.arg("--dangerously-bypass-approvals-and-sandbox");
         }
         _ => {}
+    }
+    if let Some(model) = model {
+        c.arg("--model");
+        c.arg(model);
+    }
+    if let Some(reasoning_effort) = reasoning_effort {
+        c.arg("-c");
+        c.arg(format!(
+            "model_reasoning_effort={}",
+            toml::Value::String(reasoning_effort.to_string())
+        ));
     }
     c
 }
@@ -524,6 +576,8 @@ fn spawn_fork_task_process(
     agent: &str,
     source_session_id: &str,
     permission_mode: &str,
+    model: Option<&str>,
+    reasoning_effort: Option<&str>,
     cols: u16,
     rows: u16,
 ) -> Result<SpawnedForkTask, String> {
@@ -541,14 +595,16 @@ fn spawn_fork_task_process(
         });
 
     let mut command = if is_codex {
-        let mut command = build_codex_cmd(&agent_bin, permission_mode);
+        let mut command =
+            build_codex_cmd(&agent_bin, permission_mode, model, reasoning_effort);
         if use_hooks {
             command.arg("--dangerously-bypass-hook-trust");
         }
         append_fork_session_args(&mut command, true, source_session_id);
         command
     } else {
-        let mut command = build_claude_cmd(&agent_bin, permission_mode);
+        let mut command =
+            build_claude_cmd(&agent_bin, permission_mode, model, reasoning_effort);
         append_fork_session_args(&mut command, false, source_session_id);
         if claude_pass_settings {
             if let Ok(path) = crate::hooks::nezha_claude_settings_path() {
@@ -643,6 +699,60 @@ mod fork_command_tests {
             ]
         );
     }
+
+    #[test]
+    fn builds_codex_model_and_reasoning_arguments_without_shell_parsing() {
+        let command = build_codex_cmd(
+            "codex",
+            "ask",
+            Some("provider/model:deployment"),
+            Some("high"),
+        );
+
+        assert_eq!(
+            command.get_argv(),
+            &vec![
+                OsStr::new("codex").to_owned(),
+                OsStr::new("--model").to_owned(),
+                OsStr::new("provider/model:deployment").to_owned(),
+                OsStr::new("-c").to_owned(),
+                OsStr::new("model_reasoning_effort=\"high\"").to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn builds_claude_model_and_effort_arguments() {
+        let command = build_claude_cmd(
+            "claude",
+            "ask",
+            Some("custom-provider-model"),
+            Some("max"),
+        );
+
+        assert_eq!(
+            command.get_argv(),
+            &vec![
+                OsStr::new("claude").to_owned(),
+                OsStr::new("--permission-mode").to_owned(),
+                OsStr::new("default").to_owned(),
+                OsStr::new("--model").to_owned(),
+                OsStr::new("custom-provider-model").to_owned(),
+                OsStr::new("--effort").to_owned(),
+                OsStr::new("max").to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_control_characters_in_agent_options() {
+        assert!(normalize_agent_cli_option(
+            Some("model\n--dangerous".to_string()),
+            "Model identifier",
+            MAX_MODEL_ID_BYTES,
+        )
+        .is_err());
+    }
 }
 
 // ── Tauri 命令 ───────────────────────────────────────────────────────────────
@@ -656,12 +766,20 @@ pub async fn run_task(
     prompt: String,
     agent: String,
     permission_mode: String,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
     images: Option<Vec<String>>,
     texts: Option<Vec<String>>,
     cols: Option<u16>,
     rows: Option<u16>,
     on_output: Channel<String>,
 ) -> Result<(), String> {
+    let model = normalize_agent_cli_option(model, "Model identifier", MAX_MODEL_ID_BYTES)?;
+    let reasoning_effort = normalize_agent_cli_option(
+        reasoning_effort,
+        "Reasoning effort",
+        MAX_REASONING_EFFORT_BYTES,
+    )?;
     task_manager.cancelled_tasks.lock().remove(&task_id);
     task_manager
         .manually_completed_tasks
@@ -757,7 +875,12 @@ pub async fn run_task(
             .unwrap_or(false));
 
     let mut cmd = if is_codex {
-        let mut c = build_codex_cmd(&agent_bin, &permission_mode);
+        let mut c = build_codex_cmd(
+            &agent_bin,
+            &permission_mode,
+            model.as_deref(),
+            reasoning_effort.as_deref(),
+        );
         // Codex 对非 managed 的 command hook 默认要求 trust,Nezha 注入的是新 hash 会被
         // skip;由 Nezha 注入、来源可信,这里免 trust 直接运行。必须在 `--`/prompt 之前。
         if use_hooks {
@@ -770,7 +893,12 @@ pub async fn run_task(
         }
         c
     } else {
-        let mut c = build_claude_cmd(&agent_bin, &permission_mode);
+        let mut c = build_claude_cmd(
+            &agent_bin,
+            &permission_mode,
+            model.as_deref(),
+            reasoning_effort.as_deref(),
+        );
         // Claude >= 2.1.87：通过 --session-id 指定会话，跳过 /status 发现
         if let Some(ref sid) = pre_session_id {
             c.arg("--session-id");
@@ -973,10 +1101,18 @@ pub async fn resume_task(
     session_id: String,
     _prompt: String,
     permission_mode: String,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     on_output: Channel<String>,
 ) -> Result<(), String> {
+    let model = normalize_agent_cli_option(model, "Model identifier", MAX_MODEL_ID_BYTES)?;
+    let reasoning_effort = normalize_agent_cli_option(
+        reasoning_effort,
+        "Reasoning effort",
+        MAX_REASONING_EFFORT_BYTES,
+    )?;
     task_manager.cancelled_tasks.lock().remove(&task_id);
     task_manager
         .manually_completed_tasks
@@ -1015,7 +1151,12 @@ pub async fn resume_task(
             .unwrap_or(false));
 
     let mut cmd = if agent == "codex" {
-        let mut c = build_codex_cmd(&agent_bin, &permission_mode);
+        let mut c = build_codex_cmd(
+            &agent_bin,
+            &permission_mode,
+            model.as_deref(),
+            reasoning_effort.as_deref(),
+        );
         // Nezha 注入的 hook 默认未信任会被 Codex skip;来源可信,免 trust 直接运行。
         if use_hooks {
             c.arg("--dangerously-bypass-hook-trust");
@@ -1025,7 +1166,12 @@ pub async fn resume_task(
         c
     } else {
         // resume 时 session_id 已知，使用 --resume 标志
-        let mut c = build_claude_cmd(&agent_bin, &permission_mode);
+        let mut c = build_claude_cmd(
+            &agent_bin,
+            &permission_mode,
+            model.as_deref(),
+            reasoning_effort.as_deref(),
+        );
         c.arg("--resume");
         c.arg(&session_id);
         // 同 run_task:hooks + force_default_tui 共用 --settings 通道。
@@ -1097,10 +1243,18 @@ pub async fn fork_task(
     agent: String,
     source_session_id: String,
     permission_mode: String,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     on_output: Channel<String>,
 ) -> Result<(), String> {
+    let model = normalize_agent_cli_option(model, "Model identifier", MAX_MODEL_ID_BYTES)?;
+    let reasoning_effort = normalize_agent_cli_option(
+        reasoning_effort,
+        "Reasoning effort",
+        MAX_REASONING_EFFORT_BYTES,
+    )?;
     let launch_project_path = project_path.clone();
     let launch_task_id = task_id.clone();
     let launch_agent = agent.clone();
@@ -1111,6 +1265,8 @@ pub async fn fork_task(
             &launch_agent,
             &source_session_id,
             &permission_mode,
+            model.as_deref(),
+            reasoning_effort.as_deref(),
             cols.unwrap_or(220),
             rows.unwrap_or(50),
         )

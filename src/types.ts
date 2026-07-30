@@ -124,6 +124,10 @@ export interface Task {
   prompt: string;
   agent: AgentType;
   permissionMode: PermissionMode;
+  /** 缺省时沿用 agent 自身默认模型。保存任务快照，避免设置目录变化影响 resume/fork。 */
+  model?: string;
+  /** 缺省时沿用 agent 自身默认思考深度。 */
+  reasoningEffort?: string;
   status: TaskStatus;
   createdAt: number;
   /** 任务状态最近一次变更的时间戳；左侧任务列表按此字段排序与分组。缺省时回落到 createdAt。 */

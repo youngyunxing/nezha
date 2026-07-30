@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Check, Pencil } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
+import { AgentModelCatalogSection } from "./AgentModelCatalogSection";
 import { AgentPathSection } from "./AgentPathSection";
 import type { AgentKey } from "./types";
 import type { ThemeVariant } from "../../types";
@@ -144,111 +145,48 @@ export function AgentConfigPanel({
 
   return (
     <>
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          padding: "18px 20px 14px",
-        }}
-      >
+      <div style={s.agentConfigBody}>
         {!editing && (
           <>
             <AgentPathSection agentKey={agentKey} />
+            <AgentModelCatalogSection agentKey={agentKey} />
 
-            <div
-              style={{
-                height: 1,
-                background: "var(--border-dim)",
-                margin: "4px 0 16px",
-                flexShrink: 0,
-              }}
-            />
+            <div style={s.agentConfigDivider} />
 
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                marginBottom: 10,
-                flexShrink: 0,
-              }}
-            >
-              {t("appSettings.configFile")}
-            </div>
+            <div style={s.agentConfigSectionTitle}>{t("appSettings.configFile")}</div>
           </>
         )}
 
         {/* File path + edit button row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexShrink: 0 }}>
-          <div
-            style={{
-              fontSize: 11.5,
-              color: "var(--text-hint)",
-              fontFamily: "var(--font-mono)",
-              background: "var(--bg-subtle)",
-              border: "1px solid var(--border-dim)",
-              borderRadius: 6,
-              padding: "4px 9px",
-            }}
-          >
-            {resolvedFilePath}
-          </div>
+        <div style={s.agentConfigPathRow}>
+          <div style={s.agentConfigPath}>{resolvedFilePath}</div>
           {fileState.status === "loaded" && !editing && (
-            <button
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "4px 10px",
-                background: "none",
-                border: "1px solid var(--border-medium)",
-                borderRadius: 6,
-                fontSize: 12,
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-              }}
-              onClick={() => setEditing(true)}
-            >
+            <button style={s.agentConfigEditButton} onClick={() => setEditing(true)}>
               <Pencil size={12} />
               {t("common.edit")}
             </button>
           )}
           {saved && (
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 12,
-                color: "var(--success)",
-              }}
-            >
+            <span style={s.agentConfigSaved}>
               <Check size={12} /> {t("common.saved")}
             </span>
           )}
         </div>
 
-        {error && (
-          <div style={{ color: "var(--danger)", fontSize: 12.5, marginBottom: 10 }}>{error}</div>
-        )}
+        {error && <div style={s.agentConfigError}>{error}</div>}
 
         {highlightError && fileState.status === "loaded" && !editing && (
-          <div style={{ color: "var(--text-hint)", fontSize: 12, marginBottom: 10 }}>
+          <div style={s.agentConfigHint}>
             {t("appSettings.syntaxHighlightUnavailable")}
           </div>
         )}
 
         {fileState.status === "loading" && !error && (
-          <div style={{ color: "var(--text-hint)", fontSize: 13 }}>{t("common.loading")}</div>
+          <div style={s.agentConfigLoading}>{t("common.loading")}</div>
         )}
 
         {fileState.status === "missing" && (
-          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
+          <div style={s.agentConfigMissing}>
             {t("appSettings.configFileNotFound", { path: resolvedFilePath })}
           </div>
         )}
@@ -257,36 +195,12 @@ export function AgentConfigPanel({
           highlighted ? (
             <div
               className="file-viewer-code"
-              style={{
-                flex: 1,
-                minHeight: 280,
-                minWidth: 0,
-                overflow: "auto",
-                borderRadius: 8,
-                border: "1px solid var(--border-dim)",
-                fontSize: 12.5,
-              }}
+              style={s.agentConfigCode}
               dangerouslySetInnerHTML={{ __html: highlighted }}
             />
           ) : (
             <pre
-              style={{
-                flex: 1,
-                minHeight: 280,
-                minWidth: 0,
-                margin: 0,
-                overflow: "auto",
-                padding: "14px 16px",
-                borderRadius: 8,
-                border: "1px solid var(--border-dim)",
-                background: "var(--bg-panel)",
-                color: "var(--text-primary)",
-                fontSize: 12.5,
-                fontFamily: "var(--font-mono)",
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
+              style={s.agentConfigPlainCode}
               dangerouslySetInnerHTML={{ __html: escapeHtml(fileState.content) }}
             />
           )
@@ -295,15 +209,7 @@ export function AgentConfigPanel({
         {fileState.status === "loaded" && editing && (
           <textarea
             autoFocus
-            style={{
-              ...s.modalTextarea,
-              flex: 1,
-              width: "100%",
-              minHeight: 300,
-              resize: "none",
-              boxSizing: "border-box",
-              caretColor: "var(--text-primary)",
-            }}
+            style={s.agentConfigTextarea}
             value={fileState.content}
             onChange={(e) => setFileState({ status: "loaded", content: e.target.value })}
             spellCheck={false}
@@ -317,7 +223,7 @@ export function AgentConfigPanel({
             {t("common.cancel")}
           </button>
           <button
-            style={{ ...s.modalSaveBtn, opacity: saving || !isDirty ? 0.5 : 1 }}
+            style={saving || !isDirty ? s.modalSaveBtnDisabled : s.modalSaveBtn}
             onClick={handleSave}
             disabled={saving || !isDirty}
           >

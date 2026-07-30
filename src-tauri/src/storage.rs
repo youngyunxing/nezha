@@ -35,6 +35,14 @@ pub struct Task {
     pub agent: String,
     #[serde(rename = "permissionMode")]
     pub permission_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(
+        rename = "reasoningEffort",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub reasoning_effort: Option<String>,
     pub status: String,
     #[serde(rename = "createdAt")]
     pub created_at: i64,

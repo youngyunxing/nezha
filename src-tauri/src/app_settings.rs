@@ -1,15 +1,20 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 #[cfg(windows)]
 use std::path::Path;
 
 use crate::storage::atomic_write;
+use crate::TaskManager;
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tauri::State;
 
 fn default_send_shortcut() -> String {
     "mod_enter".to_string()
@@ -48,12 +53,53 @@ static CACHED_CLAUDE_VERSION: OnceLock<Mutex<Option<Option<String>>>> = OnceLock
 static CACHED_CODEX_VERSION: OnceLock<Mutex<Option<Option<String>>>> = OnceLock::new();
 static SETTINGS_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+const MAX_MODEL_OPTIONS: usize = 100;
+const MAX_MODEL_ID_BYTES: usize = 1024;
+const MAX_MODEL_LABEL_BYTES: usize = 256;
+const MAX_REASONING_EFFORTS: usize = 32;
+const MAX_REASONING_EFFORT_BYTES: usize = 128;
+
 pub fn get_login_shell_env() -> &'static [(String, String)] {
     crate::platform::login_shell_env()
 }
 
 pub fn get_login_shell_path() -> &'static str {
     crate::platform::login_shell_path()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AgentModelOption {
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(rename = "reasoningEfforts", default)]
+    pub reasoning_efforts: Vec<String>,
+    #[serde(
+        rename = "defaultReasoningEffort",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub default_reasoning_effort: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct AgentModelCatalog {
+    #[serde(default)]
+    pub models: Vec<AgentModelOption>,
+    #[serde(default)]
+    pub initialized: bool,
+    #[serde(
+        rename = "initializedAt",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initialized_at: Option<i64>,
+    #[serde(
+        rename = "sourceVersion",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_version: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -78,6 +124,10 @@ pub struct AppSettings {
     /// 回到系统内置 ConPTY。详见 platform/windows.rs::preload_sideloaded_conpty。
     #[serde(default = "default_use_sideloaded_conpty")]
     pub use_sideloaded_conpty: bool,
+    #[serde(default)]
+    pub claude_model_catalog: AgentModelCatalog,
+    #[serde(default)]
+    pub codex_model_catalog: AgentModelCatalog,
 }
 
 impl Default for AppSettings {
@@ -90,6 +140,8 @@ impl Default for AppSettings {
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
             use_sideloaded_conpty: default_use_sideloaded_conpty(),
+            claude_model_catalog: AgentModelCatalog::default(),
+            codex_model_catalog: AgentModelCatalog::default(),
         }
     }
 }
@@ -347,6 +399,101 @@ fn get_agent_launch_spec_from_settings(settings: &AppSettings, agent: &str) -> A
     resolve_agent_launch_spec_from_path(agent, &get_agent_configured_path(settings, agent))
 }
 
+fn normalize_optional_catalog_value(
+    value: Option<String>,
+    field: &str,
+    max_bytes: usize,
+) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    validate_catalog_value(trimmed, field, max_bytes)?;
+    Ok(Some(trimmed.to_string()))
+}
+
+fn validate_catalog_value(value: &str, field: &str, max_bytes: usize) -> Result<(), String> {
+    if value.len() > max_bytes {
+        return Err(format!("{field} is too long (maximum {max_bytes} bytes)."));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!("{field} cannot contain control characters."));
+    }
+    Ok(())
+}
+
+fn normalize_model_options(models: Vec<AgentModelOption>) -> Result<Vec<AgentModelOption>, String> {
+    if models.len() > MAX_MODEL_OPTIONS {
+        return Err(format!(
+            "Too many model options (maximum {MAX_MODEL_OPTIONS})."
+        ));
+    }
+
+    let mut normalized = Vec::with_capacity(models.len());
+    for option in models {
+        let model = option.model.trim();
+        if model.is_empty() {
+            return Err("Model identifier cannot be empty.".to_string());
+        }
+        validate_catalog_value(model, "Model identifier", MAX_MODEL_ID_BYTES)?;
+        if normalized
+            .iter()
+            .any(|existing: &AgentModelOption| existing.model == model)
+        {
+            return Err(format!("Duplicate model identifier: {model}"));
+        }
+
+        let label =
+            normalize_optional_catalog_value(option.label, "Model label", MAX_MODEL_LABEL_BYTES)?;
+        if option.reasoning_efforts.len() > MAX_REASONING_EFFORTS {
+            return Err(format!(
+                "Too many reasoning efforts for {model} (maximum {MAX_REASONING_EFFORTS})."
+            ));
+        }
+        let mut reasoning_efforts = Vec::with_capacity(option.reasoning_efforts.len());
+        for effort in option.reasoning_efforts {
+            let effort = effort.trim();
+            if effort.is_empty() {
+                continue;
+            }
+            validate_catalog_value(
+                effort,
+                "Reasoning effort",
+                MAX_REASONING_EFFORT_BYTES,
+            )?;
+            if !reasoning_efforts.iter().any(|existing| existing == effort) {
+                reasoning_efforts.push(effort.to_string());
+            }
+        }
+        let default_reasoning_effort = normalize_optional_catalog_value(
+            option.default_reasoning_effort,
+            "Default reasoning effort",
+            MAX_REASONING_EFFORT_BYTES,
+        )?;
+        if let Some(default_effort) = default_reasoning_effort.as_ref() {
+            if !reasoning_efforts.iter().any(|effort| effort == default_effort) {
+                reasoning_efforts.push(default_effort.clone());
+            }
+        }
+
+        normalized.push(AgentModelOption {
+            model: model.to_string(),
+            label,
+            reasoning_efforts,
+            default_reasoning_effort,
+        });
+    }
+    Ok(normalized)
+}
+
+fn normalize_catalog(mut catalog: AgentModelCatalog) -> AgentModelCatalog {
+    catalog.models = normalize_model_options(catalog.models).unwrap_or_default();
+    catalog
+}
+
 fn normalize_settings(settings: AppSettings) -> AppSettings {
     AppSettings {
         claude_path: resolve_agent_launch_spec_from_path("claude", &settings.claude_path).program,
@@ -356,6 +503,8 @@ fn normalize_settings(settings: AppSettings) -> AppSettings {
         claude_force_default_tui: settings.claude_force_default_tui,
         terminal_scrollback: clamp_terminal_scrollback(settings.terminal_scrollback),
         use_sideloaded_conpty: settings.use_sideloaded_conpty,
+        claude_model_catalog: normalize_catalog(settings.claude_model_catalog),
+        codex_model_catalog: normalize_catalog(settings.codex_model_catalog),
     }
 }
 
@@ -374,6 +523,8 @@ fn load_settings_unlocked() -> AppSettings {
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
             use_sideloaded_conpty: default_use_sideloaded_conpty(),
+            claude_model_catalog: AgentModelCatalog::default(),
+            codex_model_catalog: AgentModelCatalog::default(),
         });
         if let Ok(dir) = nezha_dir() {
             let _ = fs::create_dir_all(&dir);
@@ -452,6 +603,183 @@ pub async fn save_agent_paths(claude_path: String, codex_path: String) -> Result
         // Nezha 自有 settings 文件,否则下次启动任务会拿到与新路径版本不匹配的旧文件。
         crate::hooks::regenerate_claude_settings()?;
         Ok::<AppSettings, String>(normalized)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn catalog_mut<'a>(
+    settings: &'a mut AppSettings,
+    agent: &str,
+) -> Result<&'a mut AgentModelCatalog, String> {
+    match agent {
+        "claude" => Ok(&mut settings.claude_model_catalog),
+        "codex" => Ok(&mut settings.codex_model_catalog),
+        _ => Err("Unsupported agent. Expected \"claude\" or \"codex\".".to_string()),
+    }
+}
+
+fn save_settings_unlocked(settings: AppSettings) -> Result<AppSettings, String> {
+    let dir = nezha_dir()?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = settings_path()?;
+    let normalized = normalize_settings(settings);
+    let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
+    atomic_write(&path, &raw)?;
+    Ok(normalized)
+}
+
+#[tauri::command]
+pub async fn save_agent_model_catalog(
+    agent: String,
+    models: Vec<AgentModelOption>,
+) -> Result<AppSettings, String> {
+    let models = normalize_model_options(models)?;
+    tokio::task::spawn_blocking(move || {
+        let _guard = settings_lock().lock();
+        let mut settings = load_settings_unlocked();
+        catalog_mut(&mut settings, &agent)?.models = models;
+        save_settings_unlocked(settings)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn parse_codex_model_option(value: &Value) -> Option<AgentModelOption> {
+    let model = value
+        .get("model")
+        .or_else(|| value.get("id"))
+        .and_then(Value::as_str)?
+        .trim();
+    if model.is_empty() {
+        return None;
+    }
+
+    let label = value
+        .get("displayName")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|label| !label.is_empty() && *label != model)
+        .map(str::to_string);
+    let reasoning_efforts = value
+        .get("supportedReasoningEfforts")
+        .and_then(Value::as_array)
+        .map(|efforts| {
+            efforts
+                .iter()
+                .filter_map(|effort| {
+                    effort
+                        .as_str()
+                        .or_else(|| effort.get("reasoningEffort").and_then(Value::as_str))
+                })
+                .map(str::trim)
+                .filter(|effort| !effort.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let default_reasoning_effort = value
+        .get("defaultReasoningEffort")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|effort| !effort.is_empty())
+        .map(str::to_string);
+
+    Some(AgentModelOption {
+        model: model.to_string(),
+        label,
+        reasoning_efforts,
+        default_reasoning_effort,
+    })
+}
+
+fn discover_codex_model_options(
+    codex_rpc: Arc<Mutex<Option<crate::usage::CodexRpcClient>>>,
+) -> Result<Vec<AgentModelOption>, String> {
+    let mut models = Vec::new();
+    let mut cursor: Option<String> = None;
+
+    for _ in 0..10 {
+        let params = match cursor.as_ref() {
+            Some(cursor) => json!({ "limit": 100, "cursor": cursor }),
+            None => json!({ "limit": 100 }),
+        };
+        let result = crate::usage::call_codex_rpc_with_client(
+            Arc::clone(&codex_rpc),
+            "model/list",
+            params,
+            Duration::from_secs(10),
+        )?;
+        let page = result
+            .get("data")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "Codex model/list response did not include a data array.".to_string())?;
+        models.extend(page.iter().filter_map(parse_codex_model_option));
+
+        cursor = result
+            .get("nextCursor")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|cursor| !cursor.is_empty())
+            .map(str::to_string);
+        if cursor.is_none() {
+            break;
+        }
+    }
+
+    normalize_model_options(models)
+}
+
+#[tauri::command]
+pub async fn initialize_agent_model_catalog(
+    agent: String,
+    task_manager: State<'_, TaskManager>,
+) -> Result<AppSettings, String> {
+    if agent != "codex" {
+        return Err(
+            "Automatic model discovery is not available for this agent; add models manually."
+                .to_string(),
+        );
+    }
+    let settings = load_settings_internal();
+    if settings.codex_model_catalog.initialized {
+        return Ok(settings);
+    }
+
+    // 初始化应严格使用刚保存的 Codex 路径；丢弃可能由用量面板基于旧路径启动的实例。
+    // 先从锁内 take，再在锁外 drop（Drop 会 kill + wait，不能持锁做进程 I/O）。
+    let stale_rpc = task_manager.codex_rpc.lock().take();
+    drop(stale_rpc);
+    let codex_rpc = Arc::clone(&task_manager.codex_rpc);
+    let discovered =
+        tokio::task::spawn_blocking(move || discover_codex_model_options(codex_rpc))
+            .await
+            .map_err(|e| e.to_string())??;
+    if discovered.is_empty() {
+        return Err("Codex returned no models; the catalog was left unchanged.".to_string());
+    }
+    let source_version =
+        tokio::task::spawn_blocking(detect_codex_version).await.unwrap_or_default();
+
+    tokio::task::spawn_blocking(move || {
+        let _guard = settings_lock().lock();
+        let mut settings = load_settings_unlocked();
+        let catalog = catalog_mut(&mut settings, "codex")?;
+        if catalog.initialized {
+            return Ok(settings);
+        }
+
+        let mut merged = catalog.models.clone();
+        for option in discovered {
+            if !merged.iter().any(|existing| existing.model == option.model) {
+                merged.push(option);
+            }
+        }
+        catalog.models = normalize_model_options(merged)?;
+        catalog.initialized = true;
+        catalog.initialized_at = Some(chrono::Utc::now().timestamp_millis());
+        catalog.source_version = source_version;
+        save_settings_unlocked(settings)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -694,4 +1022,63 @@ pub async fn get_system_fonts() -> Vec<String> {
     })
     .await
     .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod model_catalog_tests {
+    use super::*;
+
+    #[test]
+    fn parses_codex_model_list_metadata() {
+        let value = json!({
+            "model": "gpt-example",
+            "displayName": "GPT Example",
+            "supportedReasoningEfforts": [
+                { "reasoningEffort": "low", "description": "Fast" },
+                { "reasoningEffort": "high", "description": "Deep" }
+            ],
+            "defaultReasoningEffort": "high"
+        });
+
+        let parsed = parse_codex_model_option(&value).expect("model should parse");
+        assert_eq!(parsed.model, "gpt-example");
+        assert_eq!(parsed.label.as_deref(), Some("GPT Example"));
+        assert_eq!(parsed.reasoning_efforts, vec!["low", "high"]);
+        assert_eq!(parsed.default_reasoning_effort.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn accepts_provider_specific_model_identifiers() {
+        let normalized = normalize_model_options(vec![AgentModelOption {
+            model: "arn:aws:bedrock:region:account:inference-profile/custom/model".to_string(),
+            label: Some("  Production  ".to_string()),
+            reasoning_efforts: vec!["low".to_string(), "high".to_string()],
+            default_reasoning_effort: None,
+        }])
+        .expect("provider model should be accepted");
+
+        assert_eq!(
+            normalized[0].model,
+            "arn:aws:bedrock:region:account:inference-profile/custom/model"
+        );
+        assert_eq!(normalized[0].label.as_deref(), Some("Production"));
+    }
+
+    #[test]
+    fn rejects_duplicate_models_and_control_characters() {
+        let duplicate = AgentModelOption {
+            model: "same".to_string(),
+            label: None,
+            reasoning_efforts: vec![],
+            default_reasoning_effort: None,
+        };
+        assert!(normalize_model_options(vec![duplicate.clone(), duplicate]).is_err());
+        assert!(normalize_model_options(vec![AgentModelOption {
+            model: "bad\nmodel".to_string(),
+            label: None,
+            reasoning_efforts: vec![],
+            default_reasoning_effort: None,
+        }])
+        .is_err());
+    }
 }
