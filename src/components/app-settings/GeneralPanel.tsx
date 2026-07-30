@@ -81,6 +81,47 @@ export function GeneralPanel({
     }
   };
 
+  // 框选自动复制开关:与 ConPTY 同款自包含模式(面板内加载/保存,不经由
+  // App.tsx 透传 props),保存后广播 CHANGED 事件,终端侧的单例监听随之刷新。
+  // null = 尚未读到真实值,渲染为关闭态(与后端默认 false 一致,不会闪)。
+  const [copyOnSelect, setCopyOnSelect] = useState<boolean | null>(null);
+  const [copyOnSelectBusy, setCopyOnSelectBusy] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    invoke<AppSettings>("load_app_settings")
+      .then((loaded) => {
+        if (!cancelled) setCopyOnSelect(loaded.terminal_copy_on_select);
+      })
+      .catch(() => {
+        if (!cancelled) setCopyOnSelect(false);
+      })
+      .finally(() => {
+        if (!cancelled) setCopyOnSelectBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCopyOnSelectToggle = async () => {
+    if (copyOnSelectBusy || copyOnSelect === null) return;
+    const enabled = !copyOnSelect;
+    setCopyOnSelect(enabled);
+    setCopyOnSelectBusy(true);
+    try {
+      const next = await invoke<AppSettings>("save_terminal_copy_on_select", { enabled });
+      setCopyOnSelect(next.terminal_copy_on_select);
+      window.dispatchEvent(new Event(APP_SETTINGS_CHANGED_EVENT));
+    } catch {
+      setCopyOnSelect(!enabled);
+    } finally {
+      setCopyOnSelectBusy(false);
+    }
+  };
+
+  const copyOnSelectOn = copyOnSelect === true;
+
   const conptyOn = sideloadedConpty === true;
   const conptyDisabled = !isConptyEditable || conptyBusy;
   const conptyHint = isConptyEditable
@@ -115,7 +156,10 @@ export function GeneralPanel({
       <div style={s.settingField}>
         <label style={s.settingFieldLabel}>{t("appSettings.appLanguage")}</label>
         <Select.Root value={language} onValueChange={(value) => setLanguage(value as AppLanguage)}>
-          <Select.Trigger aria-label={t("appSettings.appLanguage")} style={s.settingsSelectTriggerCompact}>
+          <Select.Trigger
+            aria-label={t("appSettings.appLanguage")}
+            style={s.settingsSelectTriggerCompact}
+          >
             <Select.Value>{selectedLanguageLabel}</Select.Value>
             <Select.Icon>
               <ChevronDown size={13} strokeWidth={2.2} color="var(--text-hint)" />
@@ -253,6 +297,27 @@ export function GeneralPanel({
             <span>{t("appSettings.terminalScrollbackWarning")}</span>
           </div>
         )}
+      </div>
+
+      <div style={s.settingFieldSpaced}>
+        <label style={s.settingFieldLabel}>{t("appSettings.copyOnSelect")}</label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={copyOnSelectOn}
+          aria-label={t("appSettings.copyOnSelect")}
+          disabled={copyOnSelectBusy}
+          data-checked={copyOnSelectOn}
+          data-disabled={copyOnSelectBusy}
+          onClick={() => void handleCopyOnSelectToggle()}
+          className="app-settings-toggle"
+        >
+          <span className="app-settings-toggle-label">{t("appSettings.copyOnSelectToggle")}</span>
+          <span className="app-settings-toggle-track">
+            <span className="app-settings-toggle-knob" />
+          </span>
+        </button>
+        <span style={s.settingFieldHint}>{t("appSettings.copyOnSelectHint")}</span>
       </div>
 
       <div style={s.settingFieldSpaced}>

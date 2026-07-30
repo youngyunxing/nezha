@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { attachSmartCopy } from "./terminalCopyHelper";
+import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import type { TerminalFontSize, FontFamily, ThemeVariant } from "../types";
 import {
@@ -187,6 +187,9 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
       }, 50);
 
       const disposeSmartCopy = attachSmartCopy(term);
+      // 必须挂在 attachMacWebKitTerminalGuard 之后:guard 的 pointerup(恢复
+      // textarea + refocus)先按注册顺序执行,复制动作发生在防线状态复原之后。
+      const disposeCopyOnSelect = attachCopyOnSelect(term, container);
       const linuxIME = attachLinuxIMEFix(term, (data) => {
         invoke("send_input", { taskId: shellId, data }).catch(() => {});
       });
@@ -240,6 +243,7 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
         }
         unlisten?.();
         disposeSmartCopy();
+        disposeCopyOnSelect();
         disposeOnData.dispose();
         resizeObserver.disconnect();
         document.removeEventListener("visibilitychange", handleVisibilityChange);

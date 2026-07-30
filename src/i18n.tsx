@@ -71,6 +71,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       "Maximum number of lines kept in each task terminal's scrollback. Lines beyond this are discarded. Range: 500–5000, step 500. Applies to newly opened terminals only.",
     "appSettings.terminalScrollbackWarning":
       "Above 3000, memory and selection/copy latency grow noticeably; many concurrent tasks may lag.",
+    "appSettings.copyOnSelect": "Copy on Select",
+    "appSettings.copyOnSelectToggle": "Copy terminal selection to clipboard automatically",
+    "appSettings.copyOnSelectHint":
+      "When on, text selected in a terminal is copied to the clipboard as soon as you release the mouse — no Cmd/Ctrl+C needed. Note: every selection overwrites the clipboard.",
     "appSettings.sideloadedConpty": "Bundled ConPTY (Windows)",
     "appSettings.sideloadedConptyToggle": "Use the newer ConPTY bundled with Nezha",
     "appSettings.sideloadedConptyHint":
@@ -669,6 +673,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       "每个任务终端最多保留的回滚行数,超出后旧行被丢弃。范围:500–5000,步长 500。仅对新打开的终端生效。",
     "appSettings.terminalScrollbackWarning":
       "3000 行以上,内存与选区/复制耗时明显增加,多任务并发可能卡顿。",
+    "appSettings.copyOnSelect": "框选自动复制",
+    "appSettings.copyOnSelectToggle": "终端选中文本后自动复制到剪贴板",
+    "appSettings.copyOnSelectHint":
+      "开启后,在终端中框选文本、松开鼠标即复制到剪贴板,无需再按 Cmd/Ctrl+C。注意:每次框选都会覆盖剪贴板内容。",
     "appSettings.sideloadedConpty": "内置 ConPTY(Windows)",
     "appSettings.sideloadedConptyToggle": "使用 Nezha 内置的新版 ConPTY",
     "appSettings.sideloadedConptyHint":

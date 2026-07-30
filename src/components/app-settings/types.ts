@@ -63,6 +63,8 @@ export interface AppSettings {
   terminal_shift_enter_newline: boolean;
   claude_force_default_tui: boolean;
   terminal_scrollback: number;
+  /** 终端框选松手后自动把选区复制到剪贴板（copy-on-select） */
+  terminal_copy_on_select: boolean;
   /** Windows：优先使用随包侧载的新版 ConPTY（重启后生效），其余平台无效果 */
   use_sideloaded_conpty: boolean;
   claude_model_catalog: AgentModelCatalog;
@@ -80,6 +82,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   terminal_shift_enter_newline: DEFAULT_SHIFT_ENTER_NEWLINE,
   claude_force_default_tui: true,
   terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
+  terminal_copy_on_select: false,
   use_sideloaded_conpty: true,
   claude_model_catalog: EMPTY_AGENT_MODEL_CATALOG,
   codex_model_catalog: EMPTY_AGENT_MODEL_CATALOG,

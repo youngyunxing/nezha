@@ -119,6 +119,10 @@ pub struct AppSettings {
     pub claude_force_default_tui: bool,
     #[serde(default = "default_terminal_scrollback")]
     pub terminal_scrollback: u32,
+    /// 终端框选松手后自动把选区复制到剪贴板（copy-on-select）。默认关闭：
+    /// 每次框选都会覆盖剪贴板，对部分用户是反直觉行为。
+    #[serde(default)]
+    pub terminal_copy_on_select: bool,
     /// Windows：优先使用随包侧载的新版 ConPTY（修复部分系统全屏 TUI 输出不进
     /// scrollback、滚轮无法回滚）。侧载版异常时的手动兜底：改为 false 并重启，
     /// 回到系统内置 ConPTY。详见 platform/windows.rs::preload_sideloaded_conpty。
@@ -139,6 +143,7 @@ impl Default for AppSettings {
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
+            terminal_copy_on_select: false,
             use_sideloaded_conpty: default_use_sideloaded_conpty(),
             claude_model_catalog: AgentModelCatalog::default(),
             codex_model_catalog: AgentModelCatalog::default(),
@@ -502,6 +507,7 @@ fn normalize_settings(settings: AppSettings) -> AppSettings {
         terminal_shift_enter_newline: settings.terminal_shift_enter_newline,
         claude_force_default_tui: settings.claude_force_default_tui,
         terminal_scrollback: clamp_terminal_scrollback(settings.terminal_scrollback),
+        terminal_copy_on_select: settings.terminal_copy_on_select,
         use_sideloaded_conpty: settings.use_sideloaded_conpty,
         claude_model_catalog: normalize_catalog(settings.claude_model_catalog),
         codex_model_catalog: normalize_catalog(settings.codex_model_catalog),
@@ -522,6 +528,7 @@ fn load_settings_unlocked() -> AppSettings {
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
+            terminal_copy_on_select: false,
             use_sideloaded_conpty: default_use_sideloaded_conpty(),
             claude_model_catalog: AgentModelCatalog::default(),
             codex_model_catalog: AgentModelCatalog::default(),
@@ -829,6 +836,25 @@ pub async fn save_terminal_scrollback(scrollback: u32) -> Result<AppSettings, St
         let _guard = settings_lock().lock();
         let mut settings = load_settings_unlocked();
         settings.terminal_scrollback = clamp_terminal_scrollback(scrollback);
+
+        let dir = nezha_dir()?;
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = settings_path()?;
+        let normalized = normalize_settings(settings);
+        let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
+        atomic_write(&path, &raw)?;
+        Ok::<AppSettings, String>(normalized)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn save_terminal_copy_on_select(enabled: bool) -> Result<AppSettings, String> {
+    tokio::task::spawn_blocking(move || {
+        let _guard = settings_lock().lock();
+        let mut settings = load_settings_unlocked();
+        settings.terminal_copy_on_select = enabled;
 
         let dir = nezha_dir()?;
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

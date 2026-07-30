@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
-import { attachSmartCopy } from "./terminalCopyHelper";
+import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import {
   DEFAULT_SHIFT_ENTER_NEWLINE,
@@ -173,6 +173,9 @@ export function TerminalView({
       matchesNewline: (e) => matchesTerminalNewline(e, shiftEnterNewlineRef.current),
       onNewline: () => onInputRef.current(TERMINAL_NEWLINE_SEQUENCE),
     });
+    // 必须挂在 attachMacWebKitTerminalGuard 之后:guard 的 pointerup(恢复
+    // textarea + refocus)先按注册顺序执行,复制动作发生在防线状态复原之后。
+    const disposeCopyOnSelect = attachCopyOnSelect(term, container);
     const linuxIME = attachLinuxIMEFix(term, (data) => onInputRef.current(data));
     const disposeOnData = { dispose: () => linuxIME.dispose() };
 
@@ -223,6 +226,7 @@ export function TerminalView({
       disposeMacWebKitGuard();
       disposeInputFix();
       disposeSmartCopy();
+      disposeCopyOnSelect();
       disposeOnData.dispose();
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
