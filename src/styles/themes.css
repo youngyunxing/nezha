@@ -39,9 +39,8 @@
   --accent-hover: #4d6ff2;
   --accent-subtle: rgba(93, 124, 255, 0.12);
 
-  --brand-mark-gradient: linear-gradient(145deg, #13213f, #1676d2 58%, #2fb7d3 100%);
-  --brand-mark-glow: rgba(22, 118, 210, 0.14);
-  --brand-mark-inner-bg: rgba(9, 12, 18, 0.82);
+  --brand-mark-gradient: #16a34a;
+  --brand-mark-inner-bg: #16a34a;
   --brand-mark-fg: #ffffff;
   --badge-muted-bg: rgba(123, 139, 166, 0.14);
 

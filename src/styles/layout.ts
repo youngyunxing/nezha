@@ -56,11 +56,10 @@ export const layout = {
     borderRadius: 12,
     background: "var(--brand-mark-gradient)",
     padding: 4,
-    boxShadow: "0 10px 20px var(--brand-mark-glow)",
   },
   sidebarBrandBadge: {
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "center",
     width: "100%",
     height: "100%",
@@ -70,7 +69,6 @@ export const layout = {
     fontSize: 15,
     fontWeight: 800,
     letterSpacing: 0.6,
-    paddingBottom: 4,
   },
   sidebarBrandTitle: {
     fontSize: 16,
