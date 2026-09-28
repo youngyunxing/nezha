@@ -37,7 +37,6 @@ fn run_git<S: AsRef<std::ffi::OsStr>>(
     validate_project_path(project_path)?;
 
     let mut cmd = std::process::Command::new("git");
-    crate::subprocess::configure_background_command(&mut cmd);
     cmd.args(args)
         .current_dir(project_path)
         .output()
@@ -65,7 +64,6 @@ async fn run_git_with_timeout(
     validate_project_path(&project_path)?;
 
     let mut cmd = tokio::process::Command::new("git");
-    crate::subprocess::configure_background_tokio_command(&mut cmd);
     let mut child = cmd
         .args(&args)
         .current_dir(&project_path)
@@ -287,7 +285,6 @@ fn run_agent_commit_message_command(
 ) -> Result<Output, String> {
     let launch = crate::app_settings::get_agent_launch_spec(agent);
     let mut cmd = Command::new(&launch.program);
-    crate::subprocess::configure_background_command(&mut cmd);
     if agent == "codex" {
         cmd.args(["exec", prompt]);
     } else {

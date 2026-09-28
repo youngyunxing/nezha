@@ -13,7 +13,6 @@ import {
   type TaskDisplayWindow,
   type TerminalScrollback,
 } from "../../types";
-import { APP_PLATFORM } from "../../platform";
 import s from "../../styles";
 import { APP_SETTINGS_CHANGED_EVENT, type AppSettings } from "./types";
 
@@ -34,54 +33,7 @@ export function GeneralPanel({
 }) {
   const { language, setLanguage, t } = useI18n();
 
-  // 侧载 ConPTY 开关:仅 Windows 可改,其他平台展示为禁用态(让全平台用户
-  // 知道有此能力)。仅后端启动时读取,面板内自包含加载/保存,不经由 App.tsx
-  // 透传 props(其他面板拿到的 AppSettings 由 CHANGED 事件自行刷新)。
-  const isConptyEditable = APP_PLATFORM === "windows";
-  // null = 尚未从后端读到真实值(仅 Windows 需要读):渲染为关闭态,避免磁盘值
-  // 为 false 时先闪一下「开启」。非 Windows 固定展示默认值 true 的禁用态。
-  const [sideloadedConpty, setSideloadedConpty] = useState<boolean | null>(
-    isConptyEditable ? null : true,
-  );
-  // 加载或保存进行中:禁用开关,防止保存期间连点(stale 闭包会连发同一值)
-  const [conptyBusy, setConptyBusy] = useState(isConptyEditable);
-
-  useEffect(() => {
-    if (!isConptyEditable) return;
-    let cancelled = false;
-    invoke<AppSettings>("load_app_settings")
-      .then((loaded) => {
-        if (!cancelled) setSideloadedConpty(loaded.use_sideloaded_conpty);
-      })
-      .catch(() => {
-        // 读取失败按后端默认值展示,保持开关可操作
-        if (!cancelled) setSideloadedConpty(true);
-      })
-      .finally(() => {
-        if (!cancelled) setConptyBusy(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isConptyEditable]);
-
-  const handleSideloadedConptyToggle = async () => {
-    if (!isConptyEditable || conptyBusy || sideloadedConpty === null) return;
-    const enabled = !sideloadedConpty;
-    setSideloadedConpty(enabled);
-    setConptyBusy(true);
-    try {
-      const next = await invoke<AppSettings>("save_use_sideloaded_conpty", { enabled });
-      setSideloadedConpty(next.use_sideloaded_conpty);
-      window.dispatchEvent(new Event(APP_SETTINGS_CHANGED_EVENT));
-    } catch {
-      setSideloadedConpty(!enabled);
-    } finally {
-      setConptyBusy(false);
-    }
-  };
-
-  // 框选自动复制开关:与 ConPTY 同款自包含模式(面板内加载/保存,不经由
+  // 框选自动复制开关:面板内自包含加载/保存,不经由
   // App.tsx 透传 props),保存后广播 CHANGED 事件,终端侧的单例监听随之刷新。
   // null = 尚未读到真实值,渲染为关闭态(与后端默认 false 一致,不会闪)。
   const [copyOnSelect, setCopyOnSelect] = useState<boolean | null>(null);
@@ -122,11 +74,7 @@ export function GeneralPanel({
 
   const copyOnSelectOn = copyOnSelect === true;
 
-  const conptyOn = sideloadedConpty === true;
-  const conptyDisabled = !isConptyEditable || conptyBusy;
-  const conptyHint = isConptyEditable
-    ? t("appSettings.sideloadedConptyHint")
-    : t("appSettings.sideloadedConptyWindowsOnly") + t("appSettings.sideloadedConptyHint");
+
 
   const languageOptions: Array<{ value: AppLanguage; label: string }> = [
     { value: "en", label: t("language.english") },
@@ -320,24 +268,6 @@ export function GeneralPanel({
         <span style={s.settingFieldHint}>{t("appSettings.copyOnSelectHint")}</span>
       </div>
 
-      <div style={s.settingFieldSpaced}>
-        <label style={s.settingFieldLabel}>{t("appSettings.sideloadedConpty")}</label>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={conptyOn}
-          aria-label={t("appSettings.sideloadedConpty")}
-          disabled={conptyDisabled}
-          onClick={() => void handleSideloadedConptyToggle()}
-          style={conptyDisabled ? s.settingToggleDisabled : s.settingToggle}
-        >
-          <span style={s.settingToggleLabel}>{t("appSettings.sideloadedConptyToggle")}</span>
-          <span style={conptyOn ? s.settingToggleTrackOn : s.settingToggleTrack}>
-            <span style={conptyOn ? s.settingToggleKnobOn : s.settingToggleKnob} />
-          </span>
-        </button>
-        <span style={s.settingFieldHint}>{conptyHint}</span>
-      </div>
     </div>
   );
 }

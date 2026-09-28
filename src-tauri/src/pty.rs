@@ -21,15 +21,6 @@ const MAX_REASONING_EFFORT_BYTES: usize = 128;
 /// 最终使写入进程（Claude/Codex）的 write() 系统调用阻塞，从源头限流。
 const PTY_EMIT_CHANNEL_CAPACITY: usize = 32;
 
-/// 统一的 PTY system 入口:Windows 上先等待侧载 ConPTY 预加载完成再创建
-/// (portable-pty 的 CONPTY 是 lazy_static,首次 openpty 前必须完成预加载,
-/// 见 platform/windows.rs;其余平台该屏障为 no-op)。openpty 一律经此获取,
-/// 不要直接调 native_pty_system()。
-fn pty_system() -> Box<dyn portable_pty::PtySystem + Send> {
-    crate::platform::wait_conpty_preload();
-    native_pty_system()
-}
-
 fn task_attachments_dir(project_path: &str, task_id: &str) -> std::path::PathBuf {
     Path::new(project_path)
         .join(".nezha")
@@ -625,7 +616,7 @@ fn spawn_fork_task_process(
         command.env(key, value);
     }
 
-    let pair = pty_system()
+    let pair = native_pty_system()
         .openpty(PtySize {
             rows,
             cols,
@@ -786,7 +777,7 @@ pub async fn run_task(
         .lock()
         .remove(&task_id);
 
-    let pair = pty_system()
+    let pair = native_pty_system()
         .openpty(PtySize {
             rows: rows.unwrap_or(50),
             cols: cols.unwrap_or(220),
@@ -1119,7 +1110,7 @@ pub async fn resume_task(
         .lock()
         .remove(&task_id);
 
-    let pair = pty_system()
+    let pair = native_pty_system()
         .openpty(PtySize {
             rows: rows.unwrap_or(50),
             cols: cols.unwrap_or(220),
@@ -1387,7 +1378,7 @@ pub async fn open_shell(
         task_manager.remove_pty_handles(&shell_id);
     }
 
-    let pair = pty_system()
+    let pair = native_pty_system()
         .openpty(PtySize {
             rows: rows.unwrap_or(24),
             cols: cols.unwrap_or(120),

@@ -20,7 +20,6 @@ mod pty;
 mod session;
 mod skills;
 mod storage;
-mod subprocess;
 mod usage;
 
 use session::{ClaudeSessionInfo, CodexSessionInfo};
@@ -251,20 +250,6 @@ pub fn run() {
 
     builder
         .setup(|app| {
-            // Windows:后台线程预加载随包侧载的新版 ConPTY(读 settings + LoadLibrary
-            // + 拉起 OpenConsole.exe 自检共 50-150ms,不能阻塞窗口首帧)。
-            // 部分系统内置 ConPTY 不把全屏 TUI 输出送入 scrollback(滚轮无法回滚);
-            // portable-pty 创建 PTY 时会优先复用预加载的 conpty.dll,缺失/失败/
-            // 自检不过均自动回退系统版。pty.rs 在首次 openpty 前通过
-            // wait_conpty_preload() 等待完成,保证时序。详见 platform/windows.rs 与
-            // src-tauri/resources/conpty/README.md。
-            #[cfg(windows)]
-            {
-                use tauri::Manager;
-                if let Ok(resource_dir) = app.path().resource_dir() {
-                    crate::platform::spawn_conpty_preload(resource_dir);
-                }
-            }
             // 后台预热 login shell 环境，避免第一次启动任务时阻塞
             std::thread::spawn(|| {
                 crate::app_settings::get_login_shell_path();
@@ -397,7 +382,6 @@ pub fn run() {
             app_settings::save_send_shortcut,
             app_settings::save_shift_enter_newline,
             app_settings::save_claude_force_default_tui,
-            app_settings::save_use_sideloaded_conpty,
             app_settings::save_terminal_scrollback,
             app_settings::save_terminal_copy_on_select,
             app_settings::detect_agent_paths,

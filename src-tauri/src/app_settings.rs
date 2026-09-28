@@ -39,10 +39,6 @@ fn default_terminal_scrollback() -> u32 {
     1000
 }
 
-fn default_use_sideloaded_conpty() -> bool {
-    true
-}
-
 /// scrollback 必须在 [500, 5000] 之间且为 500 的倍数；越界或非整步则就近 snap。
 fn clamp_terminal_scrollback(value: u32) -> u32 {
     let clamped = value.clamp(500, 5000);
@@ -123,11 +119,6 @@ pub struct AppSettings {
     /// 每次框选都会覆盖剪贴板，对部分用户是反直觉行为。
     #[serde(default)]
     pub terminal_copy_on_select: bool,
-    /// Windows：优先使用随包侧载的新版 ConPTY（修复部分系统全屏 TUI 输出不进
-    /// scrollback、滚轮无法回滚）。侧载版异常时的手动兜底：改为 false 并重启，
-    /// 回到系统内置 ConPTY。详见 platform/windows.rs::preload_sideloaded_conpty。
-    #[serde(default = "default_use_sideloaded_conpty")]
-    pub use_sideloaded_conpty: bool,
     #[serde(default)]
     pub claude_model_catalog: AgentModelCatalog,
     #[serde(default)]
@@ -144,7 +135,6 @@ impl Default for AppSettings {
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
             terminal_copy_on_select: false,
-            use_sideloaded_conpty: default_use_sideloaded_conpty(),
             claude_model_catalog: AgentModelCatalog::default(),
             codex_model_catalog: AgentModelCatalog::default(),
         }
@@ -196,12 +186,6 @@ fn nezha_dir() -> Result<PathBuf, String> {
 
 fn settings_path() -> Result<PathBuf, String> {
     Ok(nezha_dir()?.join("settings.json"))
-}
-
-/// ConPTY 预加载 crash-loop 标记的唯一路径来源:platform/windows.rs 的预加载
-/// 与下方 save_use_sideloaded_conpty 的清除必须指向同一文件,不要各自拼路径。
-pub(crate) fn conpty_preload_marker_path() -> Option<PathBuf> {
-    nezha_dir().ok().map(|dir| dir.join(".conpty-preload-inflight"))
 }
 
 fn detect_path(binary: &str) -> String {
@@ -508,7 +492,6 @@ fn normalize_settings(settings: AppSettings) -> AppSettings {
         claude_force_default_tui: settings.claude_force_default_tui,
         terminal_scrollback: clamp_terminal_scrollback(settings.terminal_scrollback),
         terminal_copy_on_select: settings.terminal_copy_on_select,
-        use_sideloaded_conpty: settings.use_sideloaded_conpty,
         claude_model_catalog: normalize_catalog(settings.claude_model_catalog),
         codex_model_catalog: normalize_catalog(settings.codex_model_catalog),
     }
@@ -529,7 +512,6 @@ fn load_settings_unlocked() -> AppSettings {
             claude_force_default_tui: default_claude_force_default_tui(),
             terminal_scrollback: default_terminal_scrollback(),
             terminal_copy_on_select: false,
-            use_sideloaded_conpty: default_use_sideloaded_conpty(),
             claude_model_catalog: AgentModelCatalog::default(),
             codex_model_catalog: AgentModelCatalog::default(),
         });
@@ -891,38 +873,6 @@ pub async fn save_claude_force_default_tui(enabled: bool) -> Result<AppSettings,
     .map_err(|e| e.to_string())?
 }
 
-/// 侧载 ConPTY 开关(仅 Windows 有实际效果)。切换后需重启应用才会生效:
-/// portable-pty 的 CONPTY 是 lazy_static,进程内首次创建 PTY 后无法再切换实现。
-#[tauri::command]
-pub async fn save_use_sideloaded_conpty(enabled: bool) -> Result<AppSettings, String> {
-    tokio::task::spawn_blocking(move || {
-        // 切换视为显式重试:清除 crash-loop 标记(见 platform/windows.rs),
-        // 让下次启动重新尝试预加载。非 Windows 上文件不存在,删除是无操作。
-        if let Some(marker) = conpty_preload_marker_path() {
-            let _ = fs::remove_file(marker);
-        }
-        let _guard = settings_lock().lock();
-        let mut settings = load_settings_unlocked();
-        settings.use_sideloaded_conpty = enabled;
-
-        let dir = nezha_dir()?;
-        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = settings_path()?;
-        let normalized = normalize_settings(settings);
-        let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
-        atomic_write(&path, &raw)?;
-        Ok::<AppSettings, String>(normalized)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// 读取侧载 ConPTY 开关(仅 Windows 预加载后台线程使用,见 platform/windows.rs)。
-#[cfg(windows)]
-pub(crate) fn use_sideloaded_conpty_enabled() -> bool {
-    load_settings_internal().use_sideloaded_conpty
-}
-
 #[tauri::command]
 pub async fn detect_agent_paths() -> Result<AppSettings, String> {
     tokio::task::spawn_blocking(|| {
@@ -937,7 +887,6 @@ pub async fn detect_agent_paths() -> Result<AppSettings, String> {
 
 fn detect_version(launch: &AgentLaunchSpec) -> Option<String> {
     let mut cmd = Command::new(&launch.program);
-    crate::subprocess::configure_background_command(&mut cmd);
     cmd.arg("--version")
         .env("PATH", get_login_shell_path())
         .stdin(Stdio::null())

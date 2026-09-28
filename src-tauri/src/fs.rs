@@ -708,7 +708,6 @@ pub async fn delete_path(path: String, project_path: String) -> Result<(), Strin
 pub async fn list_project_files(project_path: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut cmd = std::process::Command::new("git");
-        crate::subprocess::configure_background_command(&mut cmd);
         let output = cmd
             .args([
                 "-c",
@@ -776,7 +775,6 @@ pub async fn search_project_files(
         let limit = limit.unwrap_or(80).clamp(1, MAX_FILE_SEARCH_RESULTS);
 
         let mut cmd = Command::new("git");
-        crate::subprocess::configure_background_command(&mut cmd);
         let output = cmd
             .args(["-c", "core.quotePath=false", "ls-files", "-z"])
             .current_dir(&root)

@@ -49,7 +49,6 @@ impl CodexRpcClient {
         let launch = get_agent_launch_spec("codex");
 
         let mut cmd = Command::new(&launch.program);
-        crate::subprocess::configure_background_command(&mut cmd);
         cmd.arg("app-server")
             .env("PATH", &shell_path)
             .stdin(Stdio::piped())
@@ -377,7 +376,6 @@ async fn read_claude_usage() -> UsageSource<ClaudeUsageData> {
         tokio::task::spawn_blocking(|| -> Result<(String, Option<String>), String> {
             let shell_path = get_login_shell_path();
             let mut cmd = Command::new("security");
-            crate::subprocess::configure_background_command(&mut cmd);
             let output = cmd
                 .args([
                     "find-generic-password",
