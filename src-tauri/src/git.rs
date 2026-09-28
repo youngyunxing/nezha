@@ -1934,7 +1934,6 @@ mod tests {
         let _ = fs::remove_dir_all(&project_dir);
     }
 
-    #[cfg(unix)]
     #[test]
     fn discover_git_roots_skips_repositories_reached_through_external_symlinks() {
         use std::os::unix::fs::symlink;

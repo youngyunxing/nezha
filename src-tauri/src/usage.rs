@@ -354,10 +354,6 @@ fn attempt_codex_usage_calls(client: &mut CodexRpcClient) -> Result<CodexUsageDa
 // ---------------------------------------------------------------------------
 
 async fn read_claude_usage() -> UsageSource<ClaudeUsageData> {
-    if !cfg!(target_os = "macos") {
-        return unavailable("Claude usage currently relies on macOS Keychain.");
-    }
-
     // 429 冷却检查：上次限流后 5 分钟内直接跳过
     {
         let guard = CLAUDE_429_UNTIL.lock();

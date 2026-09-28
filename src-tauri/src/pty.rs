@@ -472,11 +472,8 @@ fn build_claude_cmd(
     reasoning_effort: Option<&str>,
 ) -> CommandBuilder {
     let mut c = CommandBuilder::new(agent_bin);
-    // 仅 macOS 注入：Claude Code v2.1.150+ 默认开 xterm 鼠标上报（mode 1002），
-    // 会吞掉 macOS 端 xterm.js 的原生拖动框选；关掉后滚轮回退到 xterm scrollback。
-    // Windows 上 xterm.js + Claude 默认就能框选+滚轮（v0.4.0 已验证），加这个反而
-    // 让滚轮失效（见 anthropics/claude-code#51393），所以只对 macOS 启用。
-    #[cfg(target_os = "macos")]
+    // Claude Code v2.1.150+ 默认开 xterm 鼠标上报(mode 1002),会吞掉 xterm.js 的
+    // 原生拖动框选;关掉后滚轮回退到 xterm scrollback。
     c.env("CLAUDE_CODE_DISABLE_MOUSE", "1");
     match permission_mode {
         "ask" => {

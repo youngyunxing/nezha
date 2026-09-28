@@ -413,14 +413,8 @@ fn scan_skills_in(hub_path: &Path) -> Vec<Skill> {
 
 // ── Symlink helpers ──────────────────────────────────────────────────────────
 
-#[cfg(unix)]
 fn create_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, link)
-}
-
-#[cfg(windows)]
-fn create_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_dir(target, link)
 }
 
 fn classify_existing(path: &Path) -> Option<(String, Option<String>)> {
