@@ -12,16 +12,11 @@ import {
 } from "../../projectAvatar";
 import { shortenPath } from "../../utils";
 import { useI18n } from "../../i18n";
-import { APP_PLATFORM, type AppPlatform } from "../../platform";
 
 type IconMode = "label" | "emoji";
 
-// 系统 emoji 键盘快捷键提示;Linux 各桌面环境不统一,不给提示。
-const EMOJI_KEYBOARD_SHORTCUT: Record<AppPlatform, string | null> = {
-  macos: "⌃ ⌘ Space",
-  windows: "Win + .",
-  other: null,
-};
+// 系统 emoji 键盘快捷键提示。
+const EMOJI_KEYBOARD_SHORTCUT = "⌃ ⌘ Space";
 
 /**
  * 项目头像外观编辑器(弹层正文):图标(缩写 / emoji)+ 预设色板 + 恢复默认。
@@ -102,7 +97,7 @@ export function ProjectAppearanceEditor({
     onChange(undefined);
   };
 
-  const shortcut = EMOJI_KEYBOARD_SHORTCUT[APP_PLATFORM];
+  const shortcut = EMOJI_KEYBOARD_SHORTCUT;
   const isCustomized = Boolean(avatar);
 
   return (

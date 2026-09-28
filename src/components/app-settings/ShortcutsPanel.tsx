@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { useI18n } from "../../i18n";
-import { APP_PLATFORM } from "../../platform";
 import {
   getAltEnterNewlineKeys,
   getKanbanShortcutKeys,
@@ -145,22 +144,22 @@ export function ShortcutsPanel() {
   const sendShortcutOptions: ShortcutOption[] = [
     {
       value: "mod_enter",
-      keys: getSendShortcutKeys("mod_enter", APP_PLATFORM),
+      keys: getSendShortcutKeys("mod_enter"),
       ariaLabel: t("appSettings.sendShortcutModEnter"),
     },
     {
       value: "enter",
-      keys: getSendShortcutKeys("enter", APP_PLATFORM),
+      keys: getSendShortcutKeys("enter"),
       ariaLabel: t("appSettings.sendShortcutEnter"),
     },
   ];
-  const sendShortcutKeys = getSendShortcutKeys(settings.send_shortcut, APP_PLATFORM);
-  const newlineShortcutKeys = getNewlineShortcutKeys(settings.send_shortcut, APP_PLATFORM);
+  const sendShortcutKeys = getSendShortcutKeys(settings.send_shortcut);
+  const newlineShortcutKeys = getNewlineShortcutKeys(settings.send_shortcut);
   const shiftEnterEnabled = settings.terminal_shift_enter_newline;
 
   const terminalNewlineHint = (
     <>
-      {renderShortcutKeys(getAltEnterNewlineKeys(APP_PLATFORM), s.shortcutHintKey)}
+      {renderShortcutKeys(getAltEnterNewlineKeys(), s.shortcutHintKey)}
       <span>{t("appSettings.terminalNewlineAltAlways")}</span>
     </>
   );
@@ -215,7 +214,7 @@ export function ShortcutsPanel() {
           <div style={s.shortcutField}>
             <label style={s.shortcutFieldLabel}>{t("appSettings.kanbanShortcut")}</label>
             <div style={s.shortcutReadonlyKey}>
-              {renderShortcutKeys(getKanbanShortcutKeys(APP_PLATFORM))}
+              {renderShortcutKeys(getKanbanShortcutKeys())}
             </div>
             <div style={s.shortcutHint}>{t("appSettings.kanbanShortcutHint")}</div>
           </div>

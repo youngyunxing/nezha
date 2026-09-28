@@ -3,7 +3,6 @@ import type { Project } from "../../types";
 import { CODE_EXTS } from "../../utils";
 import type { FileEntry, CrossProjectRef, MentionItem } from "./MentionPopover";
 import { useI18n } from "../../i18n";
-import { APP_PLATFORM } from "../../platform";
 import {
   shouldInsertPromptNewlineKey,
   shouldSubmitPromptKey,
@@ -390,12 +389,12 @@ export function PromptEditor({
         return;
       }
     }
-    if (!isComposingRef.current && shouldSubmitPromptKey(e, sendShortcut, APP_PLATFORM)) {
+    if (!isComposingRef.current && shouldSubmitPromptKey(e, sendShortcut)) {
       e.preventDefault();
       onSubmit(true);
       return;
     }
-    if (!isComposingRef.current && shouldInsertPromptNewlineKey(e, sendShortcut, APP_PLATFORM)) {
+    if (!isComposingRef.current && shouldInsertPromptNewlineKey(e, sendShortcut)) {
       e.preventDefault();
       insertEditorLineBreak();
       onSetIsEmpty(false);

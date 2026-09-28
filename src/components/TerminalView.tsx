@@ -26,7 +26,7 @@ import {
   refreshTerminalDisplay,
   unregisterActiveTerminal,
 } from "./terminalShared";
-import { attachLinuxIMEFix, attachMacWebKitShiftInputFix } from "./terminalInputFix";
+import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalViewProps {
@@ -176,7 +176,7 @@ export function TerminalView({
     // 必须挂在 attachMacWebKitTerminalGuard 之后:guard 的 pointerup(恢复
     // textarea + refocus)先按注册顺序执行,复制动作发生在防线状态复原之后。
     const disposeCopyOnSelect = attachCopyOnSelect(term, container);
-    const linuxIME = attachLinuxIMEFix(term, (data) => onInputRef.current(data));
+    const linuxIME = term.onData((data) => onInputRef.current(data));
     const disposeOnData = { dispose: () => linuxIME.dispose() };
 
     const handlePointerDown = (e: PointerEvent) => {

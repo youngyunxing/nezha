@@ -34,7 +34,6 @@ import { SKILL_HUB_CHANGED_EVENT } from "./components/app-settings/types";
 import { KanbanView, OPEN_KANBAN_VIEW_EVENT } from "./components/KanbanView";
 import { useToast } from "./components/Toast";
 import { isHideWindowShortcut, isToggleKanbanShortcut } from "./shortcuts";
-import { APP_PLATFORM } from "./platform";
 import { ProjectAppearanceProvider } from "./hooks/useProjectAppearance";
 import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
@@ -422,12 +421,10 @@ function App() {
   }, [themeMode]);
 
   useEffect(() => {
-    // Cmd+W 收起窗口（隐藏到 Dock），仅 macOS 启用：隐藏后点 Dock 图标可唤回
-    // （见 lib.rs Reopen）。其他平台没有 Dock/托盘唤回入口，隐藏后窗口会丢失，故不启用。
+    // Cmd+W 收起窗口（隐藏到 Dock），点 Dock 图标可唤回（见 lib.rs Reopen）。
     // 在捕获阶段拦截，先于 xterm 等组件的 keydown 处理，避免被吞掉。
-    if (APP_PLATFORM !== "macos") return;
     function handleHideWindow(event: KeyboardEvent) {
-      if (!isHideWindowShortcut(event, APP_PLATFORM)) return;
+      if (!isHideWindowShortcut(event)) return;
       event.preventDefault();
       // 走后端命令收起窗口：全屏时需先退出全屏再隐藏，否则会留下黑屏的空 Space。
       invoke("hide_main_window").catch(console.error);
@@ -437,11 +434,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Cmd+K (macOS) / Alt+K (其他平台) 切换看板浮层。全平台启用——平台差异由
-    // isToggleKanbanShortcut 内部处理（非 mac 用 Alt 以避开终端 Ctrl+K / Ctrl+Shift+C）。
-    // 捕获阶段拦截，先于 xterm 处理；浮层内的 Esc 关闭仍由 KanbanView 自己负责。
+    // Cmd+K 切换看板浮层。捕获阶段拦截，先于 xterm 处理；
+    // 浮层内的 Esc 关闭仍由 KanbanView 自己负责。
     function handleToggleKanban(event: KeyboardEvent) {
-      if (!isToggleKanbanShortcut(event, APP_PLATFORM)) return;
+      if (!isToggleKanbanShortcut(event)) return;
       event.preventDefault();
       setShowKanban((prev) => !prev);
     }

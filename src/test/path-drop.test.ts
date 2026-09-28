@@ -37,13 +37,6 @@ describe("terminal path drop helpers", () => {
     expect(formatTerminalDroppedPath("/repo/Bob's file.txt")).toBe("'/repo/Bob'\\''s file.txt'");
   });
 
-  test("formats Windows terminal paths with Windows-compatible quoting", () => {
-    expect(formatTerminalDroppedPath("C:\\tmp\\Bob's file.txt", "windows")).toBe(
-      "\"C:\\tmp\\Bob's file.txt\"",
-    );
-    expect(formatTerminalDroppedPath("C:\\tmp\\plain.txt", "windows")).toBe("C:\\tmp\\plain.txt");
-  });
-
   test("rejects paths containing PTY control characters that would trigger Enter", () => {
     expect(formatTerminalDroppedPath("/repo/evil\nrm -rf ~")).toBe("");
     expect(formatTerminalDroppedPath("/repo/foo\r/bar")).toBe("");
@@ -54,12 +47,6 @@ describe("terminal path drop helpers", () => {
     expect(
       formatTerminalDroppedPaths(["/repo/safe.txt", "/repo/evil\nrm -rf ~", "/repo/other.txt"]),
     ).toBe("'/repo/safe.txt' '/repo/other.txt'");
-  });
-
-  test("rejects Windows paths containing shell metacharacters that bypass double-quoting", () => {
-    expect(formatTerminalDroppedPath("C:\\$env\\file.txt", "windows")).toBe("");
-    expect(formatTerminalDroppedPath("C:\\%USERPROFILE%\\file.txt", "windows")).toBe("");
-    expect(formatTerminalDroppedPath("C:\\foo`n.txt", "windows")).toBe("");
   });
 
   test("POSIX single-quoting keeps $ / backtick / % safe", () => {

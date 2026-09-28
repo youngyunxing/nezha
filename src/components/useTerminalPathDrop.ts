@@ -6,7 +6,6 @@ import {
   formatTerminalDroppedPaths,
   type FileTreePointerDragDetail,
 } from "./pathDrop";
-import { APP_PLATFORM } from "../platform";
 
 // ---------- 外部（OS 级）拖放：模块级单例监听 ----------
 
@@ -33,14 +32,11 @@ function handleExternalDragDrop(payload: DragDropEvent) {
   }
   lastExternalDrop = { key, at: now };
 
-  // Tauri 一律把坐标包成 PhysicalPosition，但 wry 只有 Windows（ScreenToClient
-  // 后的客户区坐标）是真物理像素；macOS（NSDraggingInfo.draggingLocation）和
-  // Linux（GTK widget 坐标）本就是逻辑坐标（上游 mislabel）。因此只在 Windows
-  // 除以 devicePixelRatio，其余平台直接当 CSS 坐标用——Retina 屏上误除会把
-  // 坐标砍半导致命中判定永远落空。
-  const scale = APP_PLATFORM === "windows" ? window.devicePixelRatio || 1 : 1;
-  const x = payload.position.x / scale;
-  const y = payload.position.y / scale;
+  // Tauri 把坐标包成 PhysicalPosition，但 wry 在 macOS 上传的是
+  // NSDraggingInfo.draggingLocation，本就是逻辑坐标（上游 mislabel）。
+  // 直接当 CSS 坐标用——Retina 屏上若按 devicePixelRatio 除会砍半，命中判定永远落空。
+  const x = payload.position.x;
+  const y = payload.position.y;
 
   // elementFromPoint 只查一次、所有订阅者共享，防止 drop 点被浮层遮挡时误插入
   const element = document.elementFromPoint(x, y);
@@ -107,7 +103,7 @@ export function useTerminalPathDrop({
 
   const sendDroppedPaths = useCallback(
     (paths: string[]) => {
-      const text = formatTerminalDroppedPaths(paths, APP_PLATFORM);
+      const text = formatTerminalDroppedPaths(paths);
       if (!text) return;
       onInsertText(`${text} `);
     },
@@ -141,7 +137,7 @@ export function useTerminalPathDrop({
     const subscriber: ExternalDropSubscriber = {
       containerRef,
       onDropPaths: (paths) => {
-        const text = formatTerminalDroppedPaths(paths, APP_PLATFORM);
+        const text = formatTerminalDroppedPaths(paths);
         if (!text) return;
         onInsertTextRef.current(`${text} `);
       },

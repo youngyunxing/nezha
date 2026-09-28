@@ -23,7 +23,6 @@ import { LaunchModeSelector, type LaunchMode } from "./new-task/LaunchModeSelect
 import { TaskModelSelector } from "./new-task/TaskModelSelector";
 import { useI18n } from "../i18n";
 import { findProjectByName } from "../projectName";
-import { APP_PLATFORM } from "../platform";
 import {
   DEFAULT_SEND_SHORTCUT,
   getSendShortcutKeys,
@@ -643,7 +642,7 @@ export function NewTaskView({
           saveAsTodoDisabledReason={
             launchMode === "worktree" ? t("newTask.worktreeMustSend") : undefined
           }
-          sendShortcutKeys={getSendShortcutKeys(sendShortcut, APP_PLATFORM)}
+          sendShortcutKeys={getSendShortcutKeys(sendShortcut)}
           modelSelector={
             <TaskModelSelector
               catalog={

@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { ENABLE_USAGE_INSIGHTS } from "../platform";
 import type { UsageSnapshot } from "../types";
 
 // Module-level cache — shared across all hook instances in the same process
@@ -40,7 +39,7 @@ export function useUsageSnapshot(active: boolean) {
   }, []);
 
   useEffect(() => {
-    if (!active || !ENABLE_USAGE_INSIGHTS) return;
+    if (!active) return;
 
     let interval: ReturnType<typeof setInterval> | null = null;
 

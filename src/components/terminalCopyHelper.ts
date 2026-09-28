@@ -1,6 +1,5 @@
 import type { Terminal } from "@xterm/xterm";
 import { invoke } from "@tauri-apps/api/core";
-import { APP_PLATFORM } from "../platform";
 import { APP_SETTINGS_CHANGED_EVENT } from "./app-settings/types";
 
 /** Threshold below which we use the fast synchronous path. */
@@ -265,11 +264,11 @@ export function attachSmartCopy(
       return false;
     }
 
-    // Windows / Linux WebView 下 Ctrl+V 不会触发 xterm textarea 的 paste 事件，
-    // 需要手动读剪贴板并通过 term.paste() 注入。macOS WKWebView 走 Cmd+V 原生路径。
+    // 非 macOS WebView 下 Ctrl+V 不会触发 xterm textarea 的 paste 事件，
+    // 需要手动读剪贴板并通过 term.paste() 注入。本项目只跑 macOS，此分支不会命中，
+    // 保留是为了 `pnpm dev` 用非 WebKit 浏览器调试 UI 时的行为一致。
     if (
       e.type === "keydown" &&
-      APP_PLATFORM !== "macos" &&
       e.ctrlKey &&
       !e.shiftKey &&
       !e.altKey &&

@@ -1,32 +1,11 @@
-export type AppPlatform = "windows" | "macos" | "other";
+/** 本项目只发布 macOS，运行在 Tauri 的 WKWebView 里。 */
 
-type PlatformNavigator = Pick<Navigator, "platform" | "userAgent">;
-
-export function detectAppPlatform(currentNavigator: PlatformNavigator | undefined = globalThis.navigator): AppPlatform {
-  if (!currentNavigator) {
-    return "other";
-  }
-
-  const platform = currentNavigator.platform.toLowerCase();
-  const userAgent = currentNavigator.userAgent.toLowerCase();
-
-  if (platform.includes("win") || userAgent.includes("windows")) {
-    return "windows";
-  }
-
-  if (platform.includes("mac") || userAgent.includes("mac os")) {
-    return "macos";
-  }
-
-  return "other";
-}
-
-export const APP_PLATFORM = detectAppPlatform();
-export const ENABLE_USAGE_INSIGHTS = APP_PLATFORM !== "windows";
-
-export function isAppleWebKit(currentNavigator: PlatformNavigator | undefined = globalThis.navigator): boolean {
+export function isAppleWebKit(
+  currentNavigator: Pick<Navigator, "userAgent"> | undefined = globalThis.navigator,
+): boolean {
   return currentNavigator?.userAgent.includes("AppleWebKit") ?? false;
 }
 
-export const IS_MAC_WEBKIT = APP_PLATFORM === "macos" && isAppleWebKit();
-export const IS_OTHER_WEBKIT = APP_PLATFORM === "other" && isAppleWebKit();
+// 仍保留运行时判断而非写死 true：`pnpm dev` 时可能用非 WebKit 浏览器
+// 打开 Vite 服务做 UI 调试，终端输入修正不该在那时生效。
+export const IS_MAC_WEBKIT = isAppleWebKit();

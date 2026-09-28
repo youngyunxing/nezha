@@ -114,12 +114,7 @@ const MONO_FONT_PR326_INITIAL_FALLBACK: FontFamily =
   '"JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, ui-monospace, monospace';
 
 export function getDefaultMonoFont(): FontFamily {
-  if (typeof navigator === "undefined") return MONO_FONT_FALLBACK;
-  const ua = navigator.userAgent;
-  if (/Windows/i.test(ua)) return MONO_FONT_WINDOWS;
-  if (/Mac OS X|Macintosh/i.test(ua)) return MONO_FONT_MAC;
-  if (/Linux/i.test(ua)) return MONO_FONT_LINUX;
-  return MONO_FONT_FALLBACK;
+  return MONO_FONT_MAC;
 }
 
 // 老版本 App.tsx 的 useEffect 无差别把当时的默认 mono 字体也写进 localStorage,

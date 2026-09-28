@@ -11,7 +11,6 @@ import type {
 import { AppSettingsDialog } from "./AppSettingsDialog";
 import { OPEN_APP_SETTINGS_EVENT, type OpenAppSettingsDetail } from "./app-settings/types";
 import { NotificationBell } from "./NotificationBell";
-import { ENABLE_USAGE_INSIGHTS } from "../platform";
 import { UsagePopover } from "./UsagePopover";
 import { useI18n } from "../i18n";
 import s from "../styles";
@@ -95,7 +94,7 @@ export function SidebarFooterActions({
             <Moon size={14} strokeWidth={1.8} color="var(--text-hint)" />
           )}
         </button>
-        {ENABLE_USAGE_INSIGHTS ? <UsagePopover /> : null}
+        <UsagePopover />
       </div>
 
       {showAppSettings && (

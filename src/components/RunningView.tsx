@@ -18,7 +18,6 @@ import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { getUsageColor } from "../utils";
 import { useUsageSnapshot } from "../hooks/useUsageSnapshot";
-import { ENABLE_USAGE_INSIGHTS } from "../platform";
 import { useI18n } from "../i18n";
 import s from "../styles";
 import {
@@ -149,7 +148,7 @@ export function RunningView({
   const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
   const restoreState = getRestoreState?.() ?? {};
 
-  const { snapshot: usageSnapshot } = useUsageSnapshot(visible && ENABLE_USAGE_INSIGHTS);
+  const { snapshot: usageSnapshot } = useUsageSnapshot(visible);
 
   const [metricsState, setMetricsState] = useState<{
     sessionPath: string;
@@ -548,7 +547,7 @@ export function RunningView({
             {task.agent === "claude" ? "✦ Claude Code" : "⬡ Codex"} ·{" "}
             {permissionModeLabel(task.permissionMode, task.agent)}
           </span>
-          {ENABLE_USAGE_INSIGHTS && usageSnapshot && (task.agent === "claude"
+          {usageSnapshot && (task.agent === "claude"
             ? usageSnapshot.claude.status === "available" && (
                 <>
                   {usageSnapshot.claude.data.fiveHour && (

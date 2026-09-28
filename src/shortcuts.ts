@@ -1,5 +1,3 @@
-import type { AppPlatform } from "./platform";
-
 export type SendShortcut = "mod_enter" | "enter";
 
 export const DEFAULT_SEND_SHORTCUT: SendShortcut = "mod_enter";
@@ -17,86 +15,73 @@ export function normalizeSendShortcut(value: unknown): SendShortcut {
   return value === "enter" || value === "mod_enter" ? value : DEFAULT_SEND_SHORTCUT;
 }
 
-export function getSendShortcutLabel(shortcut: SendShortcut, platform: AppPlatform): string {
-  return getSendShortcutKeys(shortcut, platform).join("");
+export function getSendShortcutLabel(shortcut: SendShortcut): string {
+  return getSendShortcutKeys(shortcut).join("");
 }
 
-export function getNewlineShortcutLabel(shortcut: SendShortcut, platform: AppPlatform): string {
-  return getNewlineShortcutKeys(shortcut, platform).join("");
+export function getNewlineShortcutLabel(shortcut: SendShortcut): string {
+  return getNewlineShortcutKeys(shortcut).join("");
 }
 
-export function getSendShortcutKeys(shortcut: SendShortcut, platform: AppPlatform): string[] {
+export function getSendShortcutKeys(shortcut: SendShortcut): string[] {
   if (shortcut === "enter") {
     return ["↵"];
   }
-  return [platform === "macos" ? "⌘" : "Ctrl", "↵"];
+  return ["⌘", "↵"];
 }
 
-export function getNewlineShortcutKeys(shortcut: SendShortcut, platform: AppPlatform): string[] {
+export function getNewlineShortcutKeys(shortcut: SendShortcut): string[] {
   if (shortcut === "enter") {
-    return [platform === "macos" ? "⌘" : "Ctrl", "↵"];
+    return ["⌘", "↵"];
   }
   return ["↵"];
 }
 
 /**
- * Cmd+W (macOS) / Ctrl+W (其他平台) —— 收起窗口（隐藏到 Dock/任务栏）。
+ * Cmd+W —— 收起窗口（隐藏到 Dock）。
  * 在全局 keydown 捕获阶段匹配，绕过 webview 默认的关闭行为。
  */
-export function isHideWindowShortcut(
-  event: PromptKeyEventLike,
-  platform: AppPlatform,
-): boolean {
+export function isHideWindowShortcut(event: PromptKeyEventLike): boolean {
   if (event.key !== "w" && event.key !== "W") {
     return false;
   }
   if (event.shiftKey) {
     return false;
   }
-  return platform === "macos"
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
+  return event.metaKey && !event.ctrlKey;
 }
 
 /**
- * Cmd+K (macOS) / Alt+K (其他平台) —— 切换看板浮层（开/关）。
- * 非 macOS 用 Alt 而非 Ctrl 修饰键，是为了避开终端占用：Ctrl+K 是 readline 的
- * kill-line，Ctrl+Shift+C/V 是终端复制粘贴命名空间。在全局 keydown 捕获阶段匹配，
- * 先于 xterm 处理。展示键位见 getKanbanShortcutKeys —— 两者共用同一套平台定义。
+ * Cmd+K —— 切换看板浮层（开/关）。用 ⌘ 而非 Ctrl：Ctrl+K 是 readline 的
+ * kill-line，且 Ctrl+Shift+C/V 是终端复制粘贴命名空间。在全局 keydown 捕获阶段
+ * 匹配，先于 xterm 处理。展示键位见 getKanbanShortcutKeys。
  */
-export function isToggleKanbanShortcut(
-  event: PromptKeyEventLike,
-  platform: AppPlatform,
-): boolean {
+export function isToggleKanbanShortcut(event: PromptKeyEventLike): boolean {
   if (event.key !== "k" && event.key !== "K") {
     return false;
   }
   if (event.shiftKey) {
     return false;
   }
-  return platform === "macos"
-    ? event.metaKey && !event.ctrlKey && !event.altKey
-    : Boolean(event.altKey) && !event.metaKey && !event.ctrlKey;
+  return event.metaKey && !event.ctrlKey && !event.altKey;
 }
 
 /**
- * 看板切换快捷键的展示键位：macOS 为 ["⌘", "K"]，其他平台为 ["Alt", "K"]。
- * 与 isToggleKanbanShortcut 共用同一套平台键位定义，保证提示与实际触发一致。
+ * 看板切换快捷键的展示键位。与 isToggleKanbanShortcut 共用同一套定义，
+ * 保证提示与实际触发一致。
  */
-export function getKanbanShortcutKeys(platform: AppPlatform): string[] {
-  return platform === "macos" ? ["⌘", "K"] : ["Alt", "K"];
+export function getKanbanShortcutKeys(): string[] {
+  return ["⌘", "K"];
 }
 
-/** 纯文本标签（用于 HTML title 等场景）：macOS 紧凑成 "⌘K"，其他平台用 "Alt + K"。 */
-export function getKanbanShortcutLabel(platform: AppPlatform): string {
-  const keys = getKanbanShortcutKeys(platform);
-  return platform === "macos" ? keys.join("") : keys.join(" + ");
+/** 纯文本标签（用于 HTML title 等场景）。 */
+export function getKanbanShortcutLabel(): string {
+  return getKanbanShortcutKeys().join("");
 }
 
 export function shouldInsertPromptNewlineKey(
   event: PromptKeyEventLike,
   shortcut: SendShortcut,
-  platform: AppPlatform,
 ): boolean {
   if (event.key !== "Enter") {
     return false;
@@ -104,15 +89,12 @@ export function shouldInsertPromptNewlineKey(
   if (shortcut !== "enter" || event.shiftKey) {
     return false;
   }
-  return platform === "macos"
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
+  return event.metaKey && !event.ctrlKey;
 }
 
 export function shouldSubmitPromptKey(
   event: PromptKeyEventLike,
   shortcut: SendShortcut,
-  platform: AppPlatform,
 ): boolean {
   if (event.key !== "Enter") {
     return false;
@@ -126,7 +108,7 @@ export function shouldSubmitPromptKey(
     return false;
   }
 
-  return platform === "macos" ? event.metaKey : event.ctrlKey;
+  return event.metaKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,8 +152,8 @@ export function normalizeShiftEnterNewline(value: unknown): boolean {
   return typeof value === "boolean" ? value : DEFAULT_SHIFT_ENTER_NEWLINE;
 }
 
-export function getAltEnterNewlineKeys(platform: AppPlatform): string[] {
-  return [platform === "macos" ? "⌥" : "Alt", "↵"];
+export function getAltEnterNewlineKeys(): string[] {
+  return ["⌥", "↵"];
 }
 
 export function getShiftEnterNewlineKeys(): string[] {

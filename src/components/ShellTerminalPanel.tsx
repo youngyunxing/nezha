@@ -21,7 +21,7 @@ import {
   refreshTerminalDisplay,
   unregisterActiveTerminal,
 } from "./terminalShared";
-import { attachLinuxIMEFix, attachMacWebKitShiftInputFix } from "./terminalInputFix";
+import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import { Plus, Terminal as TerminalIcon, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
@@ -190,10 +190,9 @@ const ShellTerminalInstance = forwardRef<ShellTerminalInstanceHandle, {
       // 必须挂在 attachMacWebKitTerminalGuard 之后:guard 的 pointerup(恢复
       // textarea + refocus)先按注册顺序执行,复制动作发生在防线状态复原之后。
       const disposeCopyOnSelect = attachCopyOnSelect(term, container);
-      const linuxIME = attachLinuxIMEFix(term, (data) => {
+      const disposeOnData = term.onData((data) => {
         invoke("send_input", { taskId: shellId, data }).catch(() => {});
       });
-      const disposeOnData = { dispose: () => linuxIME.dispose() };
 
       const resizeObserver = new ResizeObserver(() => {
         setTimeout(() => {
