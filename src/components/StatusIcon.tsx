@@ -4,6 +4,7 @@ import {
   XCircle,
   MinusCircle,
   Circle,
+  CircleDashed,
   AlertCircle,
   AlertTriangle,
 } from "lucide-react";
@@ -11,6 +12,12 @@ import type { TaskStatus } from "../types";
 
 export function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status) {
+    case "pending":
+      // 虚线圆：进程正在起来，转瞬即逝的状态
+      return <CircleDashed size={14} style={{ color: "var(--text-hint)" }} />;
+    case "idle":
+      // 空心圆：会话就绪、没在干活（等你说话）
+      return <Circle size={14} style={{ color: "var(--text-hint)" }} />;
     case "running":
       // 绿勾：进行中=健康，且不再转圈（转圈在恢复出来的空闲会话上会一直转，语义也不对）。
       return <CheckCircle2 size={14} style={{ color: "var(--success)" }} />;

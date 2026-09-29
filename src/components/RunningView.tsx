@@ -130,6 +130,7 @@ export function RunningView({
   const { showToast } = useToast();
   const isActive =
     task.status === "pending" ||
+    task.status === "idle" ||
     task.status === "running" ||
     task.status === "input_required" ||
     task.status === "awaiting_review";

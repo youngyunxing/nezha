@@ -12,8 +12,10 @@ function statusLabelKey(status: Task["status"], agent: Task["agent"]): string {
     case "pending":
       return "status.pending";
     case "running":
+      return "status.running";
+    case "idle":
       // 纯终端只是「开着」，不是「在干活」
-      return agent === "shell" ? "status.runningShell" : "status.running";
+      return agent === "shell" ? "status.idleShell" : "status.idle";
     case "input_required":
       return "status.inputRequired";
     case "awaiting_review":
@@ -37,7 +39,9 @@ function statusHintKey(status: Task["status"], agent: Task["agent"]): string | u
     case "pending":
       return "status.hint.pending";
     case "running":
-      return agent === "shell" ? "status.hint.runningShell" : "status.hint.running";
+      return "status.hint.running";
+    case "idle":
+      return agent === "shell" ? "status.hint.idleShell" : "status.hint.idle";
     case "input_required":
       return "status.hint.inputRequired";
     case "awaiting_review":

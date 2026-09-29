@@ -30,7 +30,10 @@ export function buildProjectActivityMap(tasks: Task[]): Map<string, ProjectActiv
       activity.status = "attention";
     } else if (task.status === "detached" || task.status === "interrupted") {
       activity.status = "attention";
-    } else if ((task.status === "running" || task.status === "pending") && activity.status === null) {
+    } else if (
+        (task.status === "running" || task.status === "pending" || task.status === "idle") &&
+        activity.status === null
+      ) {
       activity.status = "running";
     }
   }

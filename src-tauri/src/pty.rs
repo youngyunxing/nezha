@@ -847,7 +847,7 @@ pub async fn run_task(
 
     let _ = app.emit(
         "task-status",
-        serde_json::json!({ "task_id": task_id, "status": "running" }),
+        serde_json::json!({ "task_id": task_id, "status": "idle" }),
     );
 
     // hook 可信时不创建 session 转发通道,也不拉起轮询 watcher。
@@ -1059,7 +1059,7 @@ pub async fn resume_task(
 
     let _ = app.emit(
         "task-status",
-        serde_json::json!({ "task_id": task_id, "status": "running" }),
+        serde_json::json!({ "task_id": task_id, "status": "idle" }),
     );
 
     let is_codex = agent == "codex";
@@ -1134,7 +1134,7 @@ pub async fn fork_task(
 
     let _ = app.emit(
         "task-status",
-        serde_json::json!({ "task_id": task_id, "status": "running" }),
+        serde_json::json!({ "task_id": task_id, "status": "idle" }),
     );
 
     // Fork 会生成全新的 session id，不能复用 resume watcher 去绑定父会话。

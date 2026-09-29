@@ -134,6 +134,8 @@ export function isAutoDefaultMonoFont(value: string): boolean {
 
 export type TaskStatus =
   | "pending"
+  /** 进程起来了、会话就绪，但大模型没在干活（刚恢复、或刚答完在等你）。 */
+  | "idle"
   | "running"
   | "input_required"
   | "awaiting_review"
@@ -203,6 +205,7 @@ export interface LocalClaudeSession {
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return (
     status === "pending" ||
+    status === "idle" ||
     status === "running" ||
     status === "input_required" ||
     status === "awaiting_review" ||
