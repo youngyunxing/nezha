@@ -51,7 +51,6 @@ ErrorBoundary  (全局兜底)
         │   ├── MentionPopover
         │   ├── ImageAttachments / TextAttachments
         │   └── ComposeToolbar   — 智能体选择、图片、发送
-        ├── TodoTaskView         — Todo 任务编辑 / 启动视图
         ├── RunningView          — 运行中任务头部（恢复、取消、worktree 信息）
         │   └── TerminalView     — xterm.js 封装组件
         ├── SessionView          — 会话消息查看器（JSONL 回放）
@@ -114,9 +113,9 @@ ErrorBoundary  (全局兜底)
 
 ```typescript
 // 任务状态（TaskStatus）：
-//   todo | pending | running | input_required | detached | interrupted
+//   pending | running | input_required | detached | interrupted
 //   | done | failed | cancelled
-// 典型生命周期：todo → pending → running ↔ input_required → done | failed | cancelled
+// 典型生命周期：pending → running ↔ input_required → done | failed | cancelled
 // 例外路径：running → detached（断开但保留 PTY） / running → interrupted（中断挂起）
 
 interface Task {

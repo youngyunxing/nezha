@@ -5,7 +5,6 @@ import type {
   Task,
   AgentType,
   PermissionMode,
-  TaskStatus,
   ThemeVariant,
   TerminalFontSize,
   TerminalScrollback,
@@ -23,7 +22,6 @@ import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
-import { TodoTaskView } from "./TodoTaskView";
 import { ShellTerminalPanel, type ShellTerminalPanelHandle } from "./ShellTerminalPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { useToast } from "./Toast";
@@ -49,8 +47,6 @@ export function ProjectPage({
   onRenameTask,
   onGenerateTaskName,
   onSubmitTask,
-  onRunTodoTask,
-  onUpdateTodo,
   onCancelTask,
   onResumeTask,
   onForkTask,
@@ -106,17 +102,11 @@ export function ProjectPage({
     permissionMode: PermissionMode;
     images: string[];
     texts: string[];
-    immediate: boolean;
     launchMode: "local" | "worktree";
     baseBranch: string;
     /** 任务关联的 git 根（worktree 创建于此） */
     repoPath: string;
   }) => void;
-  onRunTodoTask: (task: Task) => void;
-  onUpdateTodo: (
-    taskId: string,
-    updates: { prompt: string; agent: AgentType; permissionMode: PermissionMode },
-  ) => void;
   onCancelTask: (id: string) => void;
   onResumeTask: (id: string) => void;
   onForkTask: (id: string, name: string) => void;
@@ -347,7 +337,6 @@ export function ProjectPage({
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
-        onRunTodo={onRunTodoTask}
         taskDisplayWindow={taskDisplayWindow}
         active={visible}
       />
@@ -434,12 +423,6 @@ export function ProjectPage({
                 initialDraft={newTaskDraftRef.current}
                 onCacheDraft={handleCacheNewTaskDraft}
               />
-            ) : selectedTask.status === ("todo" as TaskStatus) ? (
-              <TodoTaskView
-                task={selectedTask}
-                onRunTodo={onRunTodoTask}
-                onUpdateTodo={onUpdateTodo}
-              />
             ) : null}
           </ErrorBoundary>
 
@@ -452,8 +435,7 @@ export function ProjectPage({
                 !openDiff &&
                 !isNewTask &&
                 !!selectedTask &&
-                task.id === selectedTaskId &&
-                task.status !== "todo";
+                task.id === selectedTaskId;
               const worktreePath =
                 task.worktreePath && !task.worktreeDiscarded ? task.worktreePath : null;
               return (

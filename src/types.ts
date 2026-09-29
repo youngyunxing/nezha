@@ -132,7 +132,6 @@ export function isAutoDefaultMonoFont(value: string): boolean {
 }
 
 export type TaskStatus =
-  | "todo"
   | "pending"
   | "running"
   | "input_required"

@@ -641,7 +641,6 @@ function App() {
       permissionMode,
       images,
       texts,
-      immediate,
       launchMode,
       baseBranch,
       repoPath,
@@ -651,7 +650,6 @@ function App() {
       permissionMode: PermissionMode;
       images: string[];
       texts: string[];
-      immediate: boolean;
       launchMode: "local" | "worktree";
       baseBranch: string;
       /** 任务关联的 git 根（worktree 创建于此目录的 .nezha/worktrees）。
@@ -677,7 +675,7 @@ function App() {
       name: prompt ? undefined : `task-${taskId}`,
       agent,
       permissionMode,
-      status: immediate ? "pending" : "todo",
+      status: "pending",
       createdAt: now,
       updatedAt: now,
     };
@@ -690,7 +688,6 @@ function App() {
     mountProject(project.id);
     updateProjectView(project.id, { selectedTaskId: taskId, isNewTask: false });
 
-    if (!immediate) return;
 
     // 2) 终端 buffer 在 PTY 启动前就要建好，否则首批输出会进不来 buffer。
     tm.resetTaskTerminal(taskId);
@@ -759,29 +756,6 @@ function App() {
       images,
       texts,
     );
-  }
-
-  function handleRunTodoTask(task: Task) {
-    const project = projects.find((p) => p.id === task.projectId);
-    if (!project) return;
-
-    setTasks((prev) => {
-      const next = prev.map((t) =>
-        t.id === task.id
-          ? {
-              ...t,
-              status: "pending" as TaskStatus,
-              updatedAt: Date.now(),
-              attentionRequestedAt: undefined,
-            }
-          : t,
-      );
-      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
-      return next;
-    });
-    tm.resetTaskTerminal(task.id);
-    updateProjectView(task.projectId, { selectedTaskId: task.id, isNewTask: false });
-    invokeRunTask(task, task.worktreePath ?? project.path, []);
   }
 
   function markTaskWorktreeDiscarded(taskId: string) {
@@ -1158,26 +1132,6 @@ function App() {
     }
   }
 
-  function handleUpdateTodo(
-    taskId: string,
-    updates: { prompt: string; agent: AgentType; permissionMode: PermissionMode },
-  ) {
-    setTasks((prev) => {
-      const task = prev.find((t) => t.id === taskId);
-      if (!task || task.status !== "todo") return prev;
-      const next = prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              ...updates,
-            }
-          : t,
-      );
-      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
-      return next;
-    });
-  }
-
   async function handleDeleteProject(projectId: string) {
     const project = projects.find((p) => p.id === projectId);
     if (!project) return;
@@ -1388,8 +1342,6 @@ function App() {
               onRenameTask={handleRenameTask}
               onGenerateTaskName={handleGenerateTaskName}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
-              onRunTodoTask={handleRunTodoTask}
-              onUpdateTodo={handleUpdateTodo}
               onCancelTask={handleCancelTask}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}

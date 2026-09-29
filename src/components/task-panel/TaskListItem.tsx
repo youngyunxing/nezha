@@ -1,5 +1,5 @@
 import { useState, memo } from "react";
-import { Trash2, Star, Play, GitBranch } from "lucide-react";
+import { Trash2, Star, GitBranch } from "lucide-react";
 import type { Task } from "../../types";
 import { StatusIcon } from "../StatusIcon";
 import { useI18n } from "../../i18n";
@@ -9,8 +9,6 @@ import chatgptLogo from "../../assets/chatgpt.svg";
 
 function statusLabelKey(status: Task["status"]): string {
   switch (status) {
-    case "todo":
-      return "status.todo";
     case "pending":
       return "status.pending";
     case "running":
@@ -39,14 +37,12 @@ export const TaskListItem = memo(
     onClick,
     onDelete,
     onToggleStar,
-    onRunTodo,
   }: {
     task: Task;
     selected: boolean;
     onClick: () => void;
     onDelete: () => void;
     onToggleStar: () => void;
-    onRunTodo?: () => void;
   }) {
     const { t } = useI18n();
     const [hov, setHov] = useState(false);
@@ -124,20 +120,6 @@ export const TaskListItem = memo(
         >
           <Star size={12} strokeWidth={2.2} fill={task.starred ? "currentColor" : "none"} />
         </button>
-        {onRunTodo && (
-          <button
-            type="button"
-            aria-label={t("task.runNow")}
-            title={t("task.runNow")}
-            style={{ ...s.taskPlayBtn, opacity: hov ? 1 : 0.5 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRunTodo();
-            }}
-          >
-            <Play size={11} strokeWidth={2} fill="currentColor" />
-          </button>
-        )}
         <button
           type="button"
           aria-label={t("task.deleteTask")}
@@ -159,6 +141,5 @@ export const TaskListItem = memo(
   },
   (prev, next) =>
     prev.task === next.task &&
-    prev.selected === next.selected &&
-    (prev.onRunTodo !== undefined) === (next.onRunTodo !== undefined),
+    prev.selected === next.selected,
 );

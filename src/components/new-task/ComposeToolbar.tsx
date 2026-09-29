@@ -72,7 +72,7 @@ export function ComposeToolbar({
   sendShortcutKeys: string[];
   onSetAgent: (agent: AgentType) => void;
   onAddImages: (dataUrls: string[]) => void;
-  onSubmit: (immediate: boolean) => void;
+  onSubmit: () => void;
 }) {
   const { t } = useI18n();
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +178,7 @@ export function ComposeToolbar({
       <button
         style={s.sendBtn}
         onClick={() => {
-          onSubmit(true);
+          onSubmit();
         }}
         aria-label={`${sendLabel} (${sendShortcutLabel})`}
         title={sendShortcutLabel}

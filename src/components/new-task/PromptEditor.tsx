@@ -245,7 +245,7 @@ export function PromptEditor({
   onSelectProject: (project: Project) => void;
   onSetMentionIndex: (index: number) => void;
   sendShortcut: SendShortcut;
-  onSubmit: (immediate: boolean) => void;
+  onSubmit: () => void;
   onContentChange?: (content: PromptEditorContent) => void;
   onPasteLargeText?: (text: string) => void;
 }) {
@@ -391,7 +391,7 @@ export function PromptEditor({
     }
     if (!isComposingRef.current && shouldSubmitPromptKey(e, sendShortcut)) {
       e.preventDefault();
-      onSubmit(true);
+      onSubmit();
       return;
     }
     if (!isComposingRef.current && shouldInsertPromptNewlineKey(e, sendShortcut)) {

@@ -87,7 +87,6 @@ export function NewTaskView({
     permissionMode: PermissionMode;
     images: string[];
     texts: string[];
-    immediate: boolean;
     launchMode: LaunchMode;
     baseBranch: string;
   }) => void;
@@ -346,13 +345,9 @@ export function NewTaskView({
     setMentionIndex(0);
   }
 
-  function handleSubmit(immediate: boolean) {
+  function handleSubmit() {
     const text = editorHandle.serialize();
-    if (!text && pastedImages.length === 0 && pastedTexts.length === 0 && !immediate) return;
-    if (!immediate && launchMode === "worktree") {
-      showToast(t("newTask.worktreeMustSend"), "warning");
-      return;
-    }
+    if (!text && pastedImages.length === 0 && pastedTexts.length === 0) return;
     if (launchMode === "worktree") {
       // sub-repo 必须落在 roots 中：项目无 git 根（roots = []）或选错路径都拒绝启动。
       // 单仓库（roots.length === 1）路径自然等于 project.path / 唯一 root，校验通过。
@@ -372,7 +367,6 @@ export function NewTaskView({
       permissionMode: "full_access",
       images: pastedImages.map((img) => img.dataUrl),
       texts: pastedTexts.map((t) => t.text),
-      immediate,
       launchMode,
       baseBranch,
     });

@@ -10,7 +10,7 @@ const OVERSCAN_ROWS = 8;
 
 type VirtualRow =
   | { type: "group"; key: string; label: string; height: number }
-  | { type: "task"; key: string; task: Task; showRunTodo: boolean; height: number };
+  | { type: "task"; key: string; task: Task; height: number };
 
 function findRowIndex(offsets: number[], value: number) {
   if (offsets.length <= 1) return 0;
@@ -39,7 +39,6 @@ export function TaskList({
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
-  onRunTodo,
 }: {
   tasks: Task[];
   taskDisplayWindow: TaskDisplayWindow;
@@ -49,7 +48,6 @@ export function TaskList({
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
-  onRunTodo: (task: Task) => void;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,7 +118,6 @@ export function TaskList({
     const attentionTasks: Task[] = [];
     const pendingMergeTasks: Task[] = [];
     const starredTasks: Task[] = [];
-    const todoTasks: Task[] = [];
     const todayTasks: Task[] = [];
     const earlierTasks: Task[] = [];
 
@@ -140,8 +137,6 @@ export function TaskList({
         pendingMergeTasks.push(task);
       } else if (task.starred) {
         starredTasks.push(task);
-      } else if (task.status === "todo") {
-        todoTasks.push(task);
       } else {
         const bucketAt = task.updatedAt ?? task.createdAt;
         if (bucketAt >= todayTs) {
@@ -153,7 +148,7 @@ export function TaskList({
     }
 
     const nextRows: VirtualRow[] = [];
-    const appendGroup = (key: string, label: string, groupTasks: Task[], showRunTodo = false) => {
+    const appendGroup = (key: string, label: string, groupTasks: Task[]) => {
       if (groupTasks.length === 0) return;
       nextRows.push({ type: "group", key, label, height: GROUP_ROW_HEIGHT });
       groupTasks.forEach((task) => {
@@ -161,7 +156,6 @@ export function TaskList({
           type: "task",
           key: task.id,
           task,
-          showRunTodo: showRunTodo || task.status === "todo",
           height: TASK_ROW_HEIGHT,
         });
       });
@@ -170,7 +164,6 @@ export function TaskList({
     appendGroup("attention", t("task.needsAttention"), attentionTasks);
     appendGroup("pending_merge", t("task.pendingMerge"), pendingMergeTasks);
     appendGroup("starred", t("task.starred"), starredTasks);
-    appendGroup("todo", t("status.todo"), todoTasks, true);
     appendGroup("today", t("task.today"), todayTasks);
     appendGroup("earlier", t("task.earlier"), earlierTasks);
 
@@ -222,7 +215,6 @@ export function TaskList({
                   onClick={() => onSelectTask(row.task.id)}
                   onDelete={() => onDeleteTask(row.task.id)}
                   onToggleStar={() => onToggleTaskStar(row.task.id)}
-                  onRunTodo={row.showRunTodo ? () => onRunTodo(row.task) : undefined}
                 />
               )}
             </div>

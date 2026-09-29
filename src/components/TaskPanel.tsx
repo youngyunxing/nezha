@@ -22,7 +22,6 @@ export function TaskPanel({
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
-  onRunTodo,
   taskDisplayWindow,
   active = true,
 }: {
@@ -43,7 +42,6 @@ export function TaskPanel({
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
-  onRunTodo: (task: Task) => void;
   taskDisplayWindow: TaskDisplayWindow;
   active?: boolean;
 }) {
@@ -100,7 +98,6 @@ export function TaskPanel({
         onSelectTask={onSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
-        onRunTodo={onRunTodo}
       />
     </div>
   );
