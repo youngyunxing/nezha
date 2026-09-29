@@ -25,7 +25,6 @@ import {
   GitBranch,
   Trash2,
   AlertTriangle,
-  Terminal as TerminalIcon,
 } from "lucide-react";
 
 interface SessionMetrics {
@@ -76,7 +75,6 @@ export function RunningView({
   onFork,
   onMergeWorktree,
   onDiscardWorktree,
-  onOpenWorktreeTerminal,
   onReconnect,
   onInput,
   onResize,
@@ -100,7 +98,6 @@ export function RunningView({
   onFork?: (name: string) => void;
   onMergeWorktree?: () => Promise<void>;
   onDiscardWorktree?: () => Promise<void>;
-  onOpenWorktreeTerminal?: () => void;
   onReconnect: () => void;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
@@ -438,12 +435,6 @@ export function RunningView({
         </div>
         {isActive && (
           <>
-            {task.worktreePath && !task.worktreeDiscarded && onOpenWorktreeTerminal && (
-              <button style={s.cancelBtn} onClick={onOpenWorktreeTerminal}>
-                <TerminalIcon size={12} strokeWidth={2.5} />
-                <span>{t("running.worktreeTerminal")}</span>
-              </button>
-            )}
           </>
         )}
         {!isActive &&

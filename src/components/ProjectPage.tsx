@@ -25,12 +25,9 @@ import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
-import { ShellTerminalPanel, type ShellTerminalPanelHandle } from "./ShellTerminalPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { useToast } from "./Toast";
 import { useProjectPanels } from "../hooks/useProjectPanels";
 import { resolveProjectGitContext, useGitRoots } from "../hooks/useGitRoots";
-import { useI18n } from "../i18n";
 import s from "../styles";
 
 export function ProjectPage({
@@ -148,15 +145,12 @@ export function ProjectPage({
   monoFontFamily: FontFamily;
   onMonoFontFamilyChange: (family: FontFamily) => void;
 }) {
-  const { t } = useI18n();
-  const { showToast } = useToast();
   const {
     rightPanel,
     openFiles,
     activeFilePath,
     openDiff,
     rightPanelWidth,
-    terminalHeight,
     setOpenDiff,
     handleTogglePanel,
     handleFileSelect,
@@ -171,14 +165,9 @@ export function ProjectPage({
     handleCommitFileClick,
     clearFileAndDiff,
     handleRightResizeStart,
-    handleTerminalResizeStart,
   } = useProjectPanels();
 
-  const [showShellTerminal, setShowShellTerminal] = useState(false);
-  const [shellProjectPath, setShellProjectPath] = useState(project.path);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
-  const shellRef = useRef<ShellTerminalPanelHandle>(null);
-  const pendingCmdRef = useRef<string | null>(null);
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -259,64 +248,6 @@ export function ProjectPage({
     },
     [onSelectTask, clearFileAndDiff],
   );
-
-  const handleRunMakeTarget = useCallback(
-    (target: string) => {
-      const cmd = `make ${target}\n`;
-      if (showShellTerminal && shellRef.current) {
-        const sent = shellRef.current.sendCommandToPath(project.path, cmd);
-        if (!sent) {
-          showToast(t("terminal.limitReachedWithCloseHint"), "warning");
-        }
-      } else {
-        setShellProjectPath(project.path);
-        pendingCmdRef.current = cmd;
-        setShowShellTerminal(true);
-      }
-    },
-    [project.path, showShellTerminal, showToast, t],
-  );
-
-  const handleOpenWorktreeTerminal = useCallback(
-    (worktreePath: string) => {
-      if (showShellTerminal && shellRef.current) {
-        const opened = shellRef.current.openPath(worktreePath);
-        if (!opened) {
-          showToast(t("terminal.limitReachedWithCloseHint"), "warning");
-        }
-        return;
-      }
-      setShellProjectPath(worktreePath);
-      setShowShellTerminal(true);
-    },
-    [showShellTerminal, showToast, t],
-  );
-
-  const handleToggleShellTerminal = useCallback(() => {
-    setShowShellTerminal((currentlyVisible) => {
-      if (!currentlyVisible) {
-        setShellProjectPath(project.path);
-      }
-      return !currentlyVisible;
-    });
-  }, [project.path]);
-
-  useEffect(() => {
-    if (showShellTerminal) return;
-    setShellProjectPath(project.path);
-  }, [project.id, project.path, showShellTerminal]);
-
-  const handleShellReady = useCallback(() => {
-    if (pendingCmdRef.current) {
-      shellRef.current?.sendCommand(pendingCmdRef.current);
-      pendingCmdRef.current = null;
-    }
-  }, []);
-
-  const handleShellClose = useCallback(() => {
-    setShowShellTerminal(false);
-    setShellProjectPath(project.path);
-  }, [project.path]);
 
   // 「新建任务」不再切走视图，而是弹窗——原来切到新建任务页会把当前会话顶掉。
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
@@ -446,7 +377,6 @@ export function ProjectPage({
                 onCloseTabsToLeft={handleCloseTabsToLeft}
                 onCloseAllTabs={handleCloseAllFileTabs}
                 themeVariant={themeVariant}
-                onRunMakeTarget={handleRunMakeTarget}
               />
             ) : localSession ? (
               <LocalSessionView
@@ -468,8 +398,6 @@ export function ProjectPage({
                 !localSession &&
                 !!selectedTask &&
                 task.id === selectedTaskId;
-              const worktreePath =
-                task.worktreePath && !task.worktreeDiscarded ? task.worktreePath : null;
               return (
                 <RunningView
                   key={task.id}
@@ -482,9 +410,6 @@ export function ProjectPage({
                   onFork={(name) => onForkTask(task.id, name)}
                   onMergeWorktree={() => onMergeWorktree(task.id)}
                   onDiscardWorktree={() => onDiscardWorktree(task.id)}
-                  onOpenWorktreeTerminal={
-                    worktreePath ? () => handleOpenWorktreeTerminal(worktreePath) : undefined
-                  }
                   onReconnect={() => onReconnectTask(task.id)}
                   onInput={(data) => onInput(task.id, data)}
                   onResize={(cols, rows) => onResize(task.id, cols, rows)}
@@ -502,21 +427,6 @@ export function ProjectPage({
               );
             })}
         </div>
-        {showShellTerminal && (
-          <ShellTerminalPanel
-            ref={shellRef}
-            projectPath={shellProjectPath}
-            projectId={project.id}
-            isActive={visible}
-            onClose={handleShellClose}
-            themeVariant={themeVariant}
-            terminalFontSize={terminalFontSize}
-            monoFontFamily={monoFontFamily}
-            onReady={handleShellReady}
-            height={terminalHeight}
-            onResizeStart={handleTerminalResizeStart}
-          />
-        )}
       </div>
 
       {rightPanel && (
@@ -580,8 +490,6 @@ export function ProjectPage({
       <RightToolbar
         activePanel={rightPanel}
         onToggle={handleTogglePanel}
-        terminalActive={showShellTerminal}
-        onToggleTerminal={handleToggleShellTerminal}
       />
     </div>
   );

@@ -268,53 +268,40 @@ fn register_pty_handles(
 
 #[derive(Clone, Copy)]
 enum PtyEmitMode {
-    Immediate,
     Batched {
         flush_interval: Duration,
         max_batch_bytes: usize,
     },
 }
 
-/// 输出归宿：agent 任务用 Channel 直投单一前端订阅者，跳过事件总线的全局广播 + JSON
-/// 事件 payload；shell 终端仍走 emit 事件，多面板挂载时由前端按 shell_id 筛选。
+/// 输出归宿：Channel 直投单一前端订阅者，跳过事件总线的全局广播 + JSON 事件 payload。
+/// （原来的 Event 归宿是给内嵌 shell 面板用的，面板已移除。）
 #[derive(Clone)]
 enum OutputSink {
-    Event {
-        event_name: &'static str,
-        id_key: &'static str,
-    },
     Channel(Channel<String>),
 }
 
-fn send_pty_chunk(app: &AppHandle, id: &str, sink: &OutputSink, data: String) {
+fn send_pty_chunk(sink: &OutputSink, data: String) {
     match sink {
-        OutputSink::Event { event_name, id_key } => {
-            let mut payload = serde_json::Map::new();
-            payload.insert((*id_key).to_string(), serde_json::Value::String(id.to_string()));
-            payload.insert("data".to_string(), serde_json::Value::String(data));
-            let _ = app.emit(event_name, serde_json::Value::Object(payload));
-        }
         OutputSink::Channel(channel) => {
             let _ = channel.send(data);
         }
     }
 }
 
-fn flush_pty_batch(app: &AppHandle, id: &str, sink: &OutputSink, batch: &mut String) {
+fn flush_pty_batch(sink: &OutputSink, batch: &mut String) {
     if batch.is_empty() {
         return;
     }
-    send_pty_chunk(app, id, sink, std::mem::take(batch));
+    send_pty_chunk(sink, std::mem::take(batch));
 }
 
 /// 在后台线程中读取 PTY 输出，按 sink 把数据投递给前端。
 ///
-/// - `sink`：agent 任务传 `OutputSink::Channel`（直投单订阅者），shell 传 `OutputSink::Event`
+/// - `sink`：`OutputSink::Channel`（直投单一前端订阅者）
 /// - `session_tx`：可选 channel，用于将原始文本转发给 session watcher
 /// - `on_finish`：PTY 关闭后执行的可选清理回调
 fn spawn_pty_reader(
-    app: AppHandle,
-    id: String,
     sink: OutputSink,
     emit_mode: PtyEmitMode,
     reader: Box<dyn Read + Send>,
@@ -327,14 +314,11 @@ fn spawn_pty_reader(
         // 保存上次读取中不完整的 UTF-8 字节序列
         let mut leftover: Vec<u8> = Vec::new();
         let (emit_tx, emit_worker) = match emit_mode {
-            PtyEmitMode::Immediate => (None, None),
             PtyEmitMode::Batched {
                 flush_interval,
                 max_batch_bytes,
             } => {
                 let (tx, rx) = std::sync::mpsc::sync_channel::<String>(PTY_EMIT_CHANNEL_CAPACITY);
-                let emit_app = app.clone();
-                let emit_id = id.clone();
                 let worker_sink = sink.clone();
                 let worker = std::thread::spawn(move || {
                     let mut batch = String::new();
@@ -343,29 +327,14 @@ fn spawn_pty_reader(
                             Ok(chunk) => {
                                 batch.push_str(&chunk);
                                 if batch.len() >= max_batch_bytes {
-                                    flush_pty_batch(
-                                        &emit_app,
-                                        &emit_id,
-                                        &worker_sink,
-                                        &mut batch,
-                                    );
+                                    flush_pty_batch(&worker_sink, &mut batch);
                                 }
                             }
                             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                flush_pty_batch(
-                                    &emit_app,
-                                    &emit_id,
-                                    &worker_sink,
-                                    &mut batch,
-                                );
+                                flush_pty_batch(&worker_sink, &mut batch);
                             }
                             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                                flush_pty_batch(
-                                    &emit_app,
-                                    &emit_id,
-                                    &worker_sink,
-                                    &mut batch,
-                                );
+                                flush_pty_batch(&worker_sink, &mut batch);
                                 break;
                             }
                         }
@@ -398,10 +367,10 @@ fn spawn_pty_reader(
                         if let Some(ref tx) = emit_tx {
                             match tx.send(data) {
                                 Ok(()) => {}
-                                Err(err) => send_pty_chunk(&app, &id, &sink, err.0),
+                                Err(err) => send_pty_chunk(&sink, err.0),
                             }
                         } else {
-                            send_pty_chunk(&app, &id, &sink, data);
+                            send_pty_chunk(&sink, data);
                         }
                     }
 
@@ -898,8 +867,6 @@ pub async fn run_task(
         Some(session_tx)
     };
     spawn_pty_reader(
-        app.clone(),
-        task_id.clone(),
         OutputSink::Channel(on_output),
         PtyEmitMode::Batched {
             flush_interval: PTY_EMIT_FLUSH_INTERVAL,
@@ -1087,8 +1054,6 @@ pub async fn resume_task(
         );
     }
     spawn_pty_reader(
-        app.clone(),
-        task_id.clone(),
         OutputSink::Channel(on_output),
         PtyEmitMode::Batched {
             flush_interval: PTY_EMIT_FLUSH_INTERVAL,
@@ -1168,8 +1133,6 @@ pub async fn fork_task(
         Some(session_tx)
     };
     spawn_pty_reader(
-        app.clone(),
-        task_id.clone(),
         OutputSink::Channel(on_output),
         PtyEmitMode::Batched {
             flush_interval: PTY_EMIT_FLUSH_INTERVAL,
@@ -1220,88 +1183,3 @@ pub async fn resize_pty(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn open_shell(
-    app: AppHandle,
-    task_manager: State<'_, TaskManager>,
-    shell_id: String,
-    project_path: String,
-    cols: Option<u16>,
-    rows: Option<u16>,
-) -> Result<(), String> {
-    // 先终止已存在的同 ID Shell
-    {
-        let child_arc = task_manager
-            .child_handles
-            .lock()
-            .get(&shell_id)
-            .cloned();
-        if let Some(arc) = child_arc {
-            let _ = arc.lock().unwrap().kill();
-        }
-        task_manager.remove_pty_handles(&shell_id);
-    }
-
-    let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: rows.unwrap_or(24),
-            cols: cols.unwrap_or(120),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| e.to_string())?;
-
-    let shell = crate::platform::default_shell_command();
-    let mut cmd = CommandBuilder::new(&shell.program);
-    for arg in &shell.args {
-        cmd.arg(arg);
-    }
-    cmd.cwd(&project_path);
-    setup_env(&mut cmd);
-
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-    drop(pair.slave);
-    let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    register_pty_handles(&task_manager, &shell_id, pair.master, writer, child)?;
-
-    // Shell 退出后清理 TaskManager 中的残留句柄
-    let app_cleanup = app.clone();
-    let sid_cleanup = shell_id.clone();
-    let on_finish = Box::new(move || {
-        let tm = app_cleanup.state::<TaskManager>();
-        tm.remove_pty_handles(&sid_cleanup);
-    });
-
-    spawn_pty_reader(
-        app,
-        shell_id,
-        OutputSink::Event {
-            event_name: "shell-output",
-            id_key: "shell_id",
-        },
-        PtyEmitMode::Immediate,
-        reader,
-        None,
-        Some(on_finish),
-    );
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn kill_shell(
-    task_manager: State<'_, TaskManager>,
-    shell_id: String,
-) -> Result<(), String> {
-    let child_arc = task_manager
-        .child_handles
-        .lock()
-        .get(&shell_id)
-        .cloned();
-    if let Some(arc) = child_arc {
-        let _ = arc.lock().unwrap().kill();
-    }
-    task_manager.remove_pty_handles(&shell_id);
-    Ok(())
-}

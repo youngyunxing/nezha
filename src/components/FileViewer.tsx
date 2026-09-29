@@ -449,7 +449,6 @@ export function FileViewer({
   onCloseTabsToLeft,
   onCloseAllTabs,
   themeVariant,
-  onRunMakeTarget: _onRunMakeTarget,
 }: {
   tabs: OpenFileTab[];
   activeFilePath: string | null;
@@ -461,7 +460,6 @@ export function FileViewer({
   onCloseTabsToLeft: (path: string) => void;
   onCloseAllTabs: () => void;
   themeVariant: ThemeVariant;
-  onRunMakeTarget?: (target: string) => void;
 }) {
   const { t } = useI18n();
   const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});

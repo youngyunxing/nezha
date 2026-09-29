@@ -169,8 +169,6 @@ pub fn run() {
             pty::reset_task_process,
             pty::send_input,
             pty::resize_pty,
-            pty::open_shell,
-            pty::kill_shell,
             fs::read_dir_entries,
             fs_watcher::watch_dir,
             fs_watcher::unwatch_dir,

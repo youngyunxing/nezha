@@ -6,8 +6,9 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB per task (in-memory limit)
 const MAX_BUFFER_CHUNKS = 256; // compact when chunks array exceeds this
 const DRAIN_FRAME_BUDGET = 128 * 1024; // 每帧最多处理 128KB，避免单帧写入时间过长
-/** 屏幕落盘的最小间隔：频繁写盘没必要，退出时最多丢这几秒。 */
-const SCREEN_SAVE_MIN_INTERVAL_MS = 3000;
+/** 屏幕落盘间隔与每次保留的尾部字节数：写整份缓冲太重，留尾部足够回放出最近的屏幕。 */
+const SCREEN_SAVE_INTERVAL_MS = 15000;
+const SCREEN_TAIL_BYTES = 256 * 1024;
 
 // ── Buffer types & helpers ───────────────────────────────────────────────────
 
@@ -82,8 +83,8 @@ export function useTerminalManager(options?: {
 }) {
   const resolveTaskContextRef = useRef(options?.resolveTaskContext);
   resolveTaskContextRef.current = options?.resolveTaskContext;
-  // 每任务最后落盘的屏幕（用于去重与节流）
-  const screenSavedRef = useRef<Record<string, { snapshot: string; at: number }>>({});
+  // 每任务已落盘到的缓冲长度（没增长就跳过写盘）
+  const screenSavedRef = useRef<Record<string, number>>({});
   const taskBufferRef = useRef<Record<string, TaskBuffer>>({});
   const terminalSnapshotRef = useRef<Record<string, { snapshot: string; bufferLength: number }>>(
     {},
@@ -274,22 +275,30 @@ export function useTerminalManager(options?: {
       snapshot,
       bufferLength: buf ? Math.max(0, getBufferAbsLen(buf) - pendingLen) : 0,
     };
+  }, []);
 
-    // 顺带落盘：内存里那份只够同一次运行内重挂载用，磁盘这份是给「重启后还能看到上次
-    // 屏幕」用的。内容没变、或离上次写入太近就跳过。
-    const context = resolveTaskContextRef.current?.(taskId);
-    if (!context || !snapshot) return;
-    const saved = screenSavedRef.current[taskId];
-    const now = Date.now();
-    if (saved && (saved.snapshot === snapshot || now - saved.at < SCREEN_SAVE_MIN_INTERVAL_MS)) {
-      return;
-    }
-    screenSavedRef.current[taskId] = { snapshot, at: now };
-    invoke("save_task_screen", {
-      projectId: context.projectId,
-      taskId,
-      content: snapshot,
-    }).catch(() => {});
+  // 定期把每个任务的输出「尾部」落盘。放在输出管线这一层而不是终端组件里，后台未挂载的
+  // 任务也一样被保存；应用退出时来不及做任何事，靠这个兜住「重启后还能看到上次屏幕」。
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const buffers = taskBufferRef.current;
+      for (const [taskId, buf] of Object.entries(buffers)) {
+        if (!buf || buf.chunks.length === 0) continue;
+        const absLen = getBufferAbsLen(buf);
+        if (screenSavedRef.current[taskId] === absLen) continue; // 没有新输出
+        const context = resolveTaskContextRef.current?.(taskId);
+        if (!context) continue;
+        screenSavedRef.current[taskId] = absLen;
+        const tail = joinBufferFrom(buf, Math.max(0, absLen - SCREEN_TAIL_BYTES));
+        if (!tail) continue;
+        invoke("save_task_screen", {
+          projectId: context.projectId,
+          taskId,
+          content: tail,
+        }).catch(() => {});
+      }
+    }, SCREEN_SAVE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   const getTaskRestoreState = useCallback((taskId: string) => {

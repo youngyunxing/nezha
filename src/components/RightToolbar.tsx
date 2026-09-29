@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconButton } from "./IconButton";
-import { Folder, GitBranch, History, Terminal } from "lucide-react";
+import { Folder, GitBranch, History } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { RightPanel } from "../hooks/useProjectPanels";
 import s from "../styles";
@@ -8,13 +8,9 @@ import s from "../styles";
 export function RightToolbar({
   activePanel,
   onToggle,
-  terminalActive,
-  onToggleTerminal,
 }: {
   activePanel: RightPanel;
   onToggle: (panel: Exclude<RightPanel, null>) => void;
-  terminalActive: boolean;
-  onToggleTerminal: () => void;
 }) {
   const { t } = useI18n();
   const buttons: Array<{
@@ -38,13 +34,6 @@ export function RightToolbar({
           onClick={() => onToggle(btn.key)}
         />
       ))}
-
-      <IconButton
-        icon={<Terminal size={17} />}
-        title={t("terminal.title")}
-        active={terminalActive}
-        onClick={onToggleTerminal}
-      />
     </div>
   );
 }

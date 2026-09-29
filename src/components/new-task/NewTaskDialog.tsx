@@ -100,7 +100,9 @@ export function NewTaskDialog({
   const { t } = useI18n();
   // 任务名的默认值就是 task-<id>（与创建任务时的占位名同一格式）。先生成一份做灰色
   // 占位提示——用户不填，创建出来的名字就是它。
-  const [defaultName] = useState(() => `task-${Date.now()}`);
+  // 名字留空时的默认值按 agent 区分：claude-xxx / codex-xxx / terminal-xxx。
+  // 先生成一份 id 做灰色占位提示——用户不填，创建出来的名字就是它。
+  const [nameId] = useState(() => `${Date.now()}`);
   const [name, setName] = useState("");
   const [agent, setAgent] = useState<AgentType>("claude");
   const [isolated, setIsolated] = useState(false);
@@ -125,6 +127,8 @@ export function NewTaskDialog({
     };
   }, [isolated, projectPath, repoPath]);
 
+  const agentPrefix = agent === "claude" ? "claude" : agent === "codex" ? "codex" : "terminal";
+  const defaultName = `${agentPrefix}-${nameId}`;
   const canSubmit = !isolated || !!baseBranch;
 
   function submit() {

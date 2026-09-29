@@ -605,20 +605,28 @@ function App() {
       //
       // 三条刻意的克制：
       // - 有活子进程的交给 detached 重连，不在这里抢（否则会起第二个 claude）；
+      //   纯终端没有会话可 resume，但同样自动重开一个 shell（屏幕由落盘记录回放）；
       // - 必须有 transcript 路径：只有 id 没有路径的多半是刚建好就被带走的，会话文件还没
       //   生成，--resume 必然失败，跳过留给用户手动处理；
       // - 不想被自动恢复就取消它（cancelled 不在恢复范围内）。
       // 另外不动 updatedAt：任务列表按它排序，改成 now 会让恢复回来的任务全跳到最前面，
       // 而这里要的是与中断前一致的顺序。
-      const autoResume = loadedTasks.flatMap((task) => {
-        if (task.status !== "interrupted" || activeTaskIds.has(task.id)) return [];
+      const autoResume: Array<{ task: Task; project: Project; sessionId: string | null }> = [];
+      for (const task of loadedTasks) {
+        if (task.status !== "interrupted" || activeTaskIds.has(task.id)) continue;
         const project = loadedProjects.find((p) => p.id === task.projectId);
+        if (!project) continue;
+        // 纯终端没有会话可 resume，但也一样自动重开（屏幕由落盘的输出记录回放）。
+        if (task.agent === "shell") {
+          autoResume.push({ task, project, sessionId: null });
+          continue;
+        }
         const isCodex = task.agent === "codex";
         const sessionId = isCodex ? task.codexSessionId : task.claudeSessionId;
         const sessionPath = isCodex ? task.codexSessionPath : task.claudeSessionPath;
-        if (!project || !sessionId || !sessionPath) return [];
-        return [{ task, project, sessionId }];
-      });
+        if (!sessionId || !sessionPath) continue;
+        autoResume.push({ task, project, sessionId });
+      }
 
       const resumedIds = new Set(autoResume.map((item) => item.task.id));
       const nextTasks = loadedTasks.map((task) =>
@@ -652,11 +660,16 @@ function App() {
 
       autoResume.forEach(({ task, project, sessionId }) => {
         tm.resetTaskTerminal(task.id);
-        invokeResumeTask(
-          { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined },
-          project,
-          sessionId,
-        );
+        const pendingTask = {
+          ...task,
+          status: "pending" as TaskStatus,
+          attentionRequestedAt: undefined,
+        };
+        if (sessionId) {
+          invokeResumeTask(pendingTask, project, sessionId);
+          return;
+        }
+        invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
       });
     }
 

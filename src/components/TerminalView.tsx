@@ -67,24 +67,8 @@ export function TerminalView({
   const onResizeRef = useRef(onResize);
   const onRegisterRef = useRef(onRegisterTerminal);
 
-  // 定期把屏幕交给上层（→ 落盘）：应用退出时来不及做任何事，靠这个兜住「重启后还能
-  // 看到上次屏幕」。内容没变或离上次写入太近时，上层会跳过写盘。
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const serializeAddon = serializeAddonRef.current;
-      if (!serializeAddon) return;
-      try {
-        const snapshot = serializeAddon.serialize();
-        if (snapshot) onSnapshotRef.current?.(snapshot);
-      } catch {
-        /* ignore */
-      }
-    }, 15000);
-    return () => window.clearInterval(timer);
-  }, []);
   const onReadyRef = useRef(onReady);
   const onSnapshotRef = useRef(onSnapshot);
-  const serializeAddonRef = useRef<SerializeAddon | null>(null);
   const lastSizeRef = useRef<{ cols: number; rows: number } | null>(null);
   const shiftEnterNewlineRef = useRef<boolean>(DEFAULT_SHIFT_ENTER_NEWLINE);
   onReadyRef.current = onReady;
@@ -133,7 +117,6 @@ export function TerminalView({
 
     const serializeAddon = new SerializeAddon();
     term.loadAddon(serializeAddon);
-    serializeAddonRef.current = serializeAddon;
     term.open(container);
     // 必须在 term.open() 之后挂：_charSizeService 在 open 时才实例化。
     const disposeCharSizeOverride = applyDomCharSizeOverride(term);
@@ -236,7 +219,6 @@ export function TerminalView({
       } catch {
         /* ignore */
       }
-      serializeAddonRef.current = null;
       onRegisterRef.current(null);
       fitAddonRef.current = null;
       disposeCharSizeOverride();

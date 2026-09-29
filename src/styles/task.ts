@@ -137,7 +137,6 @@ export const task = {
   },
   repoSelectorCheck: { flexShrink: 0, marginLeft: "auto" },
   flexShrinkIcon: { flexShrink: 0 },
-  dimChevronIcon: { opacity: 0.58 },
   dimChevronIconStrong: { opacity: 0.7 },
   branchBarName: {
     flex: 1,

@@ -20,11 +20,8 @@ export function useProjectPanels() {
   });
   const [openDiff, setOpenDiff] = useState<OpenDiff | null>(null);
   const [rightPanelWidth, setRightPanelWidth] = useState(280);
-  const [terminalHeight, setTerminalHeight] = useState(240);
   const rightPanelWidthRef = useRef(rightPanelWidth);
   rightPanelWidthRef.current = rightPanelWidth;
-  const terminalHeightRef = useRef(terminalHeight);
-  terminalHeightRef.current = terminalHeight;
 
   const handleTogglePanel = useCallback((panel: Exclude<RightPanel, null>) => {
     setRightPanel((prev) => (prev === panel ? null : panel));
@@ -147,25 +144,6 @@ export function useProjectPanels() {
     document.addEventListener("mouseup", onMouseUp);
   }, []);
 
-  const handleTerminalResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = terminalHeightRef.current;
-    const onMouseMove = (ev: MouseEvent) => {
-      const newHeight = Math.max(100, Math.min(600, startHeight + (startY - ev.clientY)));
-      setTerminalHeight(newHeight);
-    };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "row-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  }, []);
 
   return {
     rightPanel,
@@ -173,7 +151,6 @@ export function useProjectPanels() {
     activeFilePath: openFilesState.activePath,
     openDiff,
     rightPanelWidth,
-    terminalHeight,
     setOpenDiff,
     handleTogglePanel,
     handleFileSelect,
@@ -188,7 +165,6 @@ export function useProjectPanels() {
     handleCommitFileClick,
     clearFileAndDiff,
     handleRightResizeStart,
-    handleTerminalResizeStart,
   };
 }
 
