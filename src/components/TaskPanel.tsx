@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus, Search, Terminal } from "lucide-react";
 import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
@@ -65,6 +65,29 @@ export function TaskPanel({
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [hoverPresetId, setHoverPresetId] = useState<string | null>(null);
+  // 右击 / 长按快捷按钮 = 打开它的编辑面板；长按后要吃掉那次 click，不能顺手把任务建了
+  const longPressTimer = useRef<number | null>(null);
+  const longPressed = useRef(false);
+
+  function startLongPress(presetId: string) {
+    longPressed.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTimer.current = null;
+      longPressed.current = true;
+      onManagePresets(presetId);
+      // 面板弹出后那次 click 可能被吃掉，标记自己过一会儿清掉，免得吃掉下一次点击
+      window.setTimeout(() => {
+        longPressed.current = false;
+      }, 800);
+    }, 500);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer.current !== null) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
 
   return (
     <div style={s.taskPanel}>
@@ -116,15 +139,31 @@ export function TaskPanel({
                 ? { background: "var(--bg-hover)", color: "var(--text-primary)" }
                 : null),
             }}
-            title={presetSummary(preset, {
+            title={`${presetSummary(preset, {
               claude: "Claude Code",
               codex: "Codex",
               shell: t("terminal.title"),
               worktree: t("newTask.dialogIsolated"),
-            })}
+            })}${t("preset.rightClickHint")}`}
             onMouseEnter={() => setHoverPresetId(preset.id)}
-            onMouseLeave={() => setHoverPresetId((prev) => (prev === preset.id ? null : prev))}
-            onClick={() => onRunPreset(preset)}
+            onMouseLeave={() => {
+              setHoverPresetId((prev) => (prev === preset.id ? null : prev));
+              cancelLongPress();
+            }}
+            onPointerDown={() => startLongPress(preset.id)}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              onManagePresets(preset.id);
+            }}
+            onClick={() => {
+              if (longPressed.current) {
+                longPressed.current = false;
+                return; // 长按已经打开编辑面板了，不再建任务
+              }
+              onRunPreset(preset);
+            }}
           >
             {preset.agent === "claude" ? (
               <img src={claudeLogo} style={s.presetChipIcon} />

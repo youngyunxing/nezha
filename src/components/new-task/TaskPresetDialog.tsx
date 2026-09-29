@@ -208,13 +208,27 @@ export function TaskPresetDialog({
           <div style={s.forkDialogActions}>
             {/* 新增和编辑分开：表单是空的就只做「添加」，载入了某条才是「保存」+「取消编辑」 */}
             {draft.id ? (
-              <button
-                type="button"
-                style={s.forkDialogCancelBtn}
-                onClick={() => setDraft({ ...EMPTY_DRAFT })}
-              >
-                {t("preset.cancelEdit")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  style={s.forkDialogCancelBtn}
+                  onClick={() => {
+                    if (!draft.id) return;
+                    onDelete(draft.id);
+                    setDraft({ ...EMPTY_DRAFT });
+                  }}
+                >
+                  <Trash2 size={12} strokeWidth={2.2} />
+                  <span>{t("common.delete")}</span>
+                </button>
+                <button
+                  type="button"
+                  style={s.forkDialogCancelBtn}
+                  onClick={() => setDraft({ ...EMPTY_DRAFT })}
+                >
+                  {t("preset.cancelEdit")}
+                </button>
+              </>
             ) : null}
             <button
               type="button"
@@ -222,7 +236,7 @@ export function TaskPresetDialog({
               disabled={!canSave}
               onClick={submit}
             >
-              {draft.id ? t("common.save") : t("preset.add")}
+              {t("common.save")}
             </button>
           </div>
         </Dialog.Content>
