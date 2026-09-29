@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Plus, Terminal, Trash2, X } from "lucide-react";
+import { Terminal, Trash2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
@@ -144,6 +144,10 @@ export function TaskPresetDialog({
             ))}
           </div>
 
+          <div style={{ ...s.newTaskDialogHint, marginBottom: 8 }}>
+            {draft.id ? t("preset.editingHint", { name: draft.name }) : t("preset.editHint")}
+          </div>
+
           <div style={s.presetFieldRow}>
             <label style={s.forkDialogLabel} htmlFor="preset-name">
               {t("preset.name")}
@@ -202,14 +206,16 @@ export function TaskPresetDialog({
           </button>
 
           <div style={s.forkDialogActions}>
-            <button
-              type="button"
-              style={s.forkDialogCancelBtn}
-              onClick={() => setDraft({ ...EMPTY_DRAFT })}
-            >
-              <Plus size={12} strokeWidth={2.4} />
-              <span>{t("preset.addNew")}</span>
-            </button>
+            {/* 新增和编辑分开：表单是空的就只做「添加」，载入了某条才是「保存」+「取消编辑」 */}
+            {draft.id ? (
+              <button
+                type="button"
+                style={s.forkDialogCancelBtn}
+                onClick={() => setDraft({ ...EMPTY_DRAFT })}
+              >
+                {t("preset.cancelEdit")}
+              </button>
+            ) : null}
             <button
               type="button"
               style={canSave ? s.forkDialogPrimaryBtn : s.forkDialogPrimaryBtnDisabled}
