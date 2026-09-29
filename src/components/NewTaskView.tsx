@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { TriangleAlert, Sparkles } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import type { Project, AgentType, PermissionMode, GitRoot } from "../types";
 import {
   APP_SETTINGS_CHANGED_EVENT,
@@ -122,7 +122,6 @@ export function NewTaskView({
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [pastedImages, setPastedImages] = useState<PastedImage[]>(initialDraft?.pastedImages ?? []);
-  const [initButtonHovered, setInitButtonHovered] = useState(false);
   const [pastedTexts, setPastedTexts] = useState<PastedText[]>(initialDraft?.pastedTexts ?? []);
   const [isEmpty, setIsEmpty] = useState(
     () =>
@@ -416,24 +415,6 @@ export function NewTaskView({
     setMentionIndex(0);
   }
 
-  function handleInitializeMd() {
-    const filename = agent === "claude" ? "CLAUDE.md" : "AGENTS.md";
-    const prompt = t("newTask.initializePrompt", { file: filename });
-    // 初始化 md 文件不涉及代码改动，强制走本地，避免无谓的 worktree 开销
-    onSubmit({
-      prompt,
-      agent,
-      permissionMode: permMode,
-      model,
-      reasoningEffort,
-      images: [],
-      texts: [],
-      immediate: true,
-      launchMode: "local",
-      baseBranch: "",
-    });
-  }
-
   function handleSubmit(immediate: boolean) {
     const text = editorHandle.serialize();
     if (!text && pastedImages.length === 0 && pastedTexts.length === 0 && !immediate) return;
@@ -514,16 +495,6 @@ export function NewTaskView({
                 agent: agent === "claude" ? "Claude Code" : "Codex",
               })}
             </div>
-            <button
-              type="button"
-              style={initButtonHovered ? s.agentMissingMdInitBtnHovered : s.agentMissingMdInitBtn}
-              onClick={handleInitializeMd}
-              onMouseEnter={() => setInitButtonHovered(true)}
-              onMouseLeave={() => setInitButtonHovered(false)}
-            >
-              <Sparkles size={13} strokeWidth={2} />
-              {t("newTask.initializeButton")}
-            </button>
           </div>
         </div>
       )}

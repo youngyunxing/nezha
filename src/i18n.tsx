@@ -239,8 +239,6 @@ const translations: Record<string, string> = {
     "未检测到 Node.js，任务状态检测已回退到轮询。安装 Node.js 后可启用 hook 状态检测。",
   "newTask.hookNotInstalled":
     "{agent} 的 hook 未安装，任务状态检测已回退到轮询。可在「设置 → Hooks」中重新安装。",
-  "newTask.initializeButton": "一键初始化",
-  "newTask.initializePrompt": "请根据当前项目初始化一个标准的最佳 {file}。",
   "newTask.promptPlaceholder": "描述你的任务… 输入 @ 可引用文件",
   "newTask.moreComposeActions": "更多编辑操作",
   "newTask.images": "图片",

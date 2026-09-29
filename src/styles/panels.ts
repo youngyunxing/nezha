@@ -2,7 +2,6 @@ import type React from "react";
 
 import { ROW_HEIGHT } from "../components/file-explorer/types";
 
-
 const settingToggleTrackBase: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -161,44 +160,6 @@ export const panels = {
     fontSize: 13,
     lineHeight: 1.55,
     color: "var(--text-secondary)",
-  },
-  agentMissingMdTitle: { fontWeight: 650, color: "var(--text-primary)" },
-  agentMissingMdCode: {
-    fontFamily: "var(--font-mono)",
-    fontSize: 12,
-    background: "var(--warning-code-bg)",
-    padding: "0 4px",
-    borderRadius: 3,
-  },
-  agentMissingMdInitBtn: {
-    alignSelf: "flex-start",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "4px 10px",
-    background: "transparent",
-    color: "var(--warning)",
-    border: "1px solid var(--warning-border)",
-    borderRadius: 6,
-    fontSize: 12.5,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background 120ms ease",
-  },
-  agentMissingMdInitBtnHovered: {
-    alignSelf: "flex-start",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "4px 10px",
-    background: "var(--warning-surface)",
-    color: "var(--warning)",
-    border: "1px solid var(--warning-border)",
-    borderRadius: 6,
-    fontSize: 12.5,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background 120ms ease",
   },
   hookFallbackIcon: {
     color: "var(--warning)",
@@ -668,8 +629,7 @@ export const panels = {
   sendBtnPrimary: {
     ...sendButtonBase,
     borderRadius: "6px 0 0 6px",
-    borderRight:
-      "1px solid color-mix(in srgb, var(--primary-action-fg) 18%, transparent)",
+    borderRight: "1px solid color-mix(in srgb, var(--primary-action-fg) 18%, transparent)",
   },
   sendBtnMenu: {
     ...sendButtonBase,
@@ -1391,5 +1351,4 @@ export const panels = {
     whiteSpace: "nowrap" as const,
   },
   hooksPanelBtnDisabled: { opacity: 0.5, cursor: "not-allowed" as const },
-
 } satisfies Record<string, React.CSSProperties>;
