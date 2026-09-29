@@ -13,6 +13,7 @@ import type {
   TaskDisplayWindow,
   FontFamily,
 } from "../types";
+import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskView, type NewTaskDraft } from "./NewTaskView";
 import { RunningView } from "./RunningView";
@@ -72,6 +73,7 @@ export function ProjectPage({
   onToggleProjectHidden,
   onUpdateProjectAvatar,
   onDeleteProject,
+  onRenameProject,
   themeVariant,
   themeMode,
   systemPrefersDark,
@@ -146,6 +148,7 @@ export function ProjectPage({
   onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDeleteProject: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
   themeVariant: ThemeVariant;
   themeMode: ThemeMode;
   systemPrefersDark: boolean;
@@ -381,6 +384,7 @@ export function ProjectPage({
         onToggleProjectHidden={onToggleProjectHidden}
         onUpdateProjectAvatar={onUpdateProjectAvatar}
         onDelete={onDeleteProject}
+        onRenameProject={onRenameProject}
       />
       <TaskPanel
         project={project}

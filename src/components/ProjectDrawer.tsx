@@ -3,6 +3,7 @@ import type React from "react";
 import type { Project, ProjectAvatarStyle, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
+import type { ProjectRenameResult } from "../projectName";
 import { DRAWER_ROW_PADDING_TOP, DRAWER_ROW_STRIDE } from "../styles/rail-drag";
 import { Search, Plus } from "lucide-react";
 import { projectMatchesRailSearch } from "./project-rail/search";
@@ -34,6 +35,7 @@ export function ProjectDrawer({
   onToggleProjectHidden,
   onUpdateProjectAvatar,
   onDelete,
+  onRenameProject,
 }: {
   projects: Project[];
   allTasks: Task[];
@@ -45,6 +47,7 @@ export function ProjectDrawer({
   onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDelete: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
 }) {
   const [query, setQuery] = useState("");
   // 右键菜单 / 外观编辑器:同一时刻只允许一个 rail 项打开,由这里统一持有。
@@ -380,6 +383,7 @@ export function ProjectDrawer({
               onToggleHidden={handleToggleHidden}
               onUpdateAvatar={onUpdateProjectAvatar}
               onDelete={onDelete}
+              onRename={onRenameProject}
             />
           );
         })}

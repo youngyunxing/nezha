@@ -1,13 +1,27 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useId, useState } from "react";
 import type React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Palette, Pin, PinOff, Trash2 } from "lucide-react";
+import { Check, Palette, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
 import type { Project, ProjectAvatarStyle } from "../../types";
 import { ProjectAvatar } from "../ProjectAvatar";
 import { ProjectAppearanceEditor } from "./ProjectAppearanceEditor";
 import { useI18n } from "../../i18n";
 import claudeWaveGif from "../../assets/gif/claude-wave.gif";
 import type { ProjectStatus } from "./activity";
+import type { ProjectRenameError, ProjectRenameResult } from "../../projectName";
+
+function projectNameErrorMessage(error: ProjectRenameError, t: (key: string) => string): string {
+  switch (error) {
+    case "required":
+      return t("project.nameRequired");
+    case "reserved_separator":
+      return t("project.nameReservedSeparator");
+    case "duplicate":
+      return t("project.nameDuplicate");
+    case "save_failed":
+      return t("project.nameSaveFailed");
+  }
+}
 
 /** rail 项上挂着的弹层:右键菜单,或从菜单进入的外观编辑器。同一时刻只有一个项打开。 */
 export type RailItemPanel = "menu" | "appearance";
@@ -47,6 +61,7 @@ export const RailItem = memo(function RailItem({
   onToggleHidden,
   onUpdateAvatar,
   onDelete,
+  onRename,
 }: {
   project: Project;
   isActive: boolean;
@@ -63,10 +78,34 @@ export const RailItem = memo(function RailItem({
   onPanelChange: (projectId: string, panel: RailItemPanel | null) => void;
   onToggleHidden: (projectId: string) => void;
   onDelete: (projectId: string) => void;
+  onRename: (projectId: string, name: string) => Promise<ProjectRenameResult>;
   onUpdateAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
 }) {
   const { t } = useI18n();
+  const errorId = useId();
   const [waving, setWaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(project.name);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  function cancelEditing() {
+    setEditing(false);
+    setDraftName(project.name);
+    setNameError(null);
+  }
+
+  async function saveName() {
+    setSaving(true);
+    const result = await onRename(project.id, draftName);
+    setSaving(false);
+    if (result.ok) {
+      setEditing(false);
+      setNameError(null);
+      return;
+    }
+    setNameError(projectNameErrorMessage(result.error, t));
+  }
   // waveNonce 每次递增(出现新的待确认任务)就触发一次性招手,3.6s 后卸载。
   // 卸载+重新挂载可让 gif 从首帧重播,同时重启 CSS 探头/缩回动画。
   useEffect(() => {
@@ -99,8 +138,11 @@ export const RailItem = memo(function RailItem({
           data-moving={translateY !== 0}
           data-panel-open={panel !== null}
           style={dynamicVars}
-          onClick={() => onClick(project)}
-          onPointerDown={(event) => onPointerDown(project, event)}
+          onClick={editing ? undefined : () => onClick(project)}
+          onPointerDown={(event) => {
+            if (editing) return;
+            onPointerDown(project, event);
+          }}
           onContextMenu={(event) => {
             if (!menuEnabled) return;
             event.preventDefault();
@@ -114,9 +156,68 @@ export const RailItem = memo(function RailItem({
             <ProjectAvatar project={project} size={28} />
             <AttentionIndicator status={status} count={attentionCount} showBadge={showBadge} />
           </div>
-          <span className="rail-drawer-item-name">{project.name}</span>
-          {project.hiddenFromRail && (
-            <PinOff size={12} strokeWidth={2} className="rail-drawer-item-hidden" />
+          {editing ? (
+            <form
+              className="rail-drawer-rename"
+              aria-busy={saving}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveName();
+              }}
+            >
+              <div className="rail-drawer-rename-row">
+                <input
+                  autoFocus
+                  className="rail-drawer-rename-input"
+                  value={draftName}
+                  disabled={saving}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    setDraftName(event.target.value);
+                    setNameError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape") return;
+                    event.preventDefault();
+                    cancelEditing();
+                  }}
+                  aria-label={t("project.nameInput")}
+                  aria-invalid={Boolean(nameError)}
+                  aria-describedby={nameError ? errorId : undefined}
+                />
+                <button
+                  type="submit"
+                  className="rail-drawer-rename-btn"
+                  disabled={saving}
+                  aria-label={t("project.saveName")}
+                  title={t("project.saveName")}
+                >
+                  <Check size={13} strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  className="rail-drawer-rename-btn"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                  aria-label={t("project.cancelRename")}
+                  title={t("project.cancelRename")}
+                >
+                  <X size={13} strokeWidth={2.2} />
+                </button>
+              </div>
+              {nameError && (
+                <div id={errorId} className="rail-drawer-rename-error" role="alert">
+                  {nameError}
+                </div>
+              )}
+            </form>
+          ) : (
+            <>
+              <span className="rail-drawer-item-name">{project.name}</span>
+              {project.hiddenFromRail && (
+                <PinOff size={12} strokeWidth={2} className="rail-drawer-item-hidden" />
+              )}
+            </>
           )}
         </button>
       </Popover.Anchor>
@@ -135,6 +236,19 @@ export const RailItem = memo(function RailItem({
           >
             {panel === "menu" ? (
               <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="rail-menu-item"
+                  onClick={() => {
+                    onPanelChange(project.id, null);
+                    setDraftName(project.name);
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil size={13} strokeWidth={2} />
+                  <span>{t("project.rename")}</span>
+                </button>
                 <button
                   type="button"
                   role="menuitem"

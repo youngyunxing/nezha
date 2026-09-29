@@ -34,6 +34,11 @@ import { ProjectAppearanceProvider } from "./hooks/useProjectAppearance";
 import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
+import {
+  normalizeProjectNameInput,
+  validateProjectName,
+  type ProjectRenameResult,
+} from "./projectName";
 import { useI18n } from "./i18n";
 import {
   DARK_THEME_STORAGE_KEY,
@@ -1273,6 +1278,32 @@ function App() {
     });
   }
 
+  async function handleRenameProject(
+    projectId: string,
+    rawName: string,
+  ): Promise<ProjectRenameResult> {
+    const normalizedName = normalizeProjectNameInput(rawName);
+    const current = projects.find((project) => project.id === projectId);
+    if (current?.name === normalizedName) return { ok: true, name: current.name };
+
+    const result = validateProjectName(rawName, projects, projectId);
+    if (!result.ok) return result;
+
+    const next = projects.map((project) =>
+      project.id === projectId ? { ...project, name: result.name } : project,
+    );
+    const saved = await persistProjects(next, showToast, formatSaveProjectsError);
+    if (!saved) return { ok: false, error: "save_failed" };
+
+    setProjects((prev) =>
+      prev.map((project) =>
+        project.id === projectId ? { ...project, name: result.name } : project,
+      ),
+    );
+
+    return result;
+  }
+
   // 头像外观(颜色 / emoji / 缩写)整体替换;归一化后为空则删掉字段,保持 projects.json 简洁。
   function handleUpdateProjectAvatar(projectId: string, avatar: ProjectAvatarStyle | undefined) {
     const normalized = normalizeProjectAvatar(avatar);
@@ -1449,6 +1480,7 @@ function App() {
               onToggleProjectHidden={handleToggleProjectHidden}
               onUpdateProjectAvatar={handleUpdateProjectAvatar}
               onDeleteProject={handleDeleteProject}
+              onRenameProject={handleRenameProject}
               themeVariant={themeVariant}
               themeMode={themeMode}
               systemPrefersDark={systemPrefersDark}

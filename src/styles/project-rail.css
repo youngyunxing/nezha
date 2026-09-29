@@ -280,6 +280,65 @@
   color: var(--accent);
 }
 
+.rail-drawer-rename {
+  flex: 1;
+  min-width: 0;
+}
+
+.rail-drawer-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rail-drawer-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--accent);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.rail-drawer-rename-input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.rail-drawer-rename-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.rail-drawer-rename-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.rail-drawer-rename-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rail-drawer-rename-error {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--color-danger);
+}
+
 .rail-drawer-item-hidden {
   margin-left: auto;
   flex-shrink: 0;
