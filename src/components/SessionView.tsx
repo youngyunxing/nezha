@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Copy, Check } from "lucide-react";
-import { marked } from "marked";
+import { marked, type Token, type Tokens } from "marked";
 import { useI18n } from "../i18n";
+import type { ThemeVariant } from "../types";
+import { highlightCode } from "../highlight";
 
 interface SessionContent {
   type: "text" | "tool_use" | "thinking";
@@ -69,7 +71,7 @@ function UserMessageBubble({ text }: { text: string }) {
         <div
           style={{
             padding: "10px 16px",
-            background: "var(--bg-subtle)",
+            background: "var(--accent-subtle)",
             color: "var(--text-primary)",
             borderRadius: 20,
             fontSize: 13.5,
@@ -85,7 +87,93 @@ function UserMessageBubble({ text }: { text: string }) {
   );
 }
 
-function MessageBlock({ message }: { message: SessionMessage }) {
+type MarkdownBlock =
+  | { kind: "html"; html: string }
+  | { kind: "code"; code: string; lang?: string };
+
+/** 把 markdown 按「代码块 / 其余」切开：代码块要异步高亮，其余整段同步渲染。 */
+function splitMarkdown(text: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  let buffer: Token[] = [];
+
+  const flush = () => {
+    if (buffer.length === 0) return;
+    blocks.push({ kind: "html", html: marked.parser(buffer, { async: false }) as string });
+    buffer = [];
+  };
+
+  for (const token of marked.lexer(text)) {
+    if (token.type === "code") {
+      flush();
+      const code = token as Tokens.Code;
+      blocks.push({ kind: "code", code: code.text, lang: code.lang || undefined });
+    } else {
+      buffer.push(token);
+    }
+  }
+  flush();
+  return blocks;
+}
+
+function CodeBlock({
+  code,
+  lang,
+  themeVariant,
+}: {
+  code: string;
+  lang?: string;
+  themeVariant: ThemeVariant;
+}) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHtml(null);
+    highlightCode(code, lang, themeVariant)
+      .then((result) => {
+        if (!cancelled) setHtml(result);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [code, lang, themeVariant]);
+
+  // 高亮未就绪（首次懒加载 shiki）或语言未知时，先按普通代码块呈现。
+  if (!html) {
+    return (
+      <div className="session-prose">
+        <pre>
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  }
+  return <div className="session-prose session-code" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function MarkdownBody({ text, themeVariant }: { text: string; themeVariant: ThemeVariant }) {
+  const blocks = useMemo(() => splitMarkdown(text), [text]);
+  return (
+    <>
+      {blocks.map((block, i) =>
+        block.kind === "html" ? (
+          <div key={i} className="session-prose" dangerouslySetInnerHTML={{ __html: block.html }} />
+        ) : (
+          <CodeBlock key={i} code={block.code} lang={block.lang} themeVariant={themeVariant} />
+        ),
+      )}
+    </>
+  );
+}
+
+function MessageBlock({
+  message,
+  themeVariant,
+}: {
+  message: SessionMessage;
+  themeVariant: ThemeVariant;
+}) {
   const isUser = message.role === "user";
 
   if (isUser) {
@@ -105,17 +193,19 @@ function MessageBlock({ message }: { message: SessionMessage }) {
   return (
     <div style={{ marginBottom: 18, maxWidth: "82%" }}>
       {textParts.map((t, i) => (
-        <div
-          key={i}
-          className="session-prose"
-          dangerouslySetInnerHTML={{ __html: marked(t.text ?? "", { async: false }) as string }}
-        />
+        <MarkdownBody key={i} text={t.text ?? ""} themeVariant={themeVariant} />
       ))}
     </div>
   );
 }
 
-export function SessionView({ sessionPath }: { sessionPath: string }) {
+export function SessionView({
+  sessionPath,
+  themeVariant,
+}: {
+  sessionPath: string;
+  themeVariant: ThemeVariant;
+}) {
   const { t } = useI18n();
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +251,7 @@ export function SessionView({ sessionPath }: { sessionPath: string }) {
         </div>
       )}
       {messages.map((msg, i) => (
-        <MessageBlock key={i} message={msg} />
+        <MessageBlock key={i} message={msg} themeVariant={themeVariant} />
       ))}
     </div>
   );

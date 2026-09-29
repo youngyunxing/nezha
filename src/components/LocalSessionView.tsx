@@ -2,7 +2,7 @@ import { RotateCcw } from "lucide-react";
 import { SessionView } from "./SessionView";
 import { useI18n } from "../i18n";
 import s from "../styles";
-import type { LocalClaudeSession } from "../types";
+import type { LocalClaudeSession, ThemeVariant } from "../types";
 
 function formatSessionTime(ms: number): string {
   if (!ms) return "";
@@ -21,9 +21,11 @@ function formatSessionTime(ms: number): string {
  */
 export function LocalSessionView({
   session,
+  themeVariant,
   onResume,
 }: {
   session: LocalClaudeSession;
+  themeVariant: ThemeVariant;
   onResume: () => void;
 }) {
   const { t } = useI18n();
@@ -42,7 +44,7 @@ export function LocalSessionView({
           <span>{t("localSession.resume")}</span>
         </button>
       </div>
-      <SessionView sessionPath={session.sessionPath} />
+      <SessionView sessionPath={session.sessionPath} themeVariant={themeVariant} />
     </div>
   );
 }

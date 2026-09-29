@@ -441,6 +441,16 @@ body {
   border: 1px solid var(--border-dim);
   overflow-x: auto;
 }
+/* shiki 高亮块：外框沿用会话里的代码块语言，底色与配色交给 shiki 主题（按主题变体选） */
+.session-prose .shiki {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-dim);
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.55;
+}
 .session-prose pre code {
   padding: 0;
   background: none;

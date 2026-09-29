@@ -6,20 +6,7 @@ import s from "../../styles";
 import { AgentPathSection } from "./AgentPathSection";
 import type { AgentKey } from "./types";
 import type { ThemeVariant } from "../../types";
-
-import type { Highlighter } from "shiki";
-let _highlighterPromise: Promise<Highlighter> | null = null;
-function getHighlighter(): Promise<Highlighter> {
-  if (!_highlighterPromise) {
-    _highlighterPromise = import("shiki").then(({ createHighlighter }) =>
-      createHighlighter({
-        themes: ["github-dark", "github-light", "solarized-light"],
-        langs: ["json", "toml"],
-      }),
-    );
-  }
-  return _highlighterPromise!;
-}
+import { getHighlighter, shikiThemeFor } from "../../highlight";
 
 type FileState =
   | { status: "loading" }
@@ -46,12 +33,7 @@ export function AgentConfigPanel({
   lang: string;
   themeVariant: ThemeVariant;
 }) {
-  const shikiTheme =
-    themeVariant === "dark" || themeVariant === "midnight"
-      ? "github-dark"
-      : themeVariant === "eyecare"
-        ? "solarized-light"
-        : "github-light";
+  const shikiTheme = shikiThemeFor(themeVariant);
   const { t } = useI18n();
   const [resolvedFilePath, setResolvedFilePath] = useState(filePath);
   const [fileState, setFileState] = useState<FileState>({ status: "loading" });

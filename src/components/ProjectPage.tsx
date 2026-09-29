@@ -454,6 +454,7 @@ export function ProjectPage({
             ) : localSession ? (
               <LocalSessionView
                 session={localSession}
+                themeVariant={themeVariant}
                 onResume={() => onResumeLocalSession(localSession)}
               />
             ) : isNewTask || !selectedTask ? (

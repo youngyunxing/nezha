@@ -623,7 +623,7 @@ export function RunningView({
             </div>
           </div>
           {sessionPath ? (
-            <SessionView sessionPath={sessionPath} />
+            <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
           ) : (
             <div style={s.interruptedNoSessionPane}>
               {t(isDetached ? "running.detachedNoSession" : "running.interruptedNoSession")}
@@ -649,7 +649,7 @@ export function RunningView({
           />
         </div>
       ) : (
-        <SessionView sessionPath={sessionPath} />
+        <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
       )}
 
       {/* Status bar when task is done and no session path (terminal fallback) */}
