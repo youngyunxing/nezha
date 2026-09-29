@@ -23,7 +23,6 @@ function dialog(presets: TaskPreset[], focusPresetId: string | undefined, onSave
         onOpenChange={() => {}}
         onSave={onSave}
         onDelete={() => {}}
-        onRestoreDefaults={() => {}}
       />
     </I18nProvider>
   );

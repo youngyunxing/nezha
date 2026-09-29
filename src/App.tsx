@@ -42,12 +42,7 @@ import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
 import { buildProjectActivityMap } from "./components/project-rail/activity";
-import {
-  DEFAULT_TASK_PRESETS,
-  loadTaskPresets,
-  saveTaskPresets,
-  type TaskPreset,
-} from "./taskPresets";
+import { loadTaskPresets, saveTaskPresets, type TaskPreset } from "./taskPresets";
 import { TaskPresetDialog } from "./components/new-task/TaskPresetDialog";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
@@ -520,17 +515,6 @@ function App() {
     showToast(t("preset.saved", { name: preset.name }), "success");
   }
 
-  /** 把两个预置按钮加回来（已经有的不重复加）。 */
-  function handleRestoreDefaultPresets() {
-    setPresets((prev) => [
-      ...prev,
-      ...DEFAULT_TASK_PRESETS.filter((d) => !prev.some((p) => p.id === d.id)).map((d) => ({
-        ...d,
-      })),
-    ]);
-    showToast(t("preset.restored"), "success");
-  }
-
   function handleDeletePreset(id: string) {
     setPresets((prev) => prev.filter((p) => p.id !== id));
     showToast(t("preset.deleted"), "success");
@@ -909,7 +893,9 @@ function App() {
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
-    }).catch((err: unknown) => {
+    })
+      .then(() => tm.reapplyTerminalSize(task.id))
+      .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
       updateTaskStatus(task.id, "failed", undefined, msg);
@@ -1139,7 +1125,9 @@ function App() {
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
-    }).catch((err: unknown) => {
+    })
+      .then(() => tm.reapplyTerminalSize(task.id))
+      .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
       updateTaskStatus(task.id, "failed", undefined, msg);
@@ -1291,7 +1279,9 @@ function App() {
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
-    }).catch((err: unknown) => {
+    })
+      .then(() => tm.reapplyTerminalSize(task.id))
+      .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
       updateTaskStatus(task.id, "failed", undefined, msg);
@@ -1826,7 +1816,6 @@ function App() {
         }
         onSave={handleSavePreset}
         onDelete={handleDeletePreset}
-        onRestoreDefaults={handleRestoreDefaultPresets}
       />
 
       {!activeProject && projects.length === 0 && (

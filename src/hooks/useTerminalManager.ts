@@ -227,6 +227,15 @@ export function useTerminalManager(options?: {
     invoke("send_input", { taskId, data }).catch(console.error);
   }, []);
 
+  /** PTY 建好之后重发一次当前尺寸。
+   *  面板通常比 PTY 先就位：挂载 → fit → resize_pty，那一次会打在还没注册的 PTY 上被丢掉，
+   *  于是 CLI 按默认 220×50 画了第一屏（首屏换行错乱），要等下一次尺寸变化（切走再切回）
+   *  才重排。spawn/resume 完成后再补一次，SIGWINCH 就会让它按真实宽度重画。 */
+  const reapplyTerminalSize = useCallback((taskId: string) => {
+    const { cols, rows } = terminalSizeRef.current;
+    invoke("resize_pty", { taskId, cols, rows }).catch(() => {});
+  }, []);
+
   const handleResize = useCallback((taskId: string, cols: number, rows: number) => {
     terminalSizeRef.current = { cols, rows };
     invoke("resize_pty", { taskId, cols, rows }).catch(console.error);
@@ -375,6 +384,7 @@ export function useTerminalManager(options?: {
     writeErrorToTerminal,
     handleInput,
     handleResize,
+    reapplyTerminalSize,
     handleRegisterTerminal,
     seedTaskScreen,
     handleTerminalReady,

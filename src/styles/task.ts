@@ -97,14 +97,15 @@ export const task = {
     color: "var(--text-primary)",
     fontSize: 12.5,
   },
-  // 新建任务 = 主操作：用实心主按钮配色（--primary-action-bg，和弹窗里的「保存」同一套），
-  // 一眼看出是按钮而不是一行文案；下面的快捷按钮是浅色 chip，层级自然分开。
+  // 新建任务 = 主操作，但别用实心重色（太跳）：主题色的浅底 + 主题色文字 + 更大的圆角，
+  // 看着是按钮，又和下面浅色 chip 的快捷命令在同一层次里。
   newTaskRowPrimary: {
     ...newTaskRowBase,
-    background: "var(--primary-action-bg)",
-    color: "var(--primary-action-fg)",
+    borderRadius: 8,
+    background: "var(--accent-subtle)",
+    color: "var(--accent)",
     fontWeight: 600,
-    transition: "filter 0.1s",
+    transition: "background 0.1s, filter 0.1s",
   },
   newTaskRowLabel: { fontSize: 13, fontWeight: 500 },
   // 快捷创建按钮：一排胶囊 chip，末尾的「+」是新增/管理
@@ -153,17 +154,6 @@ export const task = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
-  },
-  presetRestoreBtn: {
-    alignSelf: "flex-start" as const,
-    marginBottom: 10,
-    padding: 0,
-    border: "none",
-    background: "none",
-    color: "var(--text-hint)",
-    fontSize: 11.5,
-    textDecoration: "underline",
-    cursor: "pointer",
   },
   presetDialogList: { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 12 },
   presetDialogRow: {

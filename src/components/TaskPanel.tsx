@@ -126,7 +126,7 @@ export function TaskPanel({
       <button
         style={{
           ...s.newTaskRowPrimary,
-          ...(newTaskHover ? { filter: "brightness(1.07)" } : null),
+          ...(newTaskHover ? { filter: "brightness(0.97)" } : null),
         }}
         onMouseEnter={() => setNewTaskHover(true)}
         onMouseLeave={() => setNewTaskHover(false)}

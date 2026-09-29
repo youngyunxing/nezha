@@ -226,8 +226,6 @@ const translations: Record<string, string> = {
   "preset.editingHint": "正在改「{name}」；点「取消编辑」回到新增。",
   "preset.saved": "已保存快捷按钮「{name}」",
   "preset.deleted": "已删除快捷按钮",
-  "preset.restoreDefaults": "恢复默认按钮（Claude Code、创建终端）",
-  "preset.restored": "已恢复默认快捷按钮",
   "newTask.dialogName": "任务名字（可选）",
   "newTask.dialogIsolated": "创建 worktree",
   "newTask.dialogIsolatedHint": "用 git worktree 在单独的分支副本里改",

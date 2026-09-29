@@ -38,7 +38,6 @@ export function TaskPresetDialog({
   onOpenChange,
   onSave,
   onDelete,
-  onRestoreDefaults,
 }: {
   open: boolean;
   presets: TaskPreset[];
@@ -46,8 +45,6 @@ export function TaskPresetDialog({
   onOpenChange: (open: boolean) => void;
   onSave: (preset: TaskPreset) => void;
   onDelete: (id: string) => void;
-  /** 把两个预置按钮加回来（删掉之后想找回） */
-  onRestoreDefaults: () => void;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -206,14 +203,6 @@ export function TaskPresetDialog({
             <span style={draft.useWorktree ? s.settingToggleTrackOn : s.settingToggleTrack}>
               <span style={draft.useWorktree ? s.settingToggleKnobOn : s.settingToggleKnob} />
             </span>
-          </button>
-
-          <button
-            type="button"
-            style={s.presetRestoreBtn}
-            onClick={onRestoreDefaults}
-          >
-            {t("preset.restoreDefaults")}
           </button>
 
           <div style={s.forkDialogActions}>
