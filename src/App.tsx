@@ -1356,11 +1356,14 @@ function App() {
     });
   }
 
-  async function handleGenerateTaskName(taskId: string) {
+  async function handleGenerateTaskName(taskId: string, opts?: { auto?: boolean }) {
     const task = tasks.find((x) => x.id === taskId);
     if (!task) return;
     const project = projects.find((p) => p.id === task.projectId);
     if (!project) return;
+    // auto：创建时没填名字、由任务状态自动触发的后台起名。不弹失败 toast，也不校验
+    // status —— 等第一轮说完时用户很可能已经接着聊下一轮了，status 变了不该丢掉这次命名。
+    const auto = opts?.auto === true;
     // 按 agent 选择对应字段，避免历史数据两个字段都有时取错
     const sessionPath =
       task.agent === "codex" ? (task.codexSessionPath ?? null) : (task.claudeSessionPath ?? null);
@@ -1386,7 +1389,7 @@ function App() {
         if (!current) return prev;
         if ((current.name ?? "") !== expectedPriorName) return prev;
         if (current.prompt !== expectedPrompt) return prev;
-        if (current.status !== expectedStatus) return prev;
+        if (!auto && current.status !== expectedStatus) return prev;
         const currentSessionPath =
           current.agent === "codex"
             ? (current.codexSessionPath ?? null)
@@ -1398,7 +1401,7 @@ function App() {
         return next;
       });
     } catch (e) {
-      showToast(t("task.generateNameFailed", { error: String(e) }), "error");
+      if (!auto) showToast(t("task.generateNameFailed", { error: String(e) }), "error");
       throw e;
     }
   }
@@ -1482,6 +1485,31 @@ function App() {
   }
 
   // 头像外观(颜色 / emoji / 缩写)整体替换;归一化后为空则删掉字段,保持 projects.json 简洁。
+
+  // 用户没填任务名（名字还是 `claude-xxx` 这种占位符）时自动起名。触发时机：等 agent 第一轮
+  // 说完（awaiting_review / input_required / done）—— 这之前会话里没有内容可总结。三条克制：
+  // - 启动时已存在的老任务不补，免得一开 app 就并发起一堆命名请求；只有本次运行期间新建的
+  //   （或刚建没多久就落在已完成态的）才处理，靠 createdAt 判断；
+  // - 每个任务只试一次，失败就算了，名字保持占位符，用户随时能自己改；
+  // - 纯终端不起名。
+  const nameGenSeenRef = useRef<Set<string>>(new Set());
+  const nameGenRequestedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const NAMABLE = new Set(["awaiting_review", "input_required", "done"]);
+    for (const task of tasks) {
+      if (!nameGenSeenRef.current.has(task.id)) {
+        nameGenSeenRef.current.add(task.id);
+        if (Date.now() - (task.createdAt ?? 0) > 10 * 60_000) continue; // 老任务不补
+      }
+      if (nameGenRequestedRef.current.has(task.id)) continue;
+      if (task.agent === "shell") continue;
+      if (!/^(?:claude|codex)-\d+$/.test(task.name ?? "")) continue; // 用户填过名字
+      if (!NAMABLE.has(task.status)) continue;
+      nameGenRequestedRef.current.add(task.id);
+      void handleGenerateTaskName(task.id, { auto: true }).catch(() => {});
+    }
+  }, [tasks]);
+
   function handleUpdateProjectAvatar(projectId: string, avatar: ProjectAvatarStyle | undefined) {
     const normalized = normalizeProjectAvatar(avatar);
     setProjects((prev) => {
@@ -1632,7 +1660,6 @@ function App() {
               onDeleteTask={handleDeleteTask}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
-              onGenerateTaskName={handleGenerateTaskName}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}

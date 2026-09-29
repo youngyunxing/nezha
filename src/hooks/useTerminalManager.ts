@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { trimTrailingPromptNoise } from "../screenRecord";
+import { trimPromptNoise } from "../screenRecord";
 
 // ── Buffer constants ─────────────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ export function useTerminalManager(options?: {
         taskId,
       }).catch(() => null);
       // 剪掉尾部纯提示符重画：回放出来不再是一屏重复的提示符，落盘也不再攒噪声。
-      const prefix = existing ? trimTrailingPromptNoise(existing) : "";
+      const prefix = existing ? trimPromptNoise(existing) : "";
       restoredPrefixRef.current[taskId] = prefix;
       return prefix;
     },
@@ -332,7 +332,7 @@ export function useTerminalManager(options?: {
           if (!tail) continue;
           // 旧记录拼在前面：恢复出来的终端上看到的就是「旧屏幕 + 新输出」，落盘保持一致
           const prefix = await loadScreenRecord(taskId, context);
-          const content = trimTrailingPromptNoise((prefix + tail).slice(-SCREEN_TAIL_BYTES));
+          const content = trimPromptNoise((prefix + tail).slice(-SCREEN_TAIL_BYTES));
           invoke("save_task_screen", {
             projectId: context.projectId,
             taskId,

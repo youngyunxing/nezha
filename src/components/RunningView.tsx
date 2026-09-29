@@ -19,7 +19,6 @@ import s from "../styles";
 import {
   RotateCcw,
   Pencil,
-  Sparkles,
   GitMerge,
   Trash2,
   AlertTriangle,
@@ -98,7 +97,6 @@ export function RunningView({
   onSnapshot,
   getRestoreState,
   onRename,
-  onGenerateName,
   themeVariant,
   terminalFontSize,
   terminalScrollback,
@@ -121,7 +119,6 @@ export function RunningView({
   onSnapshot?: (snapshot: string) => void;
   getRestoreState?: () => { initialData?: string; initialSnapshot?: string };
   onRename: (name: string) => void;
-  onGenerateName: () => Promise<void>;
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
   terminalScrollback: TerminalScrollback;
@@ -152,18 +149,12 @@ export function RunningView({
   const [editingTitle, setEditingTitle] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [hoverHeader, setHoverHeader] = useState(false);
-  const [generatingName, setGeneratingName] = useState(false);
   const [worktreeBusy, setWorktreeBusy] = useState<"merge" | "discard" | null>(null);
   const [exporting, setExporting] = useState(false);
   const [bannerCompact, setBannerCompact] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const interruptedBannerRef = useRef<HTMLDivElement>(null);
 
-  const generateTooltip = generatingName
-    ? t("task.generatingName")
-    : sessionPath
-      ? t("task.generateName")
-      : t("task.generateNameNoSession");
   const defaultForkName = buildDefaultForkTaskName(
     task.name,
     task.prompt,
@@ -174,18 +165,6 @@ export function RunningView({
     : !resumeSessionId || !onFork
       ? t("running.forkUnavailable")
       : undefined;
-
-  const handleGenerateClick = async () => {
-    if (generatingName || isActive) return;
-    setGeneratingName(true);
-    try {
-      await onGenerateName();
-    } catch {
-      // toast already shown by parent handler
-    } finally {
-      setGeneratingName(false);
-    }
-  };
 
   const handleExport = async () => {
     if (exporting || !sessionPath) return;
@@ -427,26 +406,6 @@ export function RunningView({
               <Pencil size={13} strokeWidth={2.25} />
             </button>
           )}
-          {!editingTitle && task.agent !== "shell" && (
-            <button
-              type="button"
-              title={generateTooltip}
-              disabled={generatingName || isActive}
-              style={{
-                ...s.taskRenameBtn,
-                flexShrink: 0,
-                color: isActive ? "var(--text-hint)" : "var(--text-secondary)",
-                opacity: generatingName ? 1 : isActive ? 0.4 : hoverHeader ? 1 : 0.65,
-                background:
-                  hoverHeader && !isActive && !generatingName ? "var(--bg-input)" : "transparent",
-                cursor: generatingName || isActive ? "not-allowed" : "pointer",
-                transition: "opacity 0.15s ease, background 0.15s ease, color 0.15s ease",
-              }}
-              onClick={handleGenerateClick}
-            >
-              <Sparkles size={13} strokeWidth={2.25} className={generatingName ? "spin" : ""} />
-            </button>
-          )}
         </div>
         {isActive && (
           <>
@@ -536,9 +495,9 @@ export function RunningView({
       {(metrics || sessionPath) && (
         <div
           style={{
-            // 上下都留 8px：会话文件那一行到上面的任务名、到下面的分割线距离一致，
-            // 也比原来的 20/12 更紧（整体上移）。
-            padding: "8px 20px 8px",
+            // 任务名那行是 36px 高、文字居中，文字下方本来就空着 ~8px；所以这里顶部不给
+            // 内边距，视觉上到任务名的距离才等于到底部分割线的 8px。
+            padding: "0 20px 8px",
             borderBottom: "1px solid var(--border-dim)",
             flexShrink: 0,
           }}
