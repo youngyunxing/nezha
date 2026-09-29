@@ -1,17 +1,7 @@
 import { useState } from "react";
 import { Search, Plus, Trash2, PanelLeftClose, PanelLeftOpen, Moon, Sun } from "lucide-react";
-import type {
-  Project,
-  Task,
-  ThemeVariant,
-  TerminalFontSize,
-  TerminalScrollback,
-  TaskDisplayWindow,
-  FontFamily,
-  GitRoot,
-} from "../types";
+import type { Project, Task, ThemeVariant, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
-import { SidebarFooterActions } from "./SidebarFooterActions";
 import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
 import { TaskList } from "./task-panel/TaskList";
@@ -36,18 +26,7 @@ export function TaskPanel({
   onRunTodo,
   themeVariant,
   onToggleTheme,
-  terminalFontSize,
-  onTerminalFontSizeChange,
   taskDisplayWindow,
-  onTaskDisplayWindowChange,
-  attentionBadge,
-  onAttentionBadgeChange,
-  terminalScrollback,
-  onTerminalScrollbackChange,
-  uiFontFamily,
-  onUiFontFamilyChange,
-  monoFontFamily,
-  onMonoFontFamilyChange,
   active = true,
   collapsed = false,
   onToggleCollapsed,
@@ -73,18 +52,7 @@ export function TaskPanel({
   onRunTodo: (task: Task) => void;
   themeVariant: ThemeVariant;
   onToggleTheme: () => void;
-  terminalFontSize: TerminalFontSize;
-  onTerminalFontSizeChange: (size: TerminalFontSize) => void;
   taskDisplayWindow: TaskDisplayWindow;
-  onTaskDisplayWindowChange: (window: TaskDisplayWindow) => void;
-  attentionBadge: boolean;
-  onAttentionBadgeChange: (enabled: boolean) => void;
-  terminalScrollback: TerminalScrollback;
-  onTerminalScrollbackChange: (value: TerminalScrollback) => void;
-  uiFontFamily: FontFamily;
-  onUiFontFamilyChange: (family: FontFamily) => void;
-  monoFontFamily: FontFamily;
-  onMonoFontFamilyChange: (family: FontFamily) => void;
   active?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -217,25 +185,6 @@ export function TaskPanel({
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodo}
       />
-      <div style={s.taskPanelFooter}>
-        <SidebarFooterActions
-          projectId={project.id}
-          themeVariant={themeVariant}
-          onToggleTheme={onToggleTheme}
-          terminalFontSize={terminalFontSize}
-          onTerminalFontSizeChange={onTerminalFontSizeChange}
-          taskDisplayWindow={taskDisplayWindow}
-          onTaskDisplayWindowChange={onTaskDisplayWindowChange}
-          attentionBadge={attentionBadge}
-          onAttentionBadgeChange={onAttentionBadgeChange}
-          terminalScrollback={terminalScrollback}
-          onTerminalScrollbackChange={onTerminalScrollbackChange}
-          uiFontFamily={uiFontFamily}
-          onUiFontFamilyChange={onUiFontFamilyChange}
-          monoFontFamily={monoFontFamily}
-          onMonoFontFamilyChange={onMonoFontFamilyChange}
-        />
-      </div>
     </div>
   );
 }

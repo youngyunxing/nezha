@@ -225,6 +225,34 @@
   color: var(--text-primary);
 }
 
+.rail-drawer-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.rail-drawer-footer-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-hint);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.rail-drawer-footer-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
 .rail-drawer-list {
   flex: 1;
   overflow-y: auto;

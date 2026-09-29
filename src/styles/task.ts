@@ -361,13 +361,6 @@ export const task = {
     padding: "2px 0 12px",
     overflowAnchor: "none" as const,
   },
-  taskPanelFooter: {
-    padding: "10px 10px",
-    borderTop: "1px solid var(--border-dim)",
-    display: "flex",
-    justifyContent: "flex-start",
-    background: "var(--bg-sidebar)",
-  },
   taskListEmpty: {
     padding: "24px 16px",
     fontSize: 12,

@@ -92,8 +92,7 @@ export const DEFAULT_TERMINAL_SCROLLBACK: TerminalScrollback = 1000;
 export function clampTerminalScrollback(value: unknown): TerminalScrollback {
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num)) return DEFAULT_TERMINAL_SCROLLBACK;
-  const snapped =
-    Math.round(num / TERMINAL_SCROLLBACK_STEP) * TERMINAL_SCROLLBACK_STEP;
+  const snapped = Math.round(num / TERMINAL_SCROLLBACK_STEP) * TERMINAL_SCROLLBACK_STEP;
   return Math.min(TERMINAL_SCROLLBACK_MAX, Math.max(TERMINAL_SCROLLBACK_MIN, snapped));
 }
 
@@ -108,8 +107,7 @@ const MONO_FONT_MAC: FontFamily =
   '"JetBrains Mono", "Fira Code", "SF Mono", Menlo, ui-monospace, monospace';
 const MONO_FONT_LINUX: FontFamily =
   '"JetBrains Mono", "Fira Code", "DejaVu Sans Mono", "Liberation Mono", ui-monospace, monospace';
-const MONO_FONT_FALLBACK: FontFamily =
-  '"JetBrains Mono", "Fira Code", ui-monospace, monospace';
+const MONO_FONT_FALLBACK: FontFamily = '"JetBrains Mono", "Fira Code", ui-monospace, monospace';
 const MONO_FONT_PR326_INITIAL_FALLBACK: FontFamily =
   '"JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, ui-monospace, monospace';
 
@@ -206,22 +204,6 @@ export function isActiveTaskStatus(status: TaskStatus): boolean {
 
 // ── Notifications ────────────────────────────────────────────────────────────
 
-export interface NotificationItem {
-  id: string;
-  level: "info" | "warning" | "error" | string;
-  title: string;
-  body: string;
-  bodyZh: string | null;
-  url: string | null;
-  createdAt: string;
-  isRead: boolean;
-}
-
-export interface NotificationResult {
-  notifications: NotificationItem[];
-  unreadCount: number;
-}
-
 export interface UsageWindow {
   usedPercent: number;
   remainingPercent: number;
@@ -250,4 +232,3 @@ export interface UsageSnapshot {
   codex: UsageSource<CodexUsageData>;
   fetchedAt: number;
 }
-

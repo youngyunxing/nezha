@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ToastProvider } from "./components/Toast";
-import { NotificationsProvider } from "./hooks/useNotifications";
 import { I18nProvider } from "./i18n";
 
 class ErrorBoundary extends React.Component<
@@ -63,9 +62,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <ErrorBoundary>
       <I18nProvider>
         <ToastProvider>
-          <NotificationsProvider>
-            <App />
-          </NotificationsProvider>
+          <App />
         </ToastProvider>
       </I18nProvider>
     </ErrorBoundary>

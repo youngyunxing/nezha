@@ -14,7 +14,6 @@ mod fs;
 mod fs_watcher;
 mod git;
 mod hooks;
-mod notification;
 mod platform;
 mod pty;
 mod session;
@@ -248,9 +247,6 @@ pub fn run() {
             app_settings::detect_agent_paths,
             app_settings::detect_agent_versions_for_settings,
             app_settings::get_system_fonts,
-            notification::get_notifications,
-            notification::mark_notification_read,
-            notification::mark_all_notifications_read,
             usage::read_usage_snapshot,
             hooks::get_hook_status,
             hooks::get_hook_readiness,

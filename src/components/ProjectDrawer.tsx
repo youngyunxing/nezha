@@ -3,6 +3,16 @@ import type React from "react";
 import type { Project, ProjectAvatarStyle, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
+import { Moon, Settings, Sun } from "lucide-react";
+import { AppSettingsDialog } from "./AppSettingsDialog";
+import { OPEN_APP_SETTINGS_EVENT, type OpenAppSettingsDetail } from "./app-settings/types";
+import type {
+  FontFamily,
+  TaskDisplayWindow,
+  TerminalFontSize,
+  TerminalScrollback,
+  ThemeVariant,
+} from "../types";
 import type { ProjectRenameResult } from "../projectName";
 import { DRAWER_ROW_PADDING_TOP, DRAWER_ROW_STRIDE } from "../styles/rail-drag";
 import { Search, Plus } from "lucide-react";
@@ -36,6 +46,19 @@ export function ProjectDrawer({
   onUpdateProjectAvatar,
   onDelete,
   onRenameProject,
+  themeVariant,
+  onToggleTheme,
+  terminalFontSize,
+  onTerminalFontSizeChange,
+  taskDisplayWindow,
+  onTaskDisplayWindowChange,
+  onAttentionBadgeChange,
+  terminalScrollback,
+  onTerminalScrollbackChange,
+  uiFontFamily,
+  onUiFontFamilyChange,
+  monoFontFamily,
+  onMonoFontFamilyChange,
 }: {
   projects: Project[];
   allTasks: Task[];
@@ -48,8 +71,22 @@ export function ProjectDrawer({
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDelete: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
+  themeVariant: ThemeVariant;
+  onToggleTheme: () => void;
+  terminalFontSize: TerminalFontSize;
+  onTerminalFontSizeChange: (size: TerminalFontSize) => void;
+  taskDisplayWindow: TaskDisplayWindow;
+  onTaskDisplayWindowChange: (window: TaskDisplayWindow) => void;
+  onAttentionBadgeChange: (enabled: boolean) => void;
+  terminalScrollback: TerminalScrollback;
+  onTerminalScrollbackChange: (value: TerminalScrollback) => void;
+  uiFontFamily: FontFamily;
+  onUiFontFamilyChange: (family: FontFamily) => void;
+  monoFontFamily: FontFamily;
+  onMonoFontFamilyChange: (family: FontFamily) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [showAppSettings, setShowAppSettings] = useState(false);
   // 右键菜单 / 外观编辑器:同一时刻只允许一个 rail 项打开,由这里统一持有。
   const [openPanel, setOpenPanel] = useState<{ projectId: string; panel: RailItemPanel } | null>(
     null,
@@ -324,6 +361,19 @@ export function ProjectDrawer({
     } as React.CSSProperties);
 
   const { t } = useI18n();
+  const isDark = themeVariant === "dark" || themeVariant === "midnight";
+
+  // `OPEN_APP_SETTINGS_EVENT` 只在作用域匹配时响应,避免多个同时挂载的 ProjectPage
+  // 各开一个设置对话框(见 OpenAppSettingsDetail)。
+  useEffect(() => {
+    const open = (event: Event) => {
+      const target = (event as CustomEvent<OpenAppSettingsDetail | undefined>).detail?.projectId;
+      if (target !== activeProjectId) return;
+      setShowAppSettings(true);
+    };
+    window.addEventListener(OPEN_APP_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(OPEN_APP_SETTINGS_EVENT, open);
+  }, [activeProjectId]);
 
   return (
     <div className="rail-drawer">
@@ -388,6 +438,44 @@ export function ProjectDrawer({
           );
         })}
       </div>
+
+      <div className="rail-drawer-footer">
+        <button
+          type="button"
+          className="rail-drawer-footer-btn"
+          title={t("appSettings.title")}
+          onClick={() => setShowAppSettings(true)}
+        >
+          <Settings size={14} strokeWidth={1.6} />
+        </button>
+        <button
+          type="button"
+          className="rail-drawer-footer-btn"
+          title={isDark ? t("theme.switchToLight") : t("theme.switchToDark")}
+          onClick={onToggleTheme}
+        >
+          {isDark ? <Sun size={14} strokeWidth={1.8} /> : <Moon size={14} strokeWidth={1.8} />}
+        </button>
+      </div>
+
+      {showAppSettings && (
+        <AppSettingsDialog
+          themeVariant={themeVariant}
+          terminalFontSize={terminalFontSize}
+          onTerminalFontSizeChange={onTerminalFontSizeChange}
+          taskDisplayWindow={taskDisplayWindow}
+          onTaskDisplayWindowChange={onTaskDisplayWindowChange}
+          attentionBadge={attentionBadge}
+          onAttentionBadgeChange={onAttentionBadgeChange}
+          terminalScrollback={terminalScrollback}
+          onTerminalScrollbackChange={onTerminalScrollbackChange}
+          uiFontFamily={uiFontFamily}
+          onUiFontFamilyChange={onUiFontFamilyChange}
+          monoFontFamily={monoFontFamily}
+          onMonoFontFamilyChange={onMonoFontFamilyChange}
+          onClose={() => setShowAppSettings(false)}
+        />
+      )}
 
       {draggedProject && previewVars && (
         <div className="rail-drag-preview" style={previewVars}>

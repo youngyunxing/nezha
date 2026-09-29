@@ -370,7 +370,6 @@ export function ProjectPage({
         projects={allProjects}
         allTasks={tasks}
         activeProjectId={project.id}
-        attentionBadge={attentionBadge}
         onSwitch={onSwitchProject}
         onCommitProjectOrder={onCommitProjectOrder}
         onOpen={onOpen}
@@ -378,6 +377,20 @@ export function ProjectPage({
         onUpdateProjectAvatar={onUpdateProjectAvatar}
         onDelete={onDeleteProject}
         onRenameProject={onRenameProject}
+        themeVariant={themeVariant}
+        onToggleTheme={onToggleTheme}
+        terminalFontSize={terminalFontSize}
+        onTerminalFontSizeChange={onTerminalFontSizeChange}
+        taskDisplayWindow={taskDisplayWindow}
+        onTaskDisplayWindowChange={onTaskDisplayWindowChange}
+        attentionBadge={attentionBadge}
+        onAttentionBadgeChange={onAttentionBadgeChange}
+        terminalScrollback={terminalScrollback}
+        onTerminalScrollbackChange={onTerminalScrollbackChange}
+        uiFontFamily={uiFontFamily}
+        onUiFontFamilyChange={onUiFontFamilyChange}
+        monoFontFamily={monoFontFamily}
+        onMonoFontFamilyChange={onMonoFontFamilyChange}
       />
       <TaskPanel
         project={project}
@@ -397,18 +410,7 @@ export function ProjectPage({
         onRunTodo={onRunTodoTask}
         themeVariant={themeVariant}
         onToggleTheme={onToggleTheme}
-        terminalFontSize={terminalFontSize}
-        onTerminalFontSizeChange={onTerminalFontSizeChange}
         taskDisplayWindow={taskDisplayWindow}
-        onTaskDisplayWindowChange={onTaskDisplayWindowChange}
-        attentionBadge={attentionBadge}
-        onAttentionBadgeChange={onAttentionBadgeChange}
-        terminalScrollback={terminalScrollback}
-        onTerminalScrollbackChange={onTerminalScrollbackChange}
-        uiFontFamily={uiFontFamily}
-        onUiFontFamilyChange={onUiFontFamilyChange}
-        monoFontFamily={monoFontFamily}
-        onMonoFontFamilyChange={onMonoFontFamilyChange}
         active={visible}
         collapsed={taskPanelCollapsed}
         onToggleCollapsed={() => setTaskPanelCollapsed((v) => !v)}
