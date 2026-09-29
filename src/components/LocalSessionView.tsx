@@ -1,4 +1,4 @@
-import { Play } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { SessionView } from "./SessionView";
 import { useI18n } from "../i18n";
 import s from "../styles";
@@ -36,9 +36,10 @@ export function LocalSessionView({
           {session.preview || t("localSession.noPreview")}
         </span>
         <span style={s.localSessionTime}>{formatSessionTime(session.updatedAt)}</span>
-        <button type="button" onClick={onResume} style={s.localSessionResumeBtn}>
-          <Play size={13} strokeWidth={2} fill="currentColor" />
-          {t("localSession.resume")}
+        {/* 与 Nezha 任务的「恢复」按钮同一套样式/图标，避免两处语义相同、长相不同 */}
+        <button type="button" onClick={onResume} style={s.interruptedPrimaryBtn}>
+          <RotateCcw size={12} strokeWidth={2.1} />
+          <span>{t("localSession.resume")}</span>
         </button>
       </div>
       <SessionView sessionPath={session.sessionPath} />

@@ -18,7 +18,6 @@ import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
 import s from "../styles";
 import {
-  X,
   RotateCcw,
   Pencil,
   Sparkles,
@@ -26,7 +25,6 @@ import {
   GitBranch,
   Trash2,
   AlertTriangle,
-  CheckCircle2,
   Terminal as TerminalIcon,
 } from "lucide-react";
 
@@ -74,14 +72,12 @@ export function RunningView({
   runCount = 0,
   visible = true,
   projectActive = true,
-  onCancel,
   onResume,
   onFork,
   onMergeWorktree,
   onDiscardWorktree,
   onOpenWorktreeTerminal,
   onReconnect,
-  onMarkDone,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -100,14 +96,12 @@ export function RunningView({
   runCount?: number;
   visible?: boolean;
   projectActive?: boolean;
-  onCancel: () => void;
   onResume?: () => void;
   onFork?: (name: string) => void;
   onMergeWorktree?: () => Promise<void>;
   onDiscardWorktree?: () => Promise<void>;
   onOpenWorktreeTerminal?: () => void;
   onReconnect: () => void;
-  onMarkDone: () => void;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
@@ -426,14 +420,6 @@ export function RunningView({
                 <span>{t("running.worktreeTerminal")}</span>
               </button>
             )}
-            <button style={s.doneBtn} onClick={onMarkDone}>
-              <CheckCircle2 size={12} strokeWidth={2.5} />
-              <span>{t("running.markDone")}</span>
-            </button>
-            <button style={s.cancelBtn} onClick={onCancel}>
-              <X size={12} strokeWidth={2.5} />
-              <span>{t("running.cancel")}</span>
-            </button>
           </>
         )}
         {!isActive &&
@@ -633,16 +619,6 @@ export function RunningView({
                       ? t("running.resume")
                       : t("running.resumeTask")}
                 </span>
-              </button>
-              {isInterrupted && (
-                <button type="button" style={s.interruptedSecondaryBtn} onClick={onMarkDone}>
-                  <CheckCircle2 size={12} strokeWidth={2.1} />
-                  <span>{bannerCompact ? t("status.done") : t("running.markDone")}</span>
-                </button>
-              )}
-              <button type="button" style={s.interruptedDangerBtn} onClick={onCancel}>
-                <X size={12} strokeWidth={2.1} />
-                <span>{bannerCompact ? t("running.cancel") : t("running.cancelTask")}</span>
               </button>
             </div>
           </div>

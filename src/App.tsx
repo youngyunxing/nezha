@@ -231,15 +231,6 @@ function shouldIgnoreTaskStatusTransition(current: TaskStatus, next: TaskStatus)
   );
 }
 
-function isLiveTerminalTaskStatus(status: TaskStatus): boolean {
-  return (
-    status === "pending" ||
-    status === "running" ||
-    status === "input_required" ||
-    status === "awaiting_review"
-  );
-}
-
 function getSystemPrefersDark() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
@@ -1003,16 +994,6 @@ function App() {
     }
   }
 
-  function handleCancelTask(taskId: string) {
-    delete pendingResumeStartsRef.current[taskId];
-    const task = tasks.find((t) => t.id === taskId);
-    const project = projects.find((p) => p.id === task?.projectId);
-    const projectPath = task?.worktreePath ?? project?.path ?? "";
-    invoke("cancel_task", { taskId, projectPath }).catch((e: unknown) => {
-      showToast(t("toast.cancelTaskFailed", { error: String(e) }));
-    });
-  }
-
   function invokeResumeTask(task: Task, project: Project, sessionId: string) {
     invoke("resume_task", {
       taskId: task.id,
@@ -1196,30 +1177,6 @@ function App() {
       return;
     }
     handleResumeTask(taskId);
-  }
-
-  function handleMarkTaskDone(taskId: string) {
-    delete pendingResumeStartsRef.current[taskId];
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    if (isLiveTerminalTaskStatus(task.status)) {
-      const project = projects.find((p) => p.id === task.projectId);
-      const projectPath = task.worktreePath ?? project?.path ?? "";
-      invoke("complete_task", { taskId, projectPath })
-        .then(() => {
-          tm.removeTaskBuffers([taskId]);
-          scheduleForDoneTask(taskId);
-        })
-        .catch((e: unknown) => {
-          showToast(t("toast.completeTaskFailed", { error: String(e) }));
-        });
-      return;
-    }
-
-    updateTaskStatus(taskId, "done");
-    tm.removeTaskBuffers([taskId]);
-    scheduleForDoneTask(taskId);
   }
 
   function cleanupTaskWorktree(task: Task, projectPath: string) {
@@ -1616,13 +1573,11 @@ function App() {
               onRenameTask={handleRenameTask}
               onGenerateTaskName={handleGenerateTaskName}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
-              onCancelTask={handleCancelTask}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}
               onMergeWorktree={handleMergeWorktree}
               onDiscardWorktree={handleDiscardWorktree}
               onReconnectTask={handleReconnectTask}
-              onMarkTaskDone={handleMarkTaskDone}
               onInput={tm.handleInput}
               onResize={tm.handleResize}
               onRegisterTerminal={tm.handleRegisterTerminal}

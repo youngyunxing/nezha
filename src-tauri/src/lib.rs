@@ -26,7 +26,6 @@ pub struct TaskManager {
     pub(crate) child_handles:
         Mutex<HashMap<String, Arc<std::sync::Mutex<Box<dyn portable_pty::Child + Send + Sync>>>>>,
     pub(crate) cancelled_tasks: Mutex<HashSet<String>>,
-    pub(crate) manually_completed_tasks: Mutex<HashSet<String>>,
     pub(crate) codex_sessions: Mutex<HashMap<String, CodexSessionInfo>>,
     pub(crate) claude_sessions: Mutex<HashMap<String, ClaudeSessionInfo>>,
     pub(crate) claimed_session_paths: Mutex<HashSet<String>>,
@@ -146,7 +145,6 @@ pub fn run() {
             pty_writers: Mutex::new(HashMap::new()),
             child_handles: Mutex::new(HashMap::new()),
             cancelled_tasks: Mutex::new(HashSet::new()),
-            manually_completed_tasks: Mutex::new(HashSet::new()),
             codex_sessions: Mutex::new(HashMap::new()),
             claude_sessions: Mutex::new(HashMap::new()),
             claimed_session_paths: Mutex::new(HashSet::new()),
@@ -167,7 +165,6 @@ pub fn run() {
             pty::resume_task,
             pty::fork_task,
             pty::cancel_task,
-            pty::complete_task,
             pty::get_active_task_ids,
             pty::reset_task_process,
             pty::send_input,

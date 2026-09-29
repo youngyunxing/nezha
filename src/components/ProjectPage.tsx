@@ -53,13 +53,11 @@ export function ProjectPage({
   onRenameTask,
   onGenerateTaskName,
   onSubmitTask,
-  onCancelTask,
   onResumeTask,
   onForkTask,
   onMergeWorktree,
   onDiscardWorktree,
   onReconnectTask,
-  onMarkTaskDone,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -117,13 +115,11 @@ export function ProjectPage({
     /** 任务关联的 git 根（worktree 创建于此） */
     repoPath: string;
   }) => void;
-  onCancelTask: (id: string) => void;
   onResumeTask: (id: string) => void;
   onForkTask: (id: string, name: string) => void;
   onMergeWorktree: (id: string) => Promise<void>;
   onDiscardWorktree: (id: string) => Promise<void>;
   onReconnectTask: (id: string) => void;
-  onMarkTaskDone: (id: string) => void;
   onInput: (taskId: string, data: string) => void;
   onResize: (taskId: string, cols: number, rows: number) => void;
   onRegisterTerminal: (
@@ -495,7 +491,6 @@ export function ProjectPage({
                   runCount={taskRunCounts[task.id] ?? 0}
                   visible={visible && isVisible}
                   projectActive={visible}
-                  onCancel={() => onCancelTask(task.id)}
                   onResume={() => onResumeTask(task.id)}
                   onFork={(name) => onForkTask(task.id, name)}
                   onMergeWorktree={() => onMergeWorktree(task.id)}
@@ -504,7 +499,6 @@ export function ProjectPage({
                     worktreePath ? () => handleOpenWorktreeTerminal(worktreePath) : undefined
                   }
                   onReconnect={() => onReconnectTask(task.id)}
-                  onMarkDone={() => onMarkTaskDone(task.id)}
                   onInput={(data) => onInput(task.id, data)}
                   onResize={(cols, rows) => onResize(task.id, cols, rows)}
                   onRegisterTerminal={(fn) => onRegisterTerminal(task.id, fn)}

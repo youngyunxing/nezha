@@ -68,12 +68,7 @@ fn finalize_task_exit(
     exit_ok: bool,
     exit_code: Option<u32>,
 ) {
-    let (is_cancelled, is_manually_completed) = {
-        let tm = app.state::<TaskManager>();
-        let mut cancelled = tm.cancelled_tasks.lock();
-        let mut manually_completed = tm.manually_completed_tasks.lock();
-        (cancelled.remove(task_id), manually_completed.remove(task_id))
-    };
+    let is_cancelled = app.state::<TaskManager>().cancelled_tasks.lock().remove(task_id);
 
     let had_agent_session;
     {
@@ -102,7 +97,7 @@ fn finalize_task_exit(
         }
     }
 
-    if is_cancelled || is_manually_completed {
+    if is_cancelled {
         let _ = fs::remove_dir_all(task_attachments_dir(project_path, task_id));
         return;
     }
@@ -735,10 +730,6 @@ pub async fn run_task(
     on_output: Channel<String>,
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().remove(&task_id);
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .remove(&task_id);
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -921,10 +912,6 @@ pub async fn cancel_task(
     project_path: String,
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().insert(task_id.clone());
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .remove(&task_id);
 
     let child_arc = task_manager.child_handles.lock().get(&task_id).cloned();
     if let Some(arc) = child_arc {
@@ -941,47 +928,6 @@ pub async fn cancel_task(
     let _ = app.emit(
         "task-status",
         serde_json::json!({ "task_id": task_id, "status": "cancelled" }),
-    );
-
-    // 清理任务附件
-    let _ = fs::remove_dir_all(task_attachments_dir(&project_path, &task_id));
-    crate::event_watcher::cleanup_task_events(&task_id);
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn complete_task(
-    app: AppHandle,
-    task_manager: State<'_, TaskManager>,
-    task_id: String,
-    project_path: String,
-) -> Result<(), String> {
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .insert(task_id.clone());
-    task_manager.cancelled_tasks.lock().remove(&task_id);
-
-    let child_arc = task_manager.child_handles.lock().get(&task_id).cloned();
-    if let Some(arc) = child_arc {
-        if let Ok(mut child) = arc.lock() {
-            let _ = child.kill();
-        }
-    } else {
-        // No live child means no exit monitor will consume this marker.
-        task_manager
-            .manually_completed_tasks
-            .lock()
-            .remove(&task_id);
-    }
-
-    // 释放已声明的会话路径，确保相同提示词的任务可以重新运行
-    release_claimed_session_paths(&task_manager, &task_id);
-
-    let _ = app.emit(
-        "task-status",
-        serde_json::json!({ "task_id": task_id, "status": "done" }),
     );
 
     // 清理任务附件
@@ -1009,10 +955,6 @@ pub async fn reset_task_process(
     task_id: String,
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().remove(&task_id);
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .remove(&task_id);
     let child_arc = {
         let mut masters = task_manager.pty_masters.lock();
         let mut writers = task_manager.pty_writers.lock();
@@ -1044,10 +986,6 @@ pub async fn resume_task(
     on_output: Channel<String>,
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().remove(&task_id);
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .remove(&task_id);
 
     let pair = native_pty_system()
         .openpty(PtySize {
@@ -1185,10 +1123,6 @@ pub async fn fork_task(
     .map_err(|e| format!("Fork task launch failed: {}", e))??;
 
     task_manager.cancelled_tasks.lock().remove(&task_id);
-    task_manager
-        .manually_completed_tasks
-        .lock()
-        .remove(&task_id);
 
     let SpawnedForkTask {
         master,
