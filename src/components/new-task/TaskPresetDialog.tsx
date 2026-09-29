@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Plus, Terminal, Trash2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
@@ -20,6 +20,16 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = { id: null, name: "", agent: "claude", command: "", useWorktree: false };
 
+function toDraft(preset: TaskPreset): Draft {
+  return {
+    id: preset.id,
+    name: preset.name,
+    agent: preset.agent,
+    command: preset.command ?? "",
+    useWorktree: preset.useWorktree,
+  };
+}
+
 /** 快捷创建按钮的编辑器：上面列已有的（点一条进来改），下面表单新增/保存。 */
 export function TaskPresetDialog({
   open,
@@ -39,22 +49,22 @@ export function TaskPresetDialog({
   const { t } = useI18n();
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
 
-  // 每次打开按 focusPresetId 载入要改的那条；没指定就从空白开始
+  // 只在「打开那一刻」载入 focusPresetId 指向的那条（没指定就空白），之后不再抢：
+  // 保存会让 presets 换新数组，若把这个 effect 挂在 presets 上，就会把用户正编辑的内容
+  // 顶回最早 focus 的那条 —— 也就是「点了另一条，上一条还赖在编辑态」。
+  const loadedRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      loadedRef.current = false;
+      return;
+    }
+    if (loadedRef.current) return;
+    loadedRef.current = true;
     const target = focusPresetId ? presets.find((p) => p.id === focusPresetId) : undefined;
-    setDraft(
-      target
-        ? {
-            id: target.id,
-            name: target.name,
-            agent: target.agent,
-            command: target.command ?? "",
-            useWorktree: target.useWorktree,
-          }
-        : { ...EMPTY_DRAFT },
-    );
-  }, [open, focusPresetId, presets]);
+    setDraft(target ? toDraft(target) : { ...EMPTY_DRAFT });
+    // presets 只用于打开那一刻取值，故意不进依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, focusPresetId]);
 
   const trimmedName = draft.name.trim();
   const canSave = trimmedName.length > 0;
@@ -74,15 +84,16 @@ export function TaskPresetDialog({
 
   function submit() {
     if (!canSave) return;
-    onSave({
+    const saved: TaskPreset = {
       id: draft.id ?? makePresetId(),
       name: trimmedName,
       agent: draft.agent,
-      command:
-        draft.agent === "shell" && draft.command.trim() ? draft.command.trim() : undefined,
+      command: draft.agent === "shell" && draft.command.trim() ? draft.command.trim() : undefined,
       useWorktree: draft.useWorktree,
-    });
-    setDraft({ ...EMPTY_DRAFT });
+    };
+    onSave(saved);
+    // 保存后停在这条上（列表里它保持高亮），想加新的点「新增一个」
+    setDraft(toDraft(saved));
   }
 
   return (
@@ -110,15 +121,7 @@ export function TaskPresetDialog({
                   ...s.presetDialogRow,
                   ...(draft.id === preset.id ? s.presetDialogRowActive : null),
                 }}
-                onClick={() =>
-                  setDraft({
-                    id: preset.id,
-                    name: preset.name,
-                    agent: preset.agent,
-                    command: preset.command ?? "",
-                    useWorktree: preset.useWorktree,
-                  })
-                }
+                onClick={() => setDraft(toDraft(preset))}
               >
                 <span style={s.presetDialogRowText}>
                   <span style={s.presetDialogRowName}>{preset.name}</span>
@@ -127,6 +130,7 @@ export function TaskPresetDialog({
                 <button
                   type="button"
                   title={t("common.delete")}
+                  aria-label={t("common.delete")}
                   style={s.modalCloseBtn}
                   onClick={(event) => {
                     event.stopPropagation();

@@ -99,6 +99,7 @@ const translations: Record<string, string> = {
   "common.loadingEllipsis": "加载中…",
   "common.apply": "应用",
   "common.save": "保存",
+  "common.delete": "删除",
   "common.saving": "保存中...",
   "common.saved": "已保存",
   "common.cancel": "取消",
