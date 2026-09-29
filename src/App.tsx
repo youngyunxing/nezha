@@ -14,6 +14,7 @@ import type {
   TerminalFontSize,
   TerminalScrollback,
   TaskDisplayWindow,
+  LocalClaudeSession,
 } from "./types";
 import {
   isActiveTaskStatus,
@@ -164,10 +165,12 @@ function reorderProjects(
 interface ProjectViewState {
   selectedTaskId: string | null;
   isNewTask: boolean;
+  /** 正在查看的本地 Claude Code 会话（非 Nezha 任务）。 */
+  localSession: LocalClaudeSession | null;
 }
 
 function createDefaultProjectViewState(): ProjectViewState {
-  return { selectedTaskId: null, isNewTask: true };
+  return { selectedTaskId: null, isNewTask: true, localSession: null };
 }
 
 function normalizeInterruptedTasksOnStartup(
@@ -926,6 +929,56 @@ function App() {
     };
   }
 
+  /** 选中一条本地会话：主舞台切到它的消息回放（只读）。 */
+  function handleSelectLocalSession(project: Project, session: LocalClaudeSession) {
+    setActiveProject(project);
+    mountProject(project.id);
+    updateProjectView(project.id, {
+      selectedTaskId: null,
+      isNewTask: false,
+      localSession: session,
+    });
+  }
+
+  /**
+   * 把本机 Claude Code 的一条会话接进 Nezha：建一条任务记录（带上它的 session id），
+   * 再用 --resume 续跑。和 handleResumeTask 一样，真正拉起放在终端挂载之后，
+   * 否则首批输出进不来 buffer。
+   */
+  function handleResumeLocalSession(project: Project, session: LocalClaudeSession) {
+    const taskId = `${Date.now()}`;
+    const now = Date.now();
+    const task: Task = {
+      id: taskId,
+      projectId: project.id,
+      name: session.preview || t("localSession.fallbackName"),
+      prompt: "",
+      agent: "claude",
+      permissionMode: "full_access",
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+      claudeSessionId: session.sessionId,
+      claudeSessionPath: session.sessionPath,
+    };
+    setTasks((prev) => {
+      const next = [task, ...prev];
+      persistProjectTasks(project.id, next, showToast, formatSaveTasksError);
+      return next;
+    });
+    setActiveProject(project);
+    mountProject(project.id);
+    updateProjectView(project.id, {
+      selectedTaskId: taskId,
+      isNewTask: false,
+      localSession: null,
+    });
+    tm.resetTaskTerminal(taskId);
+    setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
+    pendingResumeStartsRef.current[taskId] = () =>
+      invokeResumeTask(task, project, session.sessionId);
+  }
+
   function invokeForkTask(task: Task, project: Project, sourceSessionId: string) {
     invoke("fork_task", {
       taskId: task.id,
@@ -1401,6 +1454,9 @@ function App() {
               taskRunCounts={taskRunCounts}
               selectedTaskId={view.selectedTaskId}
               isNewTask={view.isNewTask}
+              localSession={view.localSession}
+              onSelectLocalSession={(session) => handleSelectLocalSession(project, session)}
+              onResumeLocalSession={(session) => handleResumeLocalSession(project, session)}
               onNewTask={() =>
                 updateProjectView(project.id, { selectedTaskId: null, isNewTask: true })
               }

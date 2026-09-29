@@ -536,6 +536,108 @@ fn claude_sessions_dir_for_project(project_path: &str) -> Option<PathBuf> {
     Some(home.join(".claude").join("projects").join(encoded))
 }
 
+/// 本机 Claude Code 自己产生的一条会话记录（不属于 Nezha 的任何任务）。
+#[derive(serde::Serialize)]
+pub struct LocalClaudeSession {
+    #[serde(rename = "sessionId")]
+    pub session_id: String,
+    #[serde(rename = "sessionPath")]
+    pub session_path: String,
+    /// 首条用户消息，列表里用它当识别文本。
+    pub preview: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: i64,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: u64,
+}
+
+/// 读会话文件开头若干行取第一条用户消息当预览。会话可能几百 MB，列表不解析全文。
+fn local_session_preview(path: &Path) -> String {
+    let Ok(file) = File::open(path) else {
+        return String::new();
+    };
+    for line in BufReader::new(file).lines().take(400) {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
+        if value.get("type").and_then(|v| v.as_str()) != Some("user") {
+            continue;
+        }
+        let parts = claude_user_content(value.get("message").and_then(|m| m.get("content")));
+        let text = parts
+            .iter()
+            .filter_map(|part| match part {
+                SessionContent::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        let text = text.trim();
+        // 斜杠命令与 hook 注入的包装文本（以 '<' 开头）不是用户真正说过的话。
+        if text.is_empty() || text.starts_with('<') {
+            continue;
+        }
+        return truncate_summary_chars(text, 120);
+    }
+    String::new()
+}
+
+/// 列出该目录下本机 Claude Code 自己产生的会话（`~/.claude/projects/<encoded>/*.jsonl`）。
+/// 已被 Nezha 接管的会话由前端从 `exclude_session_ids` 传进来排除——「nezha 记录」
+/// 与「本地记录」两者分开，同一条会话不会既当任务又当本地会话出现两次。
+#[tauri::command]
+pub async fn list_local_claude_sessions(
+    project_path: String,
+    exclude_session_ids: Vec<String>,
+) -> Result<Vec<LocalClaudeSession>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(dir) = claude_sessions_dir_for_project(&project_path) else {
+            return Vec::new();
+        };
+        let Ok(entries) = fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let excluded: HashSet<&str> = exclude_session_ids.iter().map(String::as_str).collect();
+        let mut sessions: Vec<LocalClaudeSession> = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let Some(session_id) = path.file_stem().and_then(|s| s.to_str()).map(str::to_owned)
+            else {
+                continue;
+            };
+            // 只认 Claude 的 `<uuid>.jsonl`，索引之类的文件跳过。
+            if !is_uuid_like(&session_id) || excluded.contains(session_id.as_str()) {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else { continue };
+            let updated_at = metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+            sessions.push(LocalClaudeSession {
+                preview: local_session_preview(&path),
+                session_path: path.to_string_lossy().into_owned(),
+                session_id,
+                updated_at,
+                size_bytes: metadata.len(),
+            });
+        }
+        sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        sessions
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 fn watch_claude_session(app: AppHandle, task_id: String, session_path: PathBuf) {
     use notify::{RecursiveMode, Watcher};
 

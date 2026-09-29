@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
-import type { Task, TaskDisplayWindow } from "../../types";
+import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
+import { LocalSessionRow } from "./LocalSessionRow";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 
@@ -10,7 +11,8 @@ const OVERSCAN_ROWS = 8;
 
 type VirtualRow =
   | { type: "group"; key: string; label: string; height: number }
-  | { type: "task"; key: string; task: Task; height: number };
+  | { type: "task"; key: string; task: Task; height: number }
+  | { type: "local"; key: string; session: LocalClaudeSession; height: number };
 
 function findRowIndex(offsets: number[], value: number) {
   if (offsets.length <= 1) return 0;
@@ -36,6 +38,9 @@ export function TaskList({
   query,
   selectedId,
   isNewTask,
+  localSessions,
+  selectedLocalSessionId,
+  onSelectLocalSession,
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
@@ -45,6 +50,9 @@ export function TaskList({
   query: string;
   selectedId: string | null;
   isNewTask: boolean;
+  localSessions: LocalClaudeSession[];
+  selectedLocalSessionId: string | null;
+  onSelectLocalSession: (session: LocalClaudeSession) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
@@ -80,6 +88,15 @@ export function TaskList({
     const q = query.toLowerCase();
     return tasks.filter((t) => t.prompt.toLowerCase().includes(q));
   }, [tasks, query]);
+
+  const filteredLocalSessions = useMemo(() => {
+    if (!query.trim()) return localSessions;
+    const q = query.toLowerCase();
+    return localSessions.filter(
+      (session) =>
+        session.preview.toLowerCase().includes(q) || session.sessionId.toLowerCase().includes(q),
+    );
+  }, [localSessions, query]);
 
   const sorted = useMemo(() => {
     const sortKey = (task: Task) => task.updatedAt ?? task.createdAt;
@@ -167,8 +184,27 @@ export function TaskList({
     appendGroup("today", t("task.today"), todayTasks);
     appendGroup("earlier", t("task.earlier"), earlierTasks);
 
+    // 本地 Claude Code 会话单独成组：它们不是 Nezha 任务，不落盘、不参与状态机，
+    // 与上面的任务列表刻意分开。
+    if (filteredLocalSessions.length > 0) {
+      nextRows.push({
+        type: "group",
+        key: "__local_sessions__",
+        label: t("localSession.groupTitle"),
+        height: GROUP_ROW_HEIGHT,
+      });
+      filteredLocalSessions.forEach((session) => {
+        nextRows.push({
+          type: "local",
+          key: `local:${session.sessionId}`,
+          session,
+          height: TASK_ROW_HEIGHT,
+        });
+      });
+    }
+
     return nextRows;
-  }, [cutoffTs, sorted, t, todayTs]);
+  }, [cutoffTs, filteredLocalSessions, sorted, t, todayTs]);
 
   const offsets = useMemo(() => {
     const nextOffsets = [0];
@@ -188,7 +224,9 @@ export function TaskList({
 
   return (
     <div ref={scrollRef} style={s.taskListScroll} onScroll={handleScroll}>
-      {tasks.length === 0 && <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>}
+      {tasks.length === 0 && localSessions.length === 0 && (
+        <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>
+      )}
       <div style={{ height: totalHeight, position: "relative" }}>
         {visibleRows.map((row, visibleIndex) => {
           const rowIndex = startIndex + visibleIndex;
@@ -208,6 +246,12 @@ export function TaskList({
             >
               {row.type === "group" ? (
                 <div style={s.groupLabel}>{row.label}</div>
+              ) : row.type === "local" ? (
+                <LocalSessionRow
+                  session={row.session}
+                  selected={selectedLocalSessionId === row.session.sessionId}
+                  onClick={() => onSelectLocalSession(row.session)}
+                />
               ) : (
                 <TaskListItem
                   task={row.task}

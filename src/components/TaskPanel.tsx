@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
-import type { Project, Task, GitRoot, TaskDisplayWindow } from "../types";
+import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
@@ -18,6 +18,9 @@ export function TaskPanel({
   tasks,
   selectedId,
   isNewTask,
+  localSessions,
+  selectedLocalSessionId,
+  onSelectLocalSession,
   onNewTask,
   onSelectTask,
   onDeleteTask,
@@ -38,6 +41,9 @@ export function TaskPanel({
   tasks: Task[];
   selectedId: string | null;
   isNewTask: boolean;
+  localSessions: LocalClaudeSession[];
+  selectedLocalSessionId: string | null;
+  onSelectLocalSession: (session: LocalClaudeSession) => void;
   onNewTask: () => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
@@ -95,6 +101,9 @@ export function TaskPanel({
         query={query}
         selectedId={selectedId}
         isNewTask={isNewTask}
+        localSessions={localSessions}
+        selectedLocalSessionId={selectedLocalSessionId}
+        onSelectLocalSession={onSelectLocalSession}
         onSelectTask={onSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}

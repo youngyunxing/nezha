@@ -214,6 +214,7 @@ pub fn run() {
             git::worktree_diff_stats,
             analytics::read_session_metrics,
             session::read_session_messages,
+            session::list_local_claude_sessions,
             session::export_session_markdown,
             config::get_agent_config_file_path,
             config::read_agent_config_file,

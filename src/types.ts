@@ -187,6 +187,16 @@ export function permissionModeLabel(mode: PermissionMode, agent?: AgentType): st
   return PERM_LABELS[mode];
 }
 
+/** 本机 Claude Code 直接在该目录产生的会话（不属于 Nezha 的任何任务）。 */
+export interface LocalClaudeSession {
+  sessionId: string;
+  sessionPath: string;
+  /** 首条用户消息，列表里当识别文本用。 */
+  preview: string;
+  updatedAt: number;
+  sizeBytes: number;
+}
+
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return (
     status === "pending" ||

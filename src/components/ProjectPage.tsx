@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type {
   Project,
   ProjectAvatarStyle,
@@ -10,10 +11,12 @@ import type {
   TerminalScrollback,
   TaskDisplayWindow,
   FontFamily,
+  LocalClaudeSession,
 } from "../types";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskView, type NewTaskDraft } from "./NewTaskView";
+import { LocalSessionView } from "./LocalSessionView";
 import { RunningView } from "./RunningView";
 import { FileExplorer } from "./FileExplorer";
 import { FileViewer } from "./FileViewer";
@@ -40,6 +43,9 @@ export function ProjectPage({
   taskRunCounts,
   selectedTaskId,
   isNewTask,
+  localSession,
+  onSelectLocalSession,
+  onResumeLocalSession,
   onNewTask,
   onSelectTask,
   onDeleteTask,
@@ -90,6 +96,10 @@ export function ProjectPage({
   taskRunCounts: Record<string, number>;
   selectedTaskId: string | null;
   isNewTask: boolean;
+  /** 正在查看的本地 Claude Code 会话（非 Nezha 任务）。 */
+  localSession: LocalClaudeSession | null;
+  onSelectLocalSession: (session: LocalClaudeSession) => void;
+  onResumeLocalSession: (session: LocalClaudeSession) => void;
   onNewTask: () => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
@@ -185,6 +195,36 @@ export function ProjectPage({
     [tasks, project.id],
   );
   const selectedTask = projectTasks.find((t) => t.id === selectedTaskId) ?? null;
+
+  // 本机 Claude Code 直接在该目录产生的会话。已被 Nezha 接管的（任务里带 session id）
+  // 排除掉，同一条会话不会既当任务又当本地记录出现两次。
+  const [localSessions, setLocalSessions] = useState<LocalClaudeSession[]>([]);
+  const knownClaudeSessionIds = useMemo(
+    () =>
+      projectTasks
+        .map((task) => task.claudeSessionId)
+        .filter((id): id is string => !!id)
+        .sort()
+        .join(","),
+    [projectTasks],
+  );
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    invoke<LocalClaudeSession[]>("list_local_claude_sessions", {
+      projectPath: project.path,
+      excludeSessionIds: knownClaudeSessionIds ? knownClaudeSessionIds.split(",") : [],
+    })
+      .then((sessions) => {
+        if (!cancelled) setLocalSessions(sessions);
+      })
+      .catch(() => {
+        if (!cancelled) setLocalSessions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, project.path, knownClaudeSessionIds]);
 
   // 工作区项目可能包含多个 sub-repo，selectedRoot.path 为当前活动的 git 根（缺省回落 project.path）。
   const {
@@ -333,6 +373,9 @@ export function ProjectPage({
         tasks={projectTasks}
         selectedId={selectedTaskId}
         isNewTask={isNewTask}
+        localSessions={localSessions}
+        selectedLocalSessionId={localSession?.sessionId ?? null}
+        onSelectLocalSession={onSelectLocalSession}
         onNewTask={handleNewTask}
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
@@ -411,6 +454,11 @@ export function ProjectPage({
                 onCloseAllTabs={handleCloseAllFileTabs}
                 themeVariant={themeVariant}
                 onRunMakeTarget={handleRunMakeTarget}
+              />
+            ) : localSession ? (
+              <LocalSessionView
+                session={localSession}
+                onResume={() => onResumeLocalSession(localSession)}
               />
             ) : isNewTask || !selectedTask ? (
               <NewTaskView
