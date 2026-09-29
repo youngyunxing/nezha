@@ -163,10 +163,11 @@
 }
 
 .rail-drawer-header {
-  /* 8 + 按钮 32 = 按钮中心落在 24px，与任务面板头部对齐：
-     那边 panelHeader 高 48（全局 border-box）且 align-items: center，
-     22px 的头像中心也是 24px。改 padding-top 或按钮高度都要重算这一行。 */
-  padding: 8px 12px 10px;
+  /* 三个约束联立（任务面板那边是 panelHeader 48 + margin 8 = 56、头像中心 24）：
+       P + H/2 = 24   按钮中心对齐头像
+       P + H + G = 56 搜索框对齐搜索框
+     取间距 G=12 → H=40、P=4。改任一个都要重解，别单独调。 */
+  padding: 4px 12px 10px;
   border-bottom: 1px solid var(--border-dim);
 }
 
@@ -196,12 +197,9 @@
 }
 
 .rail-drawer-add {
-  /* 16 而不是 8：按钮底边在 40px，加 16 让搜索框落在 56px，
-     与任务面板的搜索框（panelHeader 48 + panelSearchWrap margin-top 8）齐平。
-     同时按钮中心仍是 8 + 16 = 24px，与任务面板头部的头像中心一致。 */
-  margin-bottom: 16px;
+  margin-bottom: 12px; /* 见 .rail-drawer-header 的联立式子 */
   width: 100%;
-  height: 32px; /* 固定高度，见 .rail-drawer-header 的算术 */
+  height: 40px; /* 固定高度，见 .rail-drawer-header 的联立式子 */
   display: flex;
   align-items: center;
   justify-content: center;
