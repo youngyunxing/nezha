@@ -16,7 +16,7 @@ interface GitBranchInfo {
 }
 
 /** 表单里的下拉沿用应用设置那套 select 样式，避免又长出一套控件。 */
-function SelectField({
+export function SelectField({
   value,
   label,
   options,

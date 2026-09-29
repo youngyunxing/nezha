@@ -105,7 +105,9 @@ export const TaskListItem = memo(
         <span
           title={
             task.agent === "shell"
-              ? t("terminal.title")
+              ? task.command
+                ? `${t("terminal.title")} · ${task.command}`
+                : t("terminal.title")
               : task.agent === "claude"
                 ? "Claude Code"
                 : "Codex"

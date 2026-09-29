@@ -37,6 +37,8 @@ import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
 import { buildProjectActivityMap } from "./components/project-rail/activity";
+import { loadTaskPresets, saveTaskPresets, type TaskPreset } from "./taskPresets";
+import { TaskPresetDialog } from "./components/new-task/TaskPresetDialog";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
   normalizeProjectNameInput,
@@ -296,6 +298,24 @@ function App() {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   // 项目小标的「已读」时间戳：点开项目就标已读，小标随之消失（见 attentionSeen.ts）
   const [attentionSeen, setAttentionSeen] = useState<AttentionSeenMap>(() => loadAttentionSeen());
+  // 快捷创建按钮（预设）：存在 localStorage，跟着应用走（命令在哪个项目里跑就用哪个项目的目录）
+  const [presets, setPresets] = useState<TaskPreset[]>(() => loadTaskPresets());
+  const [presetDialog, setPresetDialog] = useState<{ open: boolean; focusId?: string }>({ open: false });
+
+  /** 快捷按钮：按预设参数直接建任务。worktree 的基准分支留空，由 handleSubmitTask 解析成当前分支。 */
+  function handleRunPreset(project: Project, preset: TaskPreset, repoPath?: string) {
+    void handleSubmitTask(project, {
+      prompt: "",
+      agent: preset.agent,
+      permissionMode: "full_access",
+      images: [],
+      texts: [],
+      launchMode: preset.useWorktree ? "worktree" : "local",
+      baseBranch: "",
+      repoPath,
+      command: preset.agent === "shell" ? preset.command : undefined,
+    });
+  }
   const [projectViews, setProjectViews] = useState<Record<string, ProjectViewState>>({});
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
@@ -477,6 +497,23 @@ function App() {
   useEffect(() => {
     saveAttentionSeen(attentionSeen);
   }, [attentionSeen]);
+
+  useEffect(() => {
+    saveTaskPresets(presets);
+  }, [presets]);
+
+  function handleSavePreset(preset: TaskPreset) {
+    setPresets((prev) => {
+      const exists = prev.some((p) => p.id === preset.id);
+      return exists ? prev.map((p) => (p.id === preset.id ? preset : p)) : [...prev, preset];
+    });
+    showToast(t("preset.saved", { name: preset.name }), "success");
+  }
+
+  function handleDeletePreset(id: string) {
+    setPresets((prev) => prev.filter((p) => p.id !== id));
+    showToast(t("preset.deleted"), "success");
+  }
 
   // Dock 角标 = 所有项目「未读等待」之和：有任务在等你确认 / 有新回复、且你还没看过那个
   // 项目时点亮；点开项目看过、或把等待处理掉（状态离开等待、任务被删）就归零消失。
@@ -847,6 +884,7 @@ function App() {
       permissionMode: task.permissionMode,
       images,
       texts,
+      command: task.command ?? null,
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
@@ -869,6 +907,7 @@ function App() {
       baseBranch,
       repoPath,
       name,
+      command,
     }: {
       prompt: string;
       agent: AgentType;
@@ -882,14 +921,24 @@ function App() {
       repoPath?: string;
       /** 显式指定任务名（如添加项目时自动建的 main 会话）；缺省时按提示词推断。 */
       name?: string;
+      /** 纯终端任务要执行的命令（快捷按钮带来）；留空 = 交互式终端 */
+      command?: string;
     },
   ) {
     const effectiveRepoPath = repoPath ?? project.path;
     const taskId = `${Date.now()}`;
 
     if (launchMode === "worktree" && !baseBranch) {
-      showToast(t("toast.worktreeBaseRequired"), "warning");
-      return;
+      // 快捷按钮没带基准分支：用项目当前分支（弹窗里是自己选的，预设不打断你）
+      const list = await invoke<Array<{ name: string; current?: boolean }>>("git_list_branches", {
+        projectPath: project.path,
+        repoPath: effectiveRepoPath,
+      }).catch(() => [] as Array<{ name: string; current?: boolean }>);
+      baseBranch = list.find((b) => b.current)?.name ?? "";
+      if (!baseBranch) {
+        showToast(t("toast.worktreeBaseRequired"), "warning");
+        return;
+      }
     }
 
     // 1) 立即把任务推到 state 让 view 切到 RunningView。worktree 字段先留空，
@@ -905,6 +954,7 @@ function App() {
       status: "pending",
       createdAt: now,
       updatedAt: now,
+      command: agent === "shell" ? command : undefined,
     };
     setTasks((prev) => {
       const next = [baseTask, ...prev];
@@ -1712,6 +1762,9 @@ function App() {
               onReconnectTask={handleReconnectTask}
               onMarkTaskRead={markTaskRead}
               attentionSeen={attentionSeen}
+              presets={presets}
+              onRunPreset={(preset, repoPath) => handleRunPreset(project, preset, repoPath)}
+              onManagePresets={(presetId) => setPresetDialog({ open: true, focusId: presetId })}
               onInput={tm.handleInput}
               onResize={tm.handleResize}
               onRegisterTerminal={tm.handleRegisterTerminal}
@@ -1739,9 +1792,21 @@ function App() {
               monoFontFamily={monoFontFamily}
               onMonoFontFamilyChange={setMonoFontFamily}
             />
+
           );
         })}
       </div>
+      <TaskPresetDialog
+        open={presetDialog.open}
+        presets={presets}
+        focusPresetId={presetDialog.focusId}
+        onOpenChange={(open) =>
+          setPresetDialog(open ? { open: true, focusId: undefined } : { open: false })
+        }
+        onSave={handleSavePreset}
+        onDelete={handleDeletePreset}
+      />
+
       {!activeProject && projects.length === 0 && (
         <div style={s.appEmptyShell}>
           <ProjectDrawer

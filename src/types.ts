@@ -165,6 +165,8 @@ export interface Task {
   /** 重启归一化时的判定：进程还活着=true（点重连即可），进程没了=false（需要恢复）。
    *  两者都是 interrupted 状态，只有按钮和文案不同。 */
   processAlive?: boolean;
+  /** 纯终端任务：启动时要执行的命令（留空 = 交互式登录 shell）。来自快捷创建按钮。 */
+  command?: string;
   /** fork 出来的任务记下源会话 id：fork 完没说过话时，源会话的 transcript 才是唯一能恢复的记录 */
   forkedFromSessionId?: string;
   worktreePath?: string;

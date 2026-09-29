@@ -720,6 +720,8 @@ pub async fn run_task(
     permission_mode: String,
     images: Option<Vec<String>>,
     texts: Option<Vec<String>>,
+    // 纯终端任务要执行的命令（来自快捷创建按钮）；留空 = 交互式登录 shell
+    command: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     on_output: Channel<String>,
@@ -816,6 +818,12 @@ pub async fn run_task(
         let mut c = CommandBuilder::new(&shell.program);
         for arg in &shell.args {
             c.arg(arg);
+        }
+        // 快捷创建按钮带来的命令：登录环境里跑一条就退出（"跑测试"这种按钮）。
+        // 命令跑完进程退出 → 按退出码判 done/failed，输出留在屏幕上。
+        if let Some(command) = command.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            c.arg("-lc");
+            c.arg(command);
         }
         c
     } else if is_codex {

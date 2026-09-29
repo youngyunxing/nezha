@@ -14,6 +14,7 @@ import type {
   LocalClaudeSession,
 } from "../types";
 import type { AttentionSeenMap } from "../attentionSeen";
+import type { TaskPreset } from "../taskPresets";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskDialog } from "./new-task/NewTaskDialog";
@@ -55,6 +56,9 @@ export function ProjectPage({
   onReconnectTask,
   onMarkTaskRead,
   attentionSeen,
+  presets,
+  onRunPreset,
+  onManagePresets,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -110,6 +114,8 @@ export function ProjectPage({
     repoPath: string;
     /** 显式任务名（新建任务弹窗给的名字）；缺省时按提示词推断。 */
     name?: string;
+    /** 纯终端任务要执行的命令（快捷按钮带来）；留空 = 交互式终端 */
+    command?: string;
   }) => void;
   onResumeTask: (id: string) => void;
   onForkTask: (id: string, name: string) => void;
@@ -119,6 +125,10 @@ export function ProjectPage({
   /** 任务正显示在前台时把它从「有新回复」落回「空闲待命」 */
   onMarkTaskRead: (id: string) => void;
   attentionSeen: AttentionSeenMap;
+  /** 快捷创建按钮 */
+  presets: TaskPreset[];
+  onRunPreset: (preset: TaskPreset, repoPath: string) => void;
+  onManagePresets: (presetId?: string) => void;
   onInput: (taskId: string, data: string) => void;
   onResize: (taskId: string, cols: number, rows: number) => void;
   onRegisterTerminal: (
@@ -306,6 +316,9 @@ export function ProjectPage({
         selectedLocalSessionId={localSession?.sessionId ?? null}
         onSelectLocalSession={onSelectLocalSession}
         onNewTask={handleNewTask}
+        presets={presets}
+        onRunPreset={(preset) => onRunPreset(preset, subRepoPath)}
+        onManagePresets={onManagePresets}
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
