@@ -576,8 +576,12 @@ fn local_session_preview(path: &Path) -> String {
             })
             .collect::<Vec<_>>()
             .join(" ");
+        // 同一套判断：管道文本跳过；用户自己的粘贴内容剥掉外层标签后再做预览。
+        if is_plumbing_user_text(&text) {
+            continue;
+        }
+        let text = unwrap_pasted_content(&text);
         let text = text.trim();
-        // 斜杠命令与 hook 注入的包装文本（以 '<' 开头）不是用户真正说过的话。
         if text.is_empty() || text.starts_with('<') {
             continue;
         }
@@ -789,6 +793,10 @@ fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
 
         match msg_type {
             "user" => {
+                // isMeta = CLI 自己写的元信息（如 local-command-caveat），不是用户的话
+                if val.get("isMeta").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    continue;
+                }
                 let parts = claude_user_content(message.get("content"));
                 if !parts.is_empty() {
                     messages.push(SessionMessage {
@@ -817,19 +825,61 @@ fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
     messages
 }
 
+/// CLI 自己塞进 user 条目的管道文本：斜杠命令回显、local 命令的 stdout、后台任务通知、
+/// 系统提醒、local-command-caveat 等。它们不是用户说过的话，回放里当成「你的消息」显示
+/// 很怪，直接丢掉。
+const USER_TEXT_WRAPPER_TAGS: &[&str] = &[
+    "<local-command-caveat>",
+    "<local-command-stdout>",
+    "<command-name>",
+    "<command-message>",
+    "<command-args>",
+    "<task-notification>",
+    "<system-reminder>",
+];
+
+fn is_plumbing_user_text(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    USER_TEXT_WRAPPER_TAGS
+        .iter()
+        .any(|tag| trimmed.starts_with(tag))
+}
+
+/// 用户自己粘贴的内容被 CLI 包成 `<pasted_content id="…">…</pasted_content>`：内容是
+/// 用户说的，保留；外层标签是噪音，剥掉。
+fn unwrap_pasted_content(text: &str) -> String {
+    let trimmed = text.trim();
+    if !trimmed.starts_with("<pasted_content") {
+        return text.to_string();
+    }
+    let Some(gt) = trimmed.find('>') else {
+        return text.to_string();
+    };
+    trimmed[gt + 1..]
+        .trim_end()
+        .strip_suffix("</pasted_content>")
+        .unwrap_or_else(|| trimmed[gt + 1..].trim_end())
+        .trim()
+        .to_string()
+}
+
 fn claude_user_content(content: Option<&serde_json::Value>) -> Vec<SessionContent> {
     match content {
-        Some(serde_json::Value::String(s)) if !s.trim().is_empty() => {
-            vec![SessionContent::Text { text: s.clone() }]
+        Some(serde_json::Value::String(s))
+            if !s.trim().is_empty() && !is_plumbing_user_text(s) =>
+        {
+            vec![SessionContent::Text {
+                text: unwrap_pasted_content(s),
+            }]
         }
         Some(serde_json::Value::Array(blocks)) => blocks
             .iter()
             .filter_map(|b| {
                 if b.get("type").and_then(|v| v.as_str()) == Some("text") {
                     let text = b.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                    if !text.trim().is_empty() {
+                    if !text.trim().is_empty() && !is_plumbing_user_text(text) {
                         return Some(SessionContent::Text {
-                            text: text.to_string(),
+                            text: unwrap_pasted_content(text),
                         });
                     }
                 }
