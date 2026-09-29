@@ -29,9 +29,8 @@ import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
 import { WelcomePage } from "./components/WelcomePage";
 import { ProjectPage } from "./components/ProjectPage";
-import { KanbanView, OPEN_KANBAN_VIEW_EVENT } from "./components/KanbanView";
 import { useToast } from "./components/Toast";
-import { isHideWindowShortcut, isToggleKanbanShortcut } from "./shortcuts";
+import { isHideWindowShortcut } from "./shortcuts";
 import { ProjectAppearanceProvider } from "./hooks/useProjectAppearance";
 import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
@@ -319,7 +318,6 @@ function App() {
   const [projectViews, setProjectViews] = useState<Record<string, ProjectViewState>>({});
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
-  const [showKanban, setShowKanban] = useState(false);
 
   const tm = useTerminalManager();
   const pendingResumeStartsRef = useRef<Record<string, () => void>>({});
@@ -427,18 +425,6 @@ function App() {
     }
     window.addEventListener("keydown", handleHideWindow, true);
     return () => window.removeEventListener("keydown", handleHideWindow, true);
-  }, []);
-
-  useEffect(() => {
-    // Cmd+K 切换看板浮层。捕获阶段拦截，先于 xterm 处理；
-    // 浮层内的 Esc 关闭仍由 KanbanView 自己负责。
-    function handleToggleKanban(event: KeyboardEvent) {
-      if (!isToggleKanbanShortcut(event)) return;
-      event.preventDefault();
-      setShowKanban((prev) => !prev);
-    }
-    window.addEventListener("keydown", handleToggleKanban, true);
-    return () => window.removeEventListener("keydown", handleToggleKanban, true);
   }, []);
 
   useEffect(() => {
@@ -1437,25 +1423,6 @@ function App() {
   );
   const visibleProjectsForWelcome = sortedProjects;
 
-  // 看板入口在 ProjectRail 底部触发,打开全屏浮层覆盖当前页面。
-  // 不切换 activeProject,关闭浮层后用户回到原先所在的任务上下文。
-  useEffect(() => {
-    const handle = () => setShowKanban(true);
-    window.addEventListener(OPEN_KANBAN_VIEW_EVENT, handle);
-    return () => window.removeEventListener(OPEN_KANBAN_VIEW_EVENT, handle);
-  }, []);
-
-  // 从看板跳转到某个项目（可选定位到具体 task）。关浮层 + 切活动项目（或进入 hub）
-  // + 在该项目的本地视图状态里选中 task。三步必须一起做,任何一步漏掉都会让用户看到
-  // 错位的页面状态。
-  function enterProjectFromKanban(project: Project, taskId?: string) {
-    setShowKanban(false);
-    handleProjectClick(project);
-    if (taskId) {
-      updateProjectView(project.id, { selectedTaskId: taskId, isNewTask: false });
-    }
-  }
-
   // 头像外观(缩写 / 颜色去重)按全量 projects 解析一次,供各处 ProjectAvatar 读取。
   const appTree = (
     <div style={s.rootRelative}>
@@ -1528,20 +1495,6 @@ function App() {
           );
         })}
       </div>
-      {showKanban && (
-        <div style={s.kanbanOverlay}>
-          <KanbanView
-            projects={sortedProjects}
-            tasks={tasks}
-            onClose={() => setShowKanban(false)}
-            onTaskClick={(task) => {
-              const project = projects.find((p) => p.id === task.projectId);
-              if (project) enterProjectFromKanban(project, task.id);
-            }}
-            onProjectClick={(project) => enterProjectFromKanban(project)}
-          />
-        </div>
-      )}
       {!activeProject && (
         <div style={s.appWelcomeLayer}>
           <WelcomePage

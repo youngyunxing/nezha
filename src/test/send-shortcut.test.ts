@@ -1,13 +1,10 @@
 import { describe, expect, test } from "vitest";
 import {
   DEFAULT_SEND_SHORTCUT,
-  getKanbanShortcutKeys,
-  getKanbanShortcutLabel,
   getNewlineShortcutKeys,
   getNewlineShortcutLabel,
   getSendShortcutKeys,
   getSendShortcutLabel,
-  isToggleKanbanShortcut,
   normalizeSendShortcut,
   shouldInsertPromptNewlineKey,
   shouldSubmitPromptKey,
@@ -99,51 +96,5 @@ describe("send shortcut helpers", () => {
     expect(getSendShortcutKeys("enter")).toEqual(["↵"]);
     expect(getNewlineShortcutKeys("mod_enter")).toEqual(["↵"]);
     expect(getNewlineShortcutKeys("enter")).toEqual(["⌘", "↵"]);
-  });
-});
-
-describe("kanban toggle shortcut", () => {
-  test("matches Cmd+K on macOS (and uppercase K under caps lock)", () => {
-    expect(
-      isToggleKanbanShortcut({ key: "k", metaKey: true, ctrlKey: false, shiftKey: false }),
-    ).toBe(true);
-    expect(
-      isToggleKanbanShortcut({ key: "K", metaKey: true, ctrlKey: false, shiftKey: false }),
-    ).toBe(true);
-    // Shift or Alt disqualify, and bare Alt+K is not the macOS combo.
-    expect(
-      isToggleKanbanShortcut(
-        { key: "k", metaKey: true, ctrlKey: false, shiftKey: true },
-      ),
-    ).toBe(false);
-    expect(
-      isToggleKanbanShortcut(
-        { key: "k", metaKey: true, ctrlKey: false, shiftKey: false, altKey: true },
-      ),
-    ).toBe(false);
-    expect(
-      isToggleKanbanShortcut(
-        { key: "k", metaKey: false, ctrlKey: false, shiftKey: false, altKey: true },
-      ),
-    ).toBe(false);
-  });
-
-
-  test("Cmd+K only; Ctrl+K stays with the terminal", () => {
-    // Ctrl+K 是 readline 的 kill-line，不能被看板抢走。
-    expect(
-      isToggleKanbanShortcut({ key: "k", metaKey: false, ctrlKey: true, shiftKey: false, altKey: false }),
-    ).toBe(false);
-  });
-
-  test("ignores keys other than K", () => {
-    expect(
-      isToggleKanbanShortcut({ key: "j", metaKey: true, ctrlKey: false, shiftKey: false }),
-    ).toBe(false);
-  });
-
-  test("formats display keys/label", () => {
-    expect(getKanbanShortcutKeys()).toEqual(["⌘", "K"]);
-    expect(getKanbanShortcutLabel()).toBe("⌘K");
   });
 });

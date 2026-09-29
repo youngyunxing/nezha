@@ -51,34 +51,6 @@ export function isHideWindowShortcut(event: PromptKeyEventLike): boolean {
   return event.metaKey && !event.ctrlKey;
 }
 
-/**
- * Cmd+K —— 切换看板浮层（开/关）。用 ⌘ 而非 Ctrl：Ctrl+K 是 readline 的
- * kill-line，且 Ctrl+Shift+C/V 是终端复制粘贴命名空间。在全局 keydown 捕获阶段
- * 匹配，先于 xterm 处理。展示键位见 getKanbanShortcutKeys。
- */
-export function isToggleKanbanShortcut(event: PromptKeyEventLike): boolean {
-  if (event.key !== "k" && event.key !== "K") {
-    return false;
-  }
-  if (event.shiftKey) {
-    return false;
-  }
-  return event.metaKey && !event.ctrlKey && !event.altKey;
-}
-
-/**
- * 看板切换快捷键的展示键位。与 isToggleKanbanShortcut 共用同一套定义，
- * 保证提示与实际触发一致。
- */
-export function getKanbanShortcutKeys(): string[] {
-  return ["⌘", "K"];
-}
-
-/** 纯文本标签（用于 HTML title 等场景）。 */
-export function getKanbanShortcutLabel(): string {
-  return getKanbanShortcutKeys().join("");
-}
-
 export function shouldInsertPromptNewlineKey(
   event: PromptKeyEventLike,
   shortcut: SendShortcut,
@@ -92,10 +64,7 @@ export function shouldInsertPromptNewlineKey(
   return event.metaKey && !event.ctrlKey;
 }
 
-export function shouldSubmitPromptKey(
-  event: PromptKeyEventLike,
-  shortcut: SendShortcut,
-): boolean {
+export function shouldSubmitPromptKey(event: PromptKeyEventLike, shortcut: SendShortcut): boolean {
   if (event.key !== "Enter") {
     return false;
   }

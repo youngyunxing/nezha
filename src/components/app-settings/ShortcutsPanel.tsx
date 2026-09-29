@@ -6,7 +6,6 @@ import * as Select from "@radix-ui/react-select";
 import { useI18n } from "../../i18n";
 import {
   getAltEnterNewlineKeys,
-  getKanbanShortcutKeys,
   getNewlineShortcutKeys,
   getSendShortcutKeys,
   getShiftEnterNewlineKeys,
@@ -66,9 +65,7 @@ function ShortcutSelect({
                   aria-label={option.ariaLabel}
                   className="radix-select-item"
                   style={
-                    option.value === value
-                      ? s.settingsSelectOptionSelected
-                      : s.settingsSelectOption
+                    option.value === value ? s.settingsSelectOptionSelected : s.settingsSelectOption
                   }
                 >
                   <Select.ItemText>{renderShortcutKeys(option.keys)}</Select.ItemText>
@@ -199,24 +196,18 @@ export function ShortcutsPanel() {
               aria-label={t("appSettings.terminalNewlineShiftEnter")}
               disabled={saving}
               onClick={handleShiftEnterNewlineToggle}
-              style={saving ? { ...s.shortcutToggle, ...s.shortcutToggleDisabled } : s.shortcutToggle}
+              style={
+                saving ? { ...s.shortcutToggle, ...s.shortcutToggleDisabled } : s.shortcutToggle
+              }
             >
-              <span style={s.shortcutToggleKeys}>{renderShortcutKeys(getShiftEnterNewlineKeys())}</span>
+              <span style={s.shortcutToggleKeys}>
+                {renderShortcutKeys(getShiftEnterNewlineKeys())}
+              </span>
               <span style={shiftEnterEnabled ? s.shortcutSwitchTrackOn : s.shortcutSwitchTrack}>
-                <span
-                  style={shiftEnterEnabled ? s.shortcutSwitchThumbOn : s.shortcutSwitchThumb}
-                />
+                <span style={shiftEnterEnabled ? s.shortcutSwitchThumbOn : s.shortcutSwitchThumb} />
               </span>
             </button>
             <div style={s.shortcutHint}>{terminalNewlineHint}</div>
-          </div>
-          {/* 看板快捷键不可配置（固定 Cmd+K / Alt+K），只读展示，键位与 isToggleKanbanShortcut 同源 */}
-          <div style={s.shortcutField}>
-            <label style={s.shortcutFieldLabel}>{t("appSettings.kanbanShortcut")}</label>
-            <div style={s.shortcutReadonlyKey}>
-              {renderShortcutKeys(getKanbanShortcutKeys())}
-            </div>
-            <div style={s.shortcutHint}>{t("appSettings.kanbanShortcutHint")}</div>
           </div>
         </div>
       )}

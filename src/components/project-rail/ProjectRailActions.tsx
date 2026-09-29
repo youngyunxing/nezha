@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { ChevronsRight, LayoutGrid, Plus } from "lucide-react";
+import { ChevronsRight, Plus } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { getKanbanShortcutLabel } from "../../shortcuts";
 import s from "../../styles";
-import { OPEN_KANBAN_VIEW_EVENT } from "../KanbanView";
 
 export function ProjectRailActions({
   drawerOpen,
@@ -17,20 +15,9 @@ export function ProjectRailActions({
   const { t } = useI18n();
   const [addHov, setAddHov] = useState(false);
   const [expandHov, setExpandHov] = useState(false);
-  const [kanbanHov, setKanbanHov] = useState(false);
 
   return (
     <>
-      <button
-        title={`${t("kanban.title")} (${getKanbanShortcutLabel()})`}
-        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_KANBAN_VIEW_EVENT))}
-        onMouseEnter={() => setKanbanHov(true)}
-        onMouseLeave={() => setKanbanHov(false)}
-        style={kanbanHov ? s.railKanbanBtnHover : s.railKanbanBtn}
-      >
-        <LayoutGrid size={14} strokeWidth={2.2} />
-      </button>
-
       <button
         title={t("project.showAllProjects")}
         data-rail-drawer-toggle=""
@@ -38,11 +25,7 @@ export function ProjectRailActions({
         onMouseEnter={() => setExpandHov(true)}
         onMouseLeave={() => setExpandHov(false)}
         style={
-          drawerOpen
-            ? s.railExpandBtnOpen
-            : expandHov
-              ? s.railExpandBtnHover
-              : s.railExpandBtn
+          drawerOpen ? s.railExpandBtnOpen : expandHov ? s.railExpandBtnHover : s.railExpandBtn
         }
       >
         <ChevronsRight
