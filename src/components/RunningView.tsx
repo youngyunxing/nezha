@@ -13,6 +13,7 @@ import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
+import { CopySession } from "./running-view/CopySession";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
 import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
@@ -344,13 +345,21 @@ export function RunningView({
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
-      {/* 快捷输入：终端和 agent 会话都走同一条 PTY 写入通道 */}
-      <QuickInput
-        items={quickInputs}
-        onInsert={onInput}
-        onSave={onSaveQuickInput}
-        onDelete={onDeleteQuickInput}
-      />
+      {/* 会话右下角：复制会话（左）+ 快捷输入（右） */}
+      <div style={s.sessionCornerActions}>
+        {sessionPath && (
+          <CopySession
+            sessionPath={sessionPath}
+            assistantLabel={task.agent === "codex" ? "Codex" : "Claude Code"}
+          />
+        )}
+        <QuickInput
+          items={quickInputs}
+          onInsert={onInput}
+          onSave={onSaveQuickInput}
+          onDelete={onDeleteQuickInput}
+        />
+      </div>
     </div>
   );
 
