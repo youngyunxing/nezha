@@ -15,7 +15,7 @@ import type {
 } from "../types";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
-import { NewTaskView, type NewTaskDraft } from "./NewTaskView";
+import { NewTaskDialog } from "./new-task/NewTaskDialog";
 import { LocalSessionView } from "./LocalSessionView";
 import { RunningView } from "./RunningView";
 import { FileExplorer } from "./FileExplorer";
@@ -37,7 +37,6 @@ export function ProjectPage({
   project,
   visible = true,
   allProjects = [],
-  otherProjects = [],
   tasks,
   getTaskRestoreState,
   taskRunCounts,
@@ -46,7 +45,6 @@ export function ProjectPage({
   localSession,
   onSelectLocalSession,
   onResumeLocalSession,
-  onNewTask,
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
@@ -88,7 +86,6 @@ export function ProjectPage({
   project: Project;
   visible?: boolean;
   allProjects?: Project[];
-  otherProjects?: Project[];
   tasks: Task[];
   getTaskRestoreState: (taskId: string) => { initialData?: string; initialSnapshot?: string };
   taskRunCounts: Record<string, number>;
@@ -98,7 +95,6 @@ export function ProjectPage({
   localSession: LocalClaudeSession | null;
   onSelectLocalSession: (session: LocalClaudeSession) => void;
   onResumeLocalSession: (session: LocalClaudeSession) => void;
-  onNewTask: () => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
@@ -114,6 +110,8 @@ export function ProjectPage({
     baseBranch: string;
     /** 任务关联的 git 根（worktree 创建于此） */
     repoPath: string;
+    /** 显式任务名（新建任务弹窗给的名字）；缺省时按提示词推断。 */
+    name?: string;
   }) => void;
   onResumeTask: (id: string) => void;
   onForkTask: (id: string, name: string) => void;
@@ -181,10 +179,6 @@ export function ProjectPage({
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
-  const newTaskDraftRef = useRef<NewTaskDraft | null>(null);
-  const handleCacheNewTaskDraft = useCallback((draft: NewTaskDraft | null) => {
-    newTaskDraftRef.current = draft;
-  }, []);
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -324,10 +318,13 @@ export function ProjectPage({
     setShellProjectPath(project.path);
   }, [project.path]);
 
+  // 「新建任务」不再切走视图，而是弹窗——原来切到新建任务页会把当前会话顶掉。
+  const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
+
   const handleNewTask = useCallback(() => {
     clearFileAndDiff();
-    onNewTask();
-  }, [onNewTask, clearFileAndDiff]);
+    setShowNewTaskDialog(true);
+  }, [clearFileAndDiff]);
 
   const currentTaskCreatedAt = selectedTask?.createdAt ?? null;
 
@@ -457,17 +454,6 @@ export function ProjectPage({
                 themeVariant={themeVariant}
                 onResume={() => onResumeLocalSession(localSession)}
               />
-            ) : isNewTask || !selectedTask ? (
-              <NewTaskView
-                project={project}
-                repoPath={subRepoPath}
-                roots={gitRoots}
-                onSetRepoPath={setSelectedRoot}
-                otherProjects={otherProjects}
-                onSubmit={(t) => onSubmitTask({ ...t, repoPath: subRepoPath })}
-                initialDraft={newTaskDraftRef.current}
-                onCacheDraft={handleCacheNewTaskDraft}
-              />
             ) : null}
           </ErrorBoundary>
 
@@ -570,6 +556,25 @@ export function ProjectPage({
             </ErrorBoundary>
           )}
         </div>
+      )}
+
+      {showNewTaskDialog && (
+        <NewTaskDialog
+          projectPath={project.path}
+          repoPath={subRepoPath}
+          onCancel={() => setShowNewTaskDialog(false)}
+          onCreate={(input) => {
+            setShowNewTaskDialog(false);
+            onSubmitTask({
+              ...input,
+              prompt: "",
+              permissionMode: "full_access",
+              images: [],
+              texts: [],
+              repoPath: subRepoPath,
+            });
+          }}
+        />
       )}
 
       <RightToolbar

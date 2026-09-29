@@ -1516,10 +1516,6 @@ function App() {
     startResume();
   }
 
-  const sortedProjects = useMemo(
-    () => [...projects].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt),
-    [projects],
-  );
   // rail 顺序直接由 projects 数组承载;拖拽通过 handleCommitProjectOrder 改变这个数组。
   // 老版本在这里 sort 是为了给 backend 写入的"任意"顺序提供一个稳定视觉,
   // 现在改由 init 时一次性迁移 + 用户拖拽决定。
@@ -1538,14 +1534,12 @@ function App() {
       <div style={s.appProjectLayer}>
         {mountedProjects.map((project) => {
           const view = getProjectView(project.id);
-          const otherProjectsFiltered = sortedProjects.filter((p) => p.id !== project.id);
           return (
             <ProjectPage
               key={project.id}
               project={project}
               visible={activeProject?.id === project.id}
               allProjects={railProjects}
-              otherProjects={otherProjectsFiltered}
               tasks={tasks}
               getTaskRestoreState={tm.getTaskRestoreState}
               taskRunCounts={taskRunCounts}
@@ -1554,13 +1548,6 @@ function App() {
               localSession={view.localSession}
               onSelectLocalSession={(session) => handleSelectLocalSession(project, session)}
               onResumeLocalSession={(session) => handleResumeLocalSession(project, session)}
-              onNewTask={() =>
-                updateProjectView(project.id, {
-                  selectedTaskId: null,
-                  isNewTask: true,
-                  localSession: null,
-                })
-              }
               onSelectTask={(id) =>
                 updateProjectView(project.id, {
                   selectedTaskId: id,

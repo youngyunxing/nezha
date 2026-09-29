@@ -178,6 +178,18 @@ export const panels = {
   // 通用设置：开关(toggle switch)
   settingToggle: settingToggleBase,
   // 平台不适用(如 macOS 上的 Windows 专属项)或加载中:置灰且不可点
+  // 新建任务弹窗：字段间距 / 开关的说明行
+  newTaskDialogField: { marginTop: 12 },
+  newTaskDialogToggleText: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 3,
+  },
+  newTaskDialogHint: {
+    fontSize: 11.5,
+    fontWeight: 400,
+    color: "var(--text-hint)",
+  },
   settingToggleLabel: {
     fontSize: 13,
     fontWeight: 600,
