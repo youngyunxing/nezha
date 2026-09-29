@@ -159,7 +159,6 @@ const translations: Record<string, string> = {
   "status.cancelled": "已取消",
   "welcome.noMatchingProjects": "没有匹配的项目",
   "welcome.openProjectFolder": "打开项目文件夹...",
-  "welcome.projects": "项目",
   "welcome.searchProjects": "搜索项目",
   "welcome.openProject": "打开项目",
   "welcome.addProject": "添加项目",

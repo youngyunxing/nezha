@@ -378,7 +378,10 @@ export function ProjectDrawer({
   return (
     <div className="rail-drawer">
       <div className="rail-drawer-header">
-        <div className="rail-drawer-title">{t("welcome.projects")}</div>
+        <button type="button" className="rail-drawer-add" onClick={onOpen}>
+          <Plus size={14} strokeWidth={2.4} />
+          <span>{t("welcome.addProject")}</span>
+        </button>
         <div className="rail-drawer-search">
           <Search size={13} strokeWidth={2} className="rail-drawer-search-icon" />
           <input
@@ -392,10 +395,6 @@ export function ProjectDrawer({
             placeholder={t("welcome.searchProjects")}
           />
         </div>
-        <button type="button" className="rail-drawer-add" onClick={onOpen}>
-          <Plus size={14} strokeWidth={2.4} />
-          <span>{t("welcome.addProject")}</span>
-        </button>
       </div>
 
       <div ref={railContainerRef} className="rail-drawer-list">

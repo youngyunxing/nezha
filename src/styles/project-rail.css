@@ -163,23 +163,10 @@
 }
 
 .rail-drawer-header {
-  /* 32 + 标题 16 + 标题下边距 8 = 搜索框顶部 56px。
-     任务面板那边是 panelHeader 的 48px（全局 border-box，含 1px 边框）
-     + panelSearchWrap 的 margin-top 8px = 同样 56px。
-     两处都靠固定行高算，别改成 line-height: normal——那样标题行盒会涨到 ~16px
-     以上，搜索框就比对面低几个像素。 */
-  padding: 32px 12px 10px;
+  /* 标题已移除以给「添加项目」腾位置，头部不再需要为对齐任务面板而留白。
+     搜索框因此比任务面板的低——这是去掉标题换来的，别再试图对齐。 */
+  padding: 12px 12px 10px;
   border-bottom: 1px solid var(--border-dim);
-}
-
-.rail-drawer-title {
-  margin: 0 2px 8px;
-  line-height: 16px; /* 固定，见 .rail-drawer-header 的算术 */
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-hint);
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
 }
 
 .rail-drawer-search {
@@ -208,7 +195,7 @@
 }
 
 .rail-drawer-add {
-  margin-top: 8px;
+  margin-bottom: 8px;
   width: 100%;
   display: flex;
   align-items: center;
