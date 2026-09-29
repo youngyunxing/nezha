@@ -776,7 +776,8 @@ pub async fn run_task(
 
     // 版本统一走全局探测（带缓存），判断是否支持 --session-id。
     // 缓存未命中时 *_version_gte 会启子进程探测，故放进 spawn_blocking 避免阻塞 async runtime。
-    let use_explicit_session = !is_codex
+    let use_explicit_session = agent != "shell"
+        && !is_codex
         && tokio::task::spawn_blocking(|| crate::app_settings::claude_version_gte("2.1.87"))
             .await
             .unwrap_or(false);
@@ -813,7 +814,16 @@ pub async fn run_task(
             .await
             .unwrap_or(false));
 
-    let mut cmd = if is_codex {
+    // 「终端」不是 agent：直接起用户的登录 shell（与内嵌 shell 面板同一条路径）——
+    // 不注入 hook、不预置 session id、prompt 也不写进去。
+    let mut cmd = if agent == "shell" {
+        let shell = crate::platform::default_shell_command();
+        let mut c = CommandBuilder::new(&shell.program);
+        for arg in &shell.args {
+            c.arg(arg);
+        }
+        c
+    } else if is_codex {
         let mut c = build_codex_cmd(&agent_bin, &permission_mode);
         // Codex 对非 managed 的 command hook 默认要求 trust,Nezha 注入的是新 hash 会被
         // skip;由 Nezha 注入、来源可信,这里免 trust 直接运行。必须在 `--`/prompt 之前。
@@ -1066,7 +1076,8 @@ pub async fn resume_task(
     let is_codex = agent == "codex";
 
     // resume 时 session_id 已知，直接查找文件并开始监视(hook 可信时跳过)
-    if !use_hooks {
+    // 终端任务没有会话文件，跳过。
+    if !use_hooks && agent != "shell" {
         spawn_resume_session_watcher(
             app.clone(),
             task_id.clone(),

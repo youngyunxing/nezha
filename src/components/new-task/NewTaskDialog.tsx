@@ -1,16 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Select from "@radix-ui/react-select";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { Check, ChevronDown, Plus, Terminal, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
-
-/** 名字留空（或清空）时的占位名。 */
-const DEFAULT_TASK_NAME = "新任务";
 
 interface GitBranchInfo {
   name: string;
@@ -27,7 +24,7 @@ function SelectField({
 }: {
   value: string;
   label: string;
-  options: Array<{ value: string; label: string; icon?: string }>;
+  options: Array<{ value: string; label: string; icon?: ReactNode }>;
   onChange: (value: string) => void;
 }) {
   const current = options.find((o) => o.value === value);
@@ -36,7 +33,7 @@ function SelectField({
       <Select.Trigger aria-label={label} style={s.settingsSelectTriggerCompact}>
         <Select.Value>
           <span style={s.newTaskDialogSelectValue}>
-            {current?.icon && <img src={current.icon} style={s.toolbarMenuItemIcon} />}
+            {current?.icon}
             {current?.label ?? value}
           </span>
         </Select.Value>
@@ -58,7 +55,7 @@ function SelectField({
                 >
                   <Select.ItemText>
                     <span style={s.newTaskDialogSelectValue}>
-                      {option.icon && <img src={option.icon} style={s.toolbarMenuItemIcon} />}
+                      {option.icon}
                       {option.label}
                     </span>
                   </Select.ItemText>
@@ -96,8 +93,10 @@ export function NewTaskDialog({
   }) => void;
 }) {
   const { t } = useI18n();
-  // 名字给个占位默认值，用户不改也能直接创建；清空则回落到同一个占位名。
-  const [name, setName] = useState(DEFAULT_TASK_NAME);
+  // 任务名的默认值就是 task-<id>（与创建任务时的占位名同一格式）。先生成一份做灰色
+  // 占位提示——用户不填，创建出来的名字就是它。
+  const [defaultName] = useState(() => `task-${Date.now()}`);
+  const [name, setName] = useState("");
   const [agent, setAgent] = useState<AgentType>("claude");
   const [isolated, setIsolated] = useState(false);
   const [branches, setBranches] = useState<GitBranchInfo[]>([]);
@@ -126,7 +125,7 @@ export function NewTaskDialog({
   function submit() {
     if (!canSubmit) return;
     onCreate({
-      name: name.trim() || DEFAULT_TASK_NAME,
+      name: name.trim() || defaultName,
       agent,
       launchMode: isolated ? "worktree" : "local",
       baseBranch: isolated ? baseBranch : "",
@@ -167,6 +166,7 @@ export function NewTaskDialog({
                 style={s.forkDialogInput}
                 value={name}
                 maxLength={120}
+                placeholder={defaultName}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
             </div>
@@ -177,8 +177,21 @@ export function NewTaskDialog({
                 value={agent}
                 label={t("settings.agent")}
                 options={[
-                  { value: "claude", label: "Claude Code", icon: claudeLogo },
-                  { value: "codex", label: "Codex", icon: chatgptLogo },
+                  {
+                    value: "claude",
+                    label: "Claude Code",
+                    icon: <img src={claudeLogo} style={s.toolbarMenuItemIcon} />,
+                  },
+                  {
+                    value: "codex",
+                    label: "Codex",
+                    icon: <img src={chatgptLogo} style={s.toolbarMenuItemIcon} />,
+                  },
+                  {
+                    value: "shell",
+                    label: t("terminal.title"),
+                    icon: <Terminal size={14} strokeWidth={2} color="var(--text-muted)" />,
+                  },
                 ]}
                 onChange={(value) => setAgent(value as AgentType)}
               />

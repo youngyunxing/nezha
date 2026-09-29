@@ -196,7 +196,7 @@ const translations: Record<string, string> = {
   "newTask.dialogTitle": "新建任务",
   "newTask.dialogName": "任务名字（可选）",
   "newTask.dialogIsolated": "创建 worktree",
-  "newTask.dialogIsolatedHint": "用 git worktree 在单独的分支副本里改，完成后再合并回来",
+  "newTask.dialogIsolatedHint": "用 git worktree 在单独的分支副本里改",
   "newTask.dialogCreate": "创建",
   "newTask.hookVersionLow":
     "当前 {agent} 版本 {detected} 低于 {min}，任务状态检测已回退到轮询。升级 {agent} 到 {min}+ 可启用更可靠的 hook 状态检测。",

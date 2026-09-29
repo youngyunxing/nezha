@@ -1014,9 +1014,11 @@ function App() {
 
   function handleResumeTask(taskId: string) {
     const task = tasks.find((t) => t.id === taskId);
-    const sessionId = task?.agent === "codex" ? task.codexSessionId : task?.claudeSessionId;
     if (!task) return;
-    if (!sessionId) {
+    // 纯终端没有会话可 resume：直接重开一个 shell（屏幕上先回放终端快照/输出缓冲）。
+    const isShell = task.agent === "shell";
+    const sessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
+    if (!isShell && !sessionId) {
       showToast(t("running.resumeUnavailable"), "warning");
       return;
     }
@@ -1041,6 +1043,17 @@ function App() {
     tm.resetTaskTerminal(taskId);
     setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
 
+    if (isShell) {
+      invokeRunTask(
+        { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined },
+        task.worktreePath ?? project.path,
+        [],
+      );
+      return;
+    }
+
+    // 类型收窄：非终端的分支在上面已经保证 sessionId 存在。
+    if (!sessionId) return;
     pendingResumeStartsRef.current[taskId] = () => {
       invokeResumeTask(task, project, sessionId);
     };

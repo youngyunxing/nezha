@@ -1,5 +1,5 @@
 import { useState, memo } from "react";
-import { Trash2, Star, GitBranch } from "lucide-react";
+import { Trash2, Star, GitBranch, Terminal } from "lucide-react";
 import type { Task } from "../../types";
 import { StatusIcon } from "../StatusIcon";
 import { useI18n } from "../../i18n";
@@ -80,21 +80,38 @@ export const TaskListItem = memo(
               )}
           </div>
         </div>
-        <img
-          src={task.agent === "claude" ? claudeLogo : chatgptLogo}
-          title={task.agent === "claude" ? "Claude Code" : "Codex"}
+        <span
+          title={
+            task.agent === "shell"
+              ? t("terminal.title")
+              : task.agent === "claude"
+                ? "Claude Code"
+                : "Codex"
+          }
           style={{
             ...s.agentBadge,
             position: "absolute",
             right: 16,
             top: 11,
             opacity: hov ? 0 : 1,
-            filter: task.agent === "codex" ? "var(--agent-badge-filter)" : "none",
             pointerEvents: "none",
             transition: "opacity 0.12s ease",
             zIndex: 1,
           }}
-        />
+        >
+          {task.agent === "shell" ? (
+            <Terminal size={13} strokeWidth={2} color="var(--text-muted)" />
+          ) : (
+            <img
+              src={task.agent === "claude" ? claudeLogo : chatgptLogo}
+              style={{
+                width: 14,
+                height: 14,
+                filter: task.agent === "codex" ? "var(--agent-badge-filter)" : "none",
+              }}
+            />
+          )}
+        </span>
         {task.worktreePath && task.worktreeBranch && (
           <span
             title={t("task.worktreeBadge", { branch: task.worktreeBranch })}

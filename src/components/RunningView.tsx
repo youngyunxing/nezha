@@ -126,6 +126,8 @@ export function RunningView({
   const isInterrupted = task.status === "interrupted";
   const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
   const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
+  // 纯终端没有会话 id 可 resume：恢复 = 重开一个 shell（屏幕内容由终端快照/输出缓冲带回）。
+  const canResume = task.agent === "shell" || !!resumeSessionId;
   const restoreState = getRestoreState?.() ?? {};
 
   const [metricsState, setMetricsState] = useState<{
@@ -391,7 +393,7 @@ export function RunningView({
               <Pencil size={13} strokeWidth={2.25} />
             </button>
           )}
-          {!editingTitle && (
+          {!editingTitle && task.agent !== "shell" && (
             <button
               type="button"
               title={generateTooltip}
@@ -426,7 +428,7 @@ export function RunningView({
           !isDetached &&
           !isInterrupted &&
           onResume &&
-          resumeSessionId &&
+          canResume &&
           !task.worktreeDiscarded && (
             <button style={s.resumeBtn} onClick={onResume}>
               <RotateCcw size={12} strokeWidth={2.5} />
@@ -512,8 +514,12 @@ export function RunningView({
       >
         <div style={s.runMetaRow}>
           <span style={s.runMetaFixed}>
-            {task.agent === "claude" ? "✦ Claude Code" : "⬡ Codex"} ·{" "}
-            {permissionModeLabel(task.permissionMode, task.agent)}
+            {task.agent === "shell"
+              ? `>_ ${t("terminal.title")}`
+              : `${task.agent === "claude" ? "✦ Claude Code" : "⬡ Codex"} · ${permissionModeLabel(
+                  task.permissionMode,
+                  task.agent,
+                )}`}
           </span>
           {task.worktreePath && task.worktreeBranch && task.baseBranch && (
             <>
@@ -600,13 +606,13 @@ export function RunningView({
             <div style={s.interruptedBannerActions}>
               <button
                 type="button"
-                title={!resumeSessionId ? t("running.resumeUnavailable") : undefined}
+                title={!canResume ? t("running.resumeUnavailable") : undefined}
                 style={{
                   ...s.interruptedPrimaryBtn,
-                  opacity: resumeSessionId ? 1 : 0.45,
-                  cursor: resumeSessionId ? "pointer" : "not-allowed",
+                  opacity: canResume ? 1 : 0.45,
+                  cursor: canResume ? "pointer" : "not-allowed",
                 }}
-                disabled={!resumeSessionId}
+                disabled={!canResume}
                 onClick={isDetached ? onReconnect : onResume}
               >
                 <RotateCcw size={12} strokeWidth={2.1} />

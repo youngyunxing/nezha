@@ -52,7 +52,8 @@ export interface GitRoot {
   isRoot: boolean;
 }
 
-export type AgentType = "claude" | "codex";
+/** "shell" = 纯终端会话（不起 agent，直接开登录 shell）。 */
+export type AgentType = "claude" | "codex" | "shell";
 export type ThemeMode = "system" | "dark" | "light" | "eyecare" | "midnight";
 export type ThemeVariant = "dark" | "light" | "eyecare" | "midnight";
 export type PermissionMode = "ask" | "auto_edit" | "full_access";
