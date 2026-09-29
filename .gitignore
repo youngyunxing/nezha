@@ -37,3 +37,12 @@ vite.config.d.ts
 .codegraph/
 .planning/
 pnpm-workspace.yaml
+
+# `pnpm tauri icon` 每次都会生成整套跨平台图标；本项目只发布 macOS，
+# 除下面这些被 tauri.conf.json 引用（或 bundler 需要）的之外一律不入库。
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/icon.ico
+src-tauri/icons/64x64.png
