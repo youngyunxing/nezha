@@ -1,10 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import {
-  buildDefaultForkTaskName,
-  ForkTaskDialog,
-  SessionActionsMenu,
-} from "../components/running-view/SessionActionsMenu";
+import { buildDefaultForkTaskName, ForkTaskDialog } from "../components/running-view/SessionActionsMenu";
 import { I18nProvider } from "../i18n";
 
 describe("session fork actions", () => {
@@ -45,31 +41,5 @@ describe("session fork actions", () => {
 
     expect(onFork).toHaveBeenCalledWith("Fork-Renamed");
     expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
-
-  it("disables worktree forks while keeping export in the More menu", async () => {
-    const onExport = vi.fn();
-
-    render(
-      <I18nProvider>
-        <SessionActionsMenu
-          defaultForkName="Fork-Current task"
-          forkDisabledReason="暂不支持 Fork 工作树任务。"
-          canExport
-          exporting={false}
-          onFork={vi.fn()}
-          onExport={onExport}
-        />
-      </I18nProvider>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "更多会话操作" }));
-
-    const forkItem = await screen.findByRole("menuitem", { name: /Fork 会话/ });
-    expect(forkItem).toBeDisabled();
-    expect(screen.getByText("暂不支持 Fork 工作树任务。")).toBeVisible();
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "导出为 Markdown" }));
-    expect(onExport).toHaveBeenCalledOnce();
   });
 });

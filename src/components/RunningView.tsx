@@ -11,7 +11,7 @@ import type {
 import { StatusIcon } from "./StatusIcon";
 import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
-import { buildDefaultForkTaskName, SessionActionsMenu } from "./running-view/SessionActionsMenu";
+import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
@@ -22,6 +22,8 @@ import {
   GitMerge,
   Trash2,
   AlertTriangle,
+  GitFork,
+  Download,
 } from "lucide-react";
 
 interface SessionMetrics {
@@ -151,6 +153,7 @@ export function RunningView({
   const [hoverHeader, setHoverHeader] = useState(false);
   const [worktreeBusy, setWorktreeBusy] = useState<"merge" | "discard" | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [bannerCompact, setBannerCompact] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const interruptedBannerRef = useRef<HTMLDivElement>(null);
@@ -160,11 +163,10 @@ export function RunningView({
     task.prompt,
     t("running.untitledTask"),
   );
-  const forkDisabledReason = task.worktreePath
-    ? t("running.forkWorktreeUnsupported")
-    : !resumeSessionId || !onFork
-      ? t("running.forkUnavailable")
-      : undefined;
+  // 能 Fork 才算得上「可以 Fork 的会话」：工作树任务和没有会话 id 的（纯终端）都不行，
+  // 这两种情况下按钮直接不出现，而不是置灰占位。
+  const canFork = !task.worktreePath && Boolean(resumeSessionId) && Boolean(onFork);
+  const canExport = Boolean(sessionPath);
 
   const handleExport = async () => {
     if (exporting || !sessionPath) return;
@@ -481,17 +483,36 @@ export function RunningView({
               </span>
             </button>
           )}
-        {!isActive && (sessionPath || resumeSessionId) && (
-          <SessionActionsMenu
-            defaultForkName={defaultForkName}
-            forkDisabledReason={forkDisabledReason}
-            canExport={Boolean(sessionPath)}
-            exporting={exporting}
-            onFork={(name) => onFork?.(name)}
-            onExport={handleExport}
-          />
+        {!isActive && canFork && (
+          <button
+            type="button"
+            style={s.cancelBtn}
+            title={t("running.forkSession")}
+            onClick={() => setForkDialogOpen(true)}
+          >
+            <GitFork size={12} strokeWidth={2.4} />
+            <span>{t("running.forkSession")}</span>
+          </button>
+        )}
+        {!isActive && canExport && (
+          <button
+            type="button"
+            style={{ ...s.cancelBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
+            title={t("running.exportMarkdown")}
+            disabled={exporting}
+            onClick={handleExport}
+          >
+            <Download size={12} strokeWidth={2.4} className={exporting ? "spin" : ""} />
+            <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
+          </button>
         )}
       </div>
+      <ForkTaskDialog
+        open={forkDialogOpen}
+        defaultName={defaultForkName}
+        onOpenChange={setForkDialogOpen}
+        onFork={(name) => onFork?.(name)}
+      />
       {(metrics || sessionPath) && (
         <div
           style={{
