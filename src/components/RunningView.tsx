@@ -363,7 +363,6 @@ export function RunningView({
         onMouseLeave={() => setHoverHeader(false)}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-          <StatusIcon status={task.status} />
           {editingTitle ? (
             <input
               ref={titleInputRef}
