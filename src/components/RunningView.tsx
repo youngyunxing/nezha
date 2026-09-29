@@ -33,6 +33,10 @@ interface SessionMetrics {
   total_tokens: number;
   context_tokens: number;
   context_window: number;
+  /** 当前速度（token/秒）：会话里最近 60 秒的输出速率 */
+  tps_current: number;
+  /** 过去 5 小时的平均速度（会话不足 5 小时按会话跨度算） */
+  tps_5h: number;
 }
 
 function formatDuration(secs: number): string {
@@ -46,6 +50,14 @@ function formatDuration(secs: number): string {
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
+}
+
+/** TPS：小的给两位小数，大的取整，免得抖得难看。 */
+function formatTps(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value >= 100) return value.toFixed(0);
+  if (value >= 10) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function formatTokens(n: number): string {
@@ -567,6 +579,18 @@ export function RunningView({
                   label={t("running.tokens")}
                   value={formatTokens(metrics.total_tokens)}
                 />
+                {(metrics.tps_current > 0 || metrics.tps_5h > 0) && (
+                  <>
+                    <MetricPill
+                      label={t("running.tps")}
+                      value={formatTps(metrics.tps_current)}
+                    />
+                    <MetricPill
+                      label={t("running.tps5h")}
+                      value={formatTps(metrics.tps_5h)}
+                    />
+                  </>
+                )}
                 {metrics.context_window > 0 && metrics.context_tokens > 0 && (
                   <MetricPill
                     label={t("running.context")}

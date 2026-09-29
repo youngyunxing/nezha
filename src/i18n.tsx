@@ -326,6 +326,8 @@ const translations: Record<string, string> = {
   "running.worktreeBranchTitle": "任务位于分支 {branch}，将合并回 {base}",
   "running.duration": "时长",
   "running.tokens": "Tokens",
+  "running.tps": "TPS",
+  "running.tps5h": "TPS（5h）",
   "running.context": "上下文",
   "running.exportMarkdown": "导出为 Markdown",
   "running.exporting": "导出中…",

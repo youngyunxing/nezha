@@ -17,6 +17,36 @@ pub(crate) struct SessionMetrics {
     pub(crate) context_tokens: u64,
     /// 模型上下文窗口大小。仅 Codex 自带；Claude session 不暴露此值，留 0 让前端隐藏。
     pub(crate) context_window: u64,
+    /// 当前速度：会话里最近 60 秒生成的输出 token / 该窗口实际跨度（token/秒）。
+    /// 只算输出 token —— 输入里绝大多数是缓存命中，算进去就不是「生成速度」了。
+    pub(crate) tps_current: f64,
+    /// 过去 5 小时的平均速度（会话不足 5 小时则按会话跨度算）。
+    pub(crate) tps_5h: f64,
+}
+
+/// 给定窗口末尾与窗口长度，算窗口内的输出 token 速率。
+/// 分母用「窗口内第一条记录到末尾」的实际跨度，避免只有几条记录时被整段窗口稀释；
+/// 跨度不足 1 秒视为无有效样本（返回 0）。
+fn window_tps(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
+    if end <= 0.0 {
+        return 0.0;
+    }
+    let start = end - window_secs;
+    let mut tokens: u64 = 0;
+    let mut first: Option<f64> = None;
+    for (ts, out) in samples {
+        if *ts < start || *ts > end {
+            continue;
+        }
+        tokens += out;
+        if first.is_none_or(|f| *ts < f) {
+            first = Some(*ts);
+        }
+    }
+    match first {
+        Some(f) if end - f >= 1.0 => tokens as f64 / (end - f),
+        _ => 0.0,
+    }
 }
 
 /// 缓存：session_path → (file_modified_time, SessionMetrics)
@@ -72,6 +102,8 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
     let mut last_context: u64 = 0;
     let mut first_ts: Option<f64> = None;
     let mut last_ts: Option<f64> = None;
+    // 每条 assistant 记录的 (时间戳, 输出 token)，用于算 TPS
+    let mut samples: Vec<(f64, u64)> = Vec::new();
 
     for line in content.lines() {
         let Ok(val) = serde_json::from_str::<Value>(line) else { continue };
@@ -91,6 +123,13 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
             output_tokens += out;
             cache_creation += cc;
             cache_read += cr;
+            if let Some(ts) = val
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .and_then(parse_rfc3339_secs)
+            {
+                samples.push((ts, out));
+            }
             // 最后一条 assistant 的 prompt 总大小 ≈ 当前上下文占用
             last_context = inp + cc + cr;
         }
@@ -111,6 +150,8 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
         total_tokens: input_tokens + output_tokens + cache_creation + cache_read,
         context_tokens: last_context,
         context_window: 0, // Claude session 不带窗口大小
+        tps_current: window_tps(&samples, last_ts.unwrap_or(0.0), 60.0),
+        tps_5h: window_tps(&samples, last_ts.unwrap_or(0.0), 5.0 * 3600.0),
     }
 }
 
@@ -174,6 +215,9 @@ fn parse_codex_metrics(content: &str) -> SessionMetrics {
         total_tokens,
         context_tokens,
         context_window,
+        // Codex 的事件流里没有逐条 output token，先不给 TPS（前端两值都为 0 时不显示）
+        tps_current: 0.0,
+        tps_5h: 0.0,
     }
 }
 

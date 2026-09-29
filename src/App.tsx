@@ -1017,6 +1017,15 @@ function App() {
     }
   }
 
+  /** 会话文件大小；不存在或读不到按 0 算（= 这个会话从没写过内容）。 */
+  async function sessionFileSize(path: string): Promise<number> {
+    try {
+      return await invoke<number>("session_file_size", { path });
+    } catch {
+      return 0;
+    }
+  }
+
   function invokeResumeTask(task: Task, project: Project, sessionId: string) {
     invoke("resume_task", {
       taskId: task.id,
@@ -1077,7 +1086,16 @@ function App() {
 
     // 类型收窄：非终端的分支在上面已经保证 sessionId 存在。
     if (!sessionId) return;
-    pendingResumeStartsRef.current[taskId] = () => {
+    pendingResumeStartsRef.current[taskId] = async () => {
+      // fork 出来的任务：如果它自己的会话文件是空的（fork 完啥也没干，Claude 根本没写过
+      // 这份 transcript），--resume 会直接失败、记录回不来。这种情况用源会话重新 fork 一次。
+      if (task.forkedFromSessionId && task.claudeSessionPath) {
+        const size = await sessionFileSize(task.claudeSessionPath);
+        if (size === 0) {
+          invokeForkTask(task, project, task.forkedFromSessionId);
+          return;
+        }
+      }
       invokeResumeTask(task, project, sessionId);
     };
   }
@@ -1179,6 +1197,7 @@ function App() {
       status: "pending",
       createdAt: now,
       updatedAt: now,
+      forkedFromSessionId: sourceSessionId,
     };
 
     setTasks((prev) => {

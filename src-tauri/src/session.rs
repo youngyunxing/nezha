@@ -536,6 +536,13 @@ fn claude_sessions_dir_for_project(project_path: &str) -> Option<PathBuf> {
     Some(home.join(".claude").join("projects").join(encoded))
 }
 
+/// 会话文件大小；不存在或读不到返回 0。前端用它判断「这个会话从没写过内容」——
+/// fork 完啥也没干时 Claude 不会建 transcript，此时 --resume 必然失败。
+#[tauri::command]
+pub fn session_file_size(path: String) -> u64 {
+    std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
+}
+
 /// 本机 Claude Code 自己产生的一条会话记录（不属于 Nezha 的任何任务）。
 #[derive(serde::Serialize)]
 pub struct LocalClaudeSession {

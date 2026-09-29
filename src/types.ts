@@ -161,6 +161,8 @@ export interface Task {
   codexSessionPath?: string;
   claudeSessionId?: string;
   claudeSessionPath?: string;
+  /** fork 出来的任务记下源会话 id：fork 完没说过话时，源会话的 transcript 才是唯一能恢复的记录 */
+  forkedFromSessionId?: string;
   worktreePath?: string;
   worktreeBranch?: string;
   baseBranch?: string;
