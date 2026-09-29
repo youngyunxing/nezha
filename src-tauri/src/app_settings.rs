@@ -510,7 +510,7 @@ fn parse_codex_model_option(value: &Value) -> Option<AgentModelOption> {
 }
 
 fn discover_codex_model_options(
-    codex_rpc: Arc<Mutex<Option<crate::usage::CodexRpcClient>>>,
+    codex_rpc: Arc<Mutex<Option<crate::codex_rpc::CodexRpcClient>>>,
 ) -> Result<Vec<AgentModelOption>, String> {
     let mut models = Vec::new();
     let mut cursor: Option<String> = None;
@@ -520,7 +520,7 @@ fn discover_codex_model_options(
             Some(cursor) => json!({ "limit": 100, "cursor": cursor }),
             None => json!({ "limit": 100 }),
         };
-        let result = crate::usage::call_codex_rpc_with_client(
+        let result = crate::codex_rpc::call_codex_rpc_with_client(
             Arc::clone(&codex_rpc),
             "model/list",
             params,

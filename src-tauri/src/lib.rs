@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::Arc;
 
-use usage::CodexRpcClient;
+use codex_rpc::CodexRpcClient;
 
 mod agent_assist;
 mod analytics;
@@ -18,7 +18,7 @@ mod platform;
 mod pty;
 mod session;
 mod storage;
-mod usage;
+mod codex_rpc;
 
 use session::{ClaudeSessionInfo, CodexSessionInfo};
 
@@ -247,7 +247,6 @@ pub fn run() {
             app_settings::detect_agent_paths,
             app_settings::detect_agent_versions_for_settings,
             app_settings::get_system_fonts,
-            usage::read_usage_snapshot,
             hooks::get_hook_status,
             hooks::get_hook_readiness,
             hooks::install_hooks,

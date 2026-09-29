@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type {
   Task,
-  UsageWindow,
   TerminalFontSize,
   TerminalScrollback,
   FontFamily,
@@ -16,8 +15,6 @@ import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, SessionActionsMenu } from "./running-view/SessionActionsMenu";
 import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
-import { getUsageColor } from "../utils";
-import { useUsageSnapshot } from "../hooks/useUsageSnapshot";
 import { useI18n } from "../i18n";
 import s from "../styles";
 import {
@@ -69,17 +66,6 @@ function formatFileSize(bytes: number): string {
   }
   const gb = bytes / 1024 / 1024 / 1024;
   return `${gb.toFixed(gb < 10 ? 1 : 0)}G`;
-}
-
-function InlineWindow({ label, window }: { label: string; window: UsageWindow }) {
-  return (
-    <span style={s.usageInlineWindow}>
-      <span style={s.usageInlineWindowLabel}>{label}</span>
-      <span style={{ ...s.usageInlineWindowValue, color: getUsageColor(window.remainingPercent) }}>
-        {window.remainingPercent}%
-      </span>
-    </span>
-  );
 }
 
 export function RunningView({
@@ -147,8 +133,6 @@ export function RunningView({
   const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
   const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
   const restoreState = getRestoreState?.() ?? {};
-
-  const { snapshot: usageSnapshot } = useUsageSnapshot(visible);
 
   const [metricsState, setMetricsState] = useState<{
     sessionPath: string;
@@ -274,7 +258,9 @@ export function RunningView({
     }
     const activeSessionPath = sessionPath;
     setMetricsState((prev) =>
-      prev?.sessionPath === activeSessionPath ? prev : { sessionPath: activeSessionPath, status: "loading", metrics: null },
+      prev?.sessionPath === activeSessionPath
+        ? prev
+        : { sessionPath: activeSessionPath, status: "loading", metrics: null },
     );
     // 只在项目处于前台时才跑 metrics 轮询；切到其他项目时暂停，
     // 项目重新激活时这里会立即补拉一次。注意这里用的是 projectActive
@@ -422,19 +408,13 @@ export function RunningView({
                 color: isActive ? "var(--text-hint)" : "var(--text-secondary)",
                 opacity: generatingName ? 1 : isActive ? 0.4 : hoverHeader ? 1 : 0.65,
                 background:
-                  hoverHeader && !isActive && !generatingName
-                    ? "var(--bg-input)"
-                    : "transparent",
+                  hoverHeader && !isActive && !generatingName ? "var(--bg-input)" : "transparent",
                 cursor: generatingName || isActive ? "not-allowed" : "pointer",
                 transition: "opacity 0.15s ease, background 0.15s ease, color 0.15s ease",
               }}
               onClick={handleGenerateClick}
             >
-              <Sparkles
-                size={13}
-                strokeWidth={2.25}
-                className={generatingName ? "spin" : ""}
-              />
+              <Sparkles size={13} strokeWidth={2.25} className={generatingName ? "spin" : ""} />
             </button>
           )}
         </div>
@@ -502,28 +482,30 @@ export function RunningView({
           task.worktreeBranch &&
           !task.worktreeDiscarded &&
           onDiscardWorktree && (
-          <button
-            style={{
-              ...s.cancelBtn,
-              opacity: worktreeBusy ? 0.6 : 1,
-              cursor: worktreeBusy ? "not-allowed" : "pointer",
-            }}
-            disabled={!!worktreeBusy}
-            onClick={async () => {
-              setWorktreeBusy("discard");
-              try {
-                await onDiscardWorktree();
-              } finally {
-                setWorktreeBusy(null);
-              }
-            }}
-          >
-            <Trash2 size={12} strokeWidth={2.5} />
-            <span>
-              {worktreeBusy === "discard" ? t("running.discarding") : t("running.discardWorktree")}
-            </span>
-          </button>
-        )}
+            <button
+              style={{
+                ...s.cancelBtn,
+                opacity: worktreeBusy ? 0.6 : 1,
+                cursor: worktreeBusy ? "not-allowed" : "pointer",
+              }}
+              disabled={!!worktreeBusy}
+              onClick={async () => {
+                setWorktreeBusy("discard");
+                try {
+                  await onDiscardWorktree();
+                } finally {
+                  setWorktreeBusy(null);
+                }
+              }}
+            >
+              <Trash2 size={12} strokeWidth={2.5} />
+              <span>
+                {worktreeBusy === "discard"
+                  ? t("running.discarding")
+                  : t("running.discardWorktree")}
+              </span>
+            </button>
+          )}
         {!isActive && (sessionPath || resumeSessionId) && (
           <SessionActionsMenu
             defaultForkName={defaultForkName}
@@ -547,28 +529,6 @@ export function RunningView({
             {task.agent === "claude" ? "✦ Claude Code" : "⬡ Codex"} ·{" "}
             {permissionModeLabel(task.permissionMode, task.agent)}
           </span>
-          {usageSnapshot && (task.agent === "claude"
-            ? usageSnapshot.claude.status === "available" && (
-                <>
-                  {usageSnapshot.claude.data.fiveHour && (
-                    <><span>·</span><InlineWindow label="5h" window={usageSnapshot.claude.data.fiveHour} /></>
-                  )}
-                  {usageSnapshot.claude.data.sevenDay && (
-                    <><span>·</span><InlineWindow label="7d" window={usageSnapshot.claude.data.sevenDay} /></>
-                  )}
-                </>
-              )
-            : usageSnapshot.codex.status === "available" && (
-                <>
-                  {usageSnapshot.codex.data.primary && (
-                    <><span>·</span><InlineWindow label="5h" window={usageSnapshot.codex.data.primary} /></>
-                  )}
-                  {usageSnapshot.codex.data.secondary && (
-                    <><span>·</span><InlineWindow label="7d" window={usageSnapshot.codex.data.secondary} /></>
-                  )}
-                </>
-              )
-          )}
           {task.worktreePath && task.worktreeBranch && task.baseBranch && (
             <>
               <span style={s.runMetaFixed}>·</span>
@@ -594,8 +554,14 @@ export function RunningView({
           <div style={s.runMetricsRow}>
             {metrics && (
               <>
-                <MetricPill label={t("running.duration")} value={formatDuration(metrics.duration_secs)} />
-                <MetricPill label={t("running.tokens")} value={formatTokens(metrics.total_tokens)} />
+                <MetricPill
+                  label={t("running.duration")}
+                  value={formatDuration(metrics.duration_secs)}
+                />
+                <MetricPill
+                  label={t("running.tokens")}
+                  value={formatTokens(metrics.total_tokens)}
+                />
                 {metrics.context_window > 0 && metrics.context_tokens > 0 && (
                   <MetricPill
                     label={t("running.context")}
