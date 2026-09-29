@@ -79,7 +79,9 @@ export const task = {
     display: "flex",
     alignItems: "center",
     gap: 7,
-    margin: "8px 12px 4px",
+    /* 上边距 4 而非 8：与抽屉那边的搜索框对齐到 52px（那边是 8+32+12）。
+       抽屉侧按钮高度固定，所以收紧间距要在这里让。 */
+    margin: "4px 12px 4px",
     padding: "6px 9px",
     background: "var(--bg-card)",
     border: "1px solid var(--border-dim)",
