@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import type { Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { BranchBar } from "./task-panel/BranchBar";
@@ -21,7 +21,6 @@ export function TaskPanel({
   onNewTask,
   onSelectTask,
   onDeleteTask,
-  onDeleteAllTasks,
   onToggleTaskStar,
   onRunTodo,
   taskDisplayWindow,
@@ -43,7 +42,6 @@ export function TaskPanel({
   onNewTask: () => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
-  onDeleteAllTasks: () => void;
   onToggleTaskStar: (id: string) => void;
   onRunTodo: (task: Task) => void;
   taskDisplayWindow: TaskDisplayWindow;
@@ -89,21 +87,6 @@ export function TaskPanel({
         <Plus size={14} strokeWidth={2.5} style={s.flexShrinkIcon} />
         <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
       </button>
-
-      <div style={s.taskActionsRow}>
-        <div style={s.taskActionsMeta}>
-          {tasks.length} {t("task.tasks")}
-        </div>
-        <button
-          type="button"
-          style={tasks.length > 0 ? s.taskActionBtn : s.taskActionBtnDisabled}
-          disabled={tasks.length === 0}
-          onClick={onDeleteAllTasks}
-        >
-          <Trash2 size={12} strokeWidth={2.2} />
-          <span>{t("task.clearAll")}</span>
-        </button>
-      </div>
 
       <div style={s.taskDivider} />
 

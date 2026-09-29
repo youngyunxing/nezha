@@ -47,7 +47,6 @@ export function ProjectPage({
   onNewTask,
   onSelectTask,
   onDeleteTask,
-  onDeleteAllTasks,
   onToggleTaskStar,
   onRenameTask,
   onGenerateTaskName,
@@ -100,7 +99,6 @@ export function ProjectPage({
   onNewTask: () => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
-  onDeleteAllTasks: () => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
   onGenerateTaskName: (id: string) => Promise<void>;
@@ -363,7 +361,6 @@ export function ProjectPage({
         onNewTask={handleNewTask}
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
-        onDeleteAllTasks={onDeleteAllTasks}
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
         taskDisplayWindow={taskDisplayWindow}

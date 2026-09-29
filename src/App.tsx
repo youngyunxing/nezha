@@ -1111,22 +1111,6 @@ function App() {
     deleteTasks([taskId]);
   }
 
-  async function handleDeleteAllTasks(project: Project) {
-    const projectTaskIds = tasks
-      .filter((task) => task.projectId === project.id)
-      .map((task) => task.id);
-    if (projectTaskIds.length === 0) return;
-    const ok = await confirm(
-      t("task.clearPrompt", { count: projectTaskIds.length, project: project.name }),
-      {
-        title: t("task.clearTitle"),
-        kind: "warning",
-      },
-    );
-    if (!ok) return;
-    deleteTasks(projectTaskIds);
-  }
-
   function handleToggleTaskStar(taskId: string) {
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
@@ -1422,7 +1406,6 @@ function App() {
                 updateProjectView(project.id, { selectedTaskId: id, isNewTask: false })
               }
               onDeleteTask={handleDeleteTask}
-              onDeleteAllTasks={() => handleDeleteAllTasks(project)}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
               onGenerateTaskName={handleGenerateTaskName}
