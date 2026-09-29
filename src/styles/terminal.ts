@@ -2,14 +2,17 @@ import type React from "react";
 
 export const terminal = {
   runHeader: {
-    padding: "16px 20px 8px",
+    /* 36px 高、内容居中 → 任务名中心落在 18px，与左侧两个面板头部（task.ts 的 panelHeader
+       36px、project-rail.css 里「添加项目」按钮中心 18px）连成同一条水平带。 */
+    height: 36,
+    padding: "0 20px",
     display: "flex",
     alignItems: "center",
     gap: 10,
     flexShrink: 0,
   },
   runMetricsRow: {
-    marginTop: 8,
+    marginTop: 0,
     display: "flex",
     gap: 12,
     flexWrap: "wrap" as const,

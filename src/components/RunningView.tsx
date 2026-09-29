@@ -536,7 +536,9 @@ export function RunningView({
       {(metrics || sessionPath) && (
         <div
           style={{
-            padding: "4px 20px 12px",
+            // 上下都留 8px：会话文件那一行到上面的任务名、到下面的分割线距离一致，
+            // 也比原来的 20/12 更紧（整体上移）。
+            padding: "8px 20px 8px",
             borderBottom: "1px solid var(--border-dim)",
             flexShrink: 0,
           }}
