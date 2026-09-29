@@ -23,6 +23,8 @@ import { RunningView } from "./RunningView";
 import { FileExplorer } from "./FileExplorer";
 import { FileViewer } from "./FileViewer";
 import { GitChanges } from "./GitChanges";
+import { BranchBar } from "./task-panel/BranchBar";
+import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { ProjectDrawer } from "./ProjectDrawer";
@@ -306,11 +308,6 @@ export function ProjectPage({
       />
       <TaskPanel
         project={project}
-        repoPath={displayedRepoPath}
-        branchRepoPath={gitContextPath}
-        repoSelectionLocked={repoSelectionLocked}
-        gitRoots={gitRoots}
-        onSelectRoot={setSelectedRoot}
         tasks={projectTasks}
         selectedId={selectedTaskId}
         isNewTask={isNewTask}
@@ -326,7 +323,6 @@ export function ProjectPage({
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
         taskDisplayWindow={taskDisplayWindow}
-        active={visible}
       />
       <div style={s.mainContent}>
         <div style={s.projectMainStage}>
@@ -472,6 +468,19 @@ export function ProjectPage({
                 currentTaskCreatedAt={currentTaskCreatedAt}
                 onFileSelect={handleDiffFileSelect}
                 width={rightPanelWidth}
+                topControls={
+                  <>
+                    {gitRoots.length > 1 && (
+                      <RepoSelector
+                        roots={gitRoots}
+                        selectedPath={displayedRepoPath}
+                        onSelect={setSelectedRoot}
+                        disabled={repoSelectionLocked}
+                      />
+                    )}
+                    <BranchBar projectRoot={project.path} repoPath={gitContextPath} active={visible} />
+                  </>
+                }
               />
             </ErrorBoundary>
           )}

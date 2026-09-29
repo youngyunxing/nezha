@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Pencil, Plus, Search, Terminal } from "lucide-react";
-import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
+import type { LocalClaudeSession, Project, Task, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
-import { BranchBar } from "./task-panel/BranchBar";
-import { RepoSelector } from "./task-panel/RepoSelector";
 import { TaskList } from "./task-panel/TaskList";
 import { useI18n } from "../i18n";
 import claudeLogo from "../assets/claude.svg";
@@ -13,11 +11,6 @@ import s from "../styles";
 
 export function TaskPanel({
   project,
-  repoPath,
-  branchRepoPath,
-  repoSelectionLocked,
-  gitRoots,
-  onSelectRoot,
   tasks,
   selectedId,
   isNewTask,
@@ -33,18 +26,8 @@ export function TaskPanel({
   onDeleteTask,
   onToggleTaskStar,
   taskDisplayWindow,
-  active = true,
 }: {
   project: Project;
-  /** 当前活动 git 根（用于 BranchBar / 多仓库工作区切换） */
-  repoPath: string;
-  /** BranchBar 的实际 git cwd；worktree 任务中为 worktreePath。 */
-  branchRepoPath: string;
-  /** worktree 任务选中时锁定仓库，避免界面同时操作另一个 sub-repo。 */
-  repoSelectionLocked: boolean;
-  /** 项目下所有 git 根。仅当 length > 1 时渲染 RepoSelector。 */
-  gitRoots: GitRoot[];
-  onSelectRoot: (path: string) => void;
   tasks: Task[];
   selectedId: string | null;
   isNewTask: boolean;
@@ -63,7 +46,6 @@ export function TaskPanel({
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   taskDisplayWindow: TaskDisplayWindow;
-  active?: boolean;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -88,19 +70,6 @@ export function TaskPanel({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-
-      {/* Repo selector (only multi-repo workspaces) */}
-      {gitRoots.length > 1 && (
-        <RepoSelector
-          roots={gitRoots}
-          selectedPath={repoPath}
-          onSelect={onSelectRoot}
-          disabled={repoSelectionLocked}
-        />
-      )}
-
-      {/* Branch bar */}
-      <BranchBar projectRoot={project.path} repoPath={branchRepoPath} active={active} />
 
       {/* New Task row */}
       <button

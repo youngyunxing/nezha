@@ -31,6 +31,8 @@ interface Props {
   currentTaskCreatedAt: number | null;
   onFileSelect: (filePath: string, staged: boolean, label: string) => void;
   width?: number;
+  /** 「变更」标题下方的插槽：分支条 / 子仓库切换 */
+  topControls?: React.ReactNode;
 }
 
 function fileName(path: string): string {
@@ -42,6 +44,7 @@ export function GitChanges({
   repoPath,
   currentTaskCreatedAt,
   onFileSelect,
+  topControls,
   width = 280,
 }: Props) {
   const { t } = useI18n();
@@ -313,6 +316,9 @@ export function GitChanges({
       <div style={s.gitChangesHeader}>
         <span style={s.gitChangesTitle}>{t("git.changes")}</span>
       </div>
+
+      {/* 分支 / 子仓库切换：从左侧任务面板搬过来的，它们本来就是 git 维度的控件 */}
+      {topControls}
 
       {/* Tabs */}
       <div style={s.gitChangesTabs}>
