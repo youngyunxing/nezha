@@ -18,7 +18,7 @@ import {
 import { PromptEditor, usePromptEditor, type PromptEditorContent } from "./new-task/PromptEditor";
 import { ImageAttachments } from "./new-task/ImageAttachments";
 import { TextAttachments, type PastedText } from "./new-task/TextAttachments";
-import { AgentPermSelector } from "./new-task/AgentPermSelector";
+import { ComposeToolbar } from "./new-task/ComposeToolbar";
 import { LaunchModeSelector, type LaunchMode } from "./new-task/LaunchModeSelector";
 import { TaskModelSelector } from "./new-task/TaskModelSelector";
 import { useI18n } from "../i18n";
@@ -41,10 +41,8 @@ interface PastedImage {
 export interface NewTaskDraft {
   promptHtml: string;
   agent: AgentType;
-  permMode: PermissionMode;
   model?: string;
   reasoningEffort?: string;
-  planMode: boolean;
   pastedImages: PastedImage[];
   pastedTexts?: PastedText[];
   launchMode?: LaunchMode;
@@ -105,12 +103,10 @@ export function NewTaskView({
   const { t } = useI18n();
   const { showToast } = useToast();
   const [agent, setAgent] = useState<AgentType>(initialDraft?.agent ?? "claude");
-  const [permMode, setPermMode] = useState<PermissionMode>(initialDraft?.permMode ?? "ask");
   const [model, setModel] = useState<string | undefined>(initialDraft?.model);
   const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(
     initialDraft?.reasoningEffort,
   );
-  const [planMode, setPlanMode] = useState(initialDraft?.planMode ?? false);
   const [launchMode, setLaunchMode] = useState<LaunchMode>(initialDraft?.launchMode ?? "local");
   const [baseBranch, setBaseBranch] = useState<string>(initialDraft?.baseBranch ?? "");
 
@@ -157,10 +153,8 @@ export function NewTaskView({
   const submittedRef = useRef(false);
   const draftDataRef = useRef({
     agent,
-    permMode,
     model,
     reasoningEffort,
-    planMode,
     pastedImages,
     pastedTexts,
     launchMode,
@@ -169,10 +163,8 @@ export function NewTaskView({
   useEffect(() => {
     draftDataRef.current = {
       agent,
-      permMode,
       model,
       reasoningEffort,
-      planMode,
       pastedImages,
       pastedTexts,
       launchMode,
@@ -180,10 +172,8 @@ export function NewTaskView({
     };
   }, [
     agent,
-    permMode,
     model,
     reasoningEffort,
-    planMode,
     pastedImages,
     pastedTexts,
     launchMode,
@@ -212,10 +202,8 @@ export function NewTaskView({
       onCacheDraft({
         promptHtml: editorContent.html,
         agent: data.agent,
-        permMode: data.permMode,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
-        planMode: data.planMode,
         pastedImages: data.pastedImages,
         pastedTexts: data.pastedTexts,
         launchMode: data.launchMode,
@@ -243,10 +231,10 @@ export function NewTaskView({
     return () => window.removeEventListener(APP_SETTINGS_CHANGED_EVENT, loadTaskSettings);
   }, []);
 
-  // Load default agent and permission mode from project config when project changes
+  // Load the default agent from project config when the project changes
   useEffect(() => {
     if (initialDraft) return;
-    invoke<{ agent: { default: string; default_permission_mode?: string } }>(
+    invoke<{ agent: { default: string } }>(
       "read_project_config",
       { projectPath: project.path },
     )
@@ -254,10 +242,6 @@ export function NewTaskView({
         const defaultAgent = cfg.agent.default;
         if (defaultAgent === "claude" || defaultAgent === "codex") {
           setAgent(defaultAgent);
-        }
-        const defaultPerm = cfg.agent.default_permission_mode;
-        if (defaultPerm === "ask" || defaultPerm === "auto_edit" || defaultPerm === "full_access") {
-          setPermMode(defaultPerm);
         }
       })
       .catch(() => {});
@@ -422,11 +406,10 @@ export function NewTaskView({
       }
     }
     submittedRef.current = true;
-    const finalPrompt = planMode && text ? `${text}\n\nPlease use plan mode.` : text;
     onSubmit({
-      prompt: finalPrompt,
+      prompt: text,
       agent,
-      permissionMode: permMode,
+      permissionMode: "full_access",
       model,
       reasoningEffort,
       images: pastedImages.map((img) => img.dataUrl),
@@ -561,15 +544,10 @@ export function NewTaskView({
         )}
 
         {/* Toolbar */}
-        <AgentPermSelector
+        <ComposeToolbar
           agent={agent}
-          permMode={permMode}
-          planMode={planMode}
           isEmpty={isEmpty}
           hasImages={pastedImages.length > 0 || pastedTexts.length > 0}
-          saveAsTodoDisabledReason={
-            launchMode === "worktree" ? t("newTask.worktreeMustSend") : undefined
-          }
           sendShortcutKeys={getSendShortcutKeys(sendShortcut)}
           modelSelector={
             <TaskModelSelector
@@ -591,8 +569,6 @@ export function NewTaskView({
             }
             setAgent(nextAgent);
           }}
-          onSetPermMode={setPermMode}
-          onTogglePlanMode={() => setPlanMode((v) => !v)}
           onAddImages={(dataUrls) => {
             setPastedImages((prev) => [
               ...prev,

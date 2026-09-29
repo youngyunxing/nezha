@@ -1,25 +1,20 @@
 import { useRef, type ReactNode } from "react";
 import {
-  BookmarkPlus,
   ChevronDown,
   Command,
   CornerDownLeft,
-  Hand,
   Image as ImageIcon,
-  Map as MapIcon,
   Plus,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Select from "@radix-ui/react-select";
-import type { AgentType, PermissionMode } from "../../types";
-import { permissionModeLabel } from "../../types";
+import type { AgentType } from "../../types";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
 const AGENTS: AgentType[] = ["claude", "codex"];
-const PERMS: PermissionMode[] = ["ask", "auto_edit", "full_access"];
 
 function agentLabel(agent: AgentType): string {
   return agent === "claude" ? "Claude Code" : "Codex";
@@ -62,32 +57,22 @@ function SendShortcutIcon({ keys }: { keys: string[] }) {
   );
 }
 
-export function AgentPermSelector({
+export function ComposeToolbar({
   agent,
-  permMode,
-  planMode,
   isEmpty,
   hasImages,
-  saveAsTodoDisabledReason,
   sendShortcutKeys,
   modelSelector,
   onSetAgent,
-  onSetPermMode,
-  onTogglePlanMode,
   onAddImages,
   onSubmit,
 }: {
   agent: AgentType;
-  permMode: PermissionMode;
-  planMode: boolean;
   isEmpty: boolean;
   hasImages: boolean;
-  saveAsTodoDisabledReason?: string;
   sendShortcutKeys: string[];
   modelSelector?: ReactNode;
   onSetAgent: (agent: AgentType) => void;
-  onSetPermMode: (mode: PermissionMode) => void;
-  onTogglePlanMode: () => void;
   onAddImages: (dataUrls: string[]) => void;
   onSubmit: (immediate: boolean) => void;
 }) {
@@ -95,10 +80,6 @@ export function AgentPermSelector({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const sendShortcutLabel = sendShortcutKeys.join("");
   const sendLabel = isEmpty && !hasImages ? t("newTask.startTerminal") : t("newTask.send");
-  const saveAsTodoDisabled = hasImages || !!saveAsTodoDisabledReason;
-  const saveAsTodoTitle = hasImages
-    ? t("newTask.imagesMustSend")
-    : saveAsTodoDisabledReason;
 
   async function handleImageFiles(files: FileList | null) {
     const images = Array.from(files ?? []).filter((file) => file.type.startsWith("image/"));
@@ -148,28 +129,6 @@ export function AgentPermSelector({
                 <ImageIcon size={15} strokeWidth={2} color="var(--text-muted)" />
                 {t("newTask.images")}
               </button>
-
-              <div style={s.toolbarMenuSeparator} />
-
-              <button
-                role="switch"
-                aria-checked={planMode}
-                className="branch-popover-item"
-                style={s.toolbarMenuSwitchItem}
-                onClick={onTogglePlanMode}
-              >
-                <span style={s.toolbarMenuItemLead}>
-                  <MapIcon size={15} strokeWidth={2} color="var(--text-muted)" />
-                  {t("newTask.planMode")}
-                </span>
-                <span
-                  style={planMode ? s.toolbarSwitchTrackOn : s.toolbarSwitchTrack}
-                >
-                  <span
-                    style={planMode ? s.toolbarSwitchThumbOn : s.toolbarSwitchThumb}
-                  />
-                </span>
-              </button>
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -214,84 +173,23 @@ export function AgentPermSelector({
             </Select.Content>
           </Select.Portal>
         </Select.Root>
-
-        <Select.Root value={permMode} onValueChange={(v) => onSetPermMode(v as PermissionMode)}>
-          <Select.Trigger style={s.toolbarBtn} aria-label={t("settings.defaultPermissionMode")}>
-            <Hand size={14} strokeWidth={2} color="var(--text-muted)" />
-            <Select.Value />
-            <Select.Icon>
-              <ChevronDown size={12} strokeWidth={2.5} style={s.toolbarChevron} />
-            </Select.Icon>
-          </Select.Trigger>
-          <Select.Portal>
-            <Select.Content position="popper" sideOffset={6} style={s.toolbarMenuContent}>
-              <Select.Viewport>
-                {PERMS.map((perm) => (
-                  <Select.Item
-                    key={perm}
-                    value={perm}
-                    className="branch-popover-item"
-                    style={s.toolbarMenuItem}
-                  >
-                    <Select.ItemText>{permissionModeLabel(perm, agent)}</Select.ItemText>
-                  </Select.Item>
-                ))}
-              </Select.Viewport>
-            </Select.Content>
-          </Select.Portal>
-        </Select.Root>
       </div>
 
       <div style={s.toolbarSpacer} />
 
       {modelSelector && <div style={s.toolbarModelSlot}>{modelSelector}</div>}
 
-      <div style={s.sendSplit}>
-        <button
-          style={s.sendBtnPrimary}
-          onClick={() => {
-            onSubmit(true);
-          }}
-          aria-label={`${sendLabel} (${sendShortcutLabel})`}
-          title={sendShortcutLabel}
-        >
-          <span>{sendLabel}</span>
-          <SendShortcutIcon keys={sendShortcutKeys} />
-        </button>
-        <Popover.Root>
-          <Popover.Trigger asChild>
-            <button
-              style={s.sendBtnMenu}
-              aria-label={t("newTask.moreComposeActions")}
-            >
-              <ChevronDown size={12} strokeWidth={2.5} />
-            </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content side="bottom" align="end" sideOffset={6} style={s.toolbarMenuContent}>
-              <Popover.Close asChild>
-                <button
-                  className="branch-popover-item"
-                  style={
-                    saveAsTodoDisabled
-                      ? s.toolbarTodoMenuItemDisabled
-                      : s.toolbarTodoMenuItem
-                  }
-                  disabled={saveAsTodoDisabled}
-                  title={saveAsTodoTitle}
-                  onClick={() => {
-                    if (saveAsTodoDisabled) return;
-                    if (!isEmpty) onSubmit(false);
-                  }}
-                >
-                  <BookmarkPlus size={13} strokeWidth={2} color="var(--text-muted)" />
-                  {t("newTask.saveAsTodo")}
-                </button>
-              </Popover.Close>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
+      <button
+        style={s.sendBtn}
+        onClick={() => {
+          onSubmit(true);
+        }}
+        aria-label={`${sendLabel} (${sendShortcutLabel})`}
+        title={sendShortcutLabel}
+      >
+        <span>{sendLabel}</span>
+        <SendShortcutIcon keys={sendShortcutKeys} />
+      </button>
     </div>
   );
 }

@@ -61,10 +61,6 @@ export function updateNode(
   return changed ? nextItems : items;
 }
 
-function isCompactBridge(children: TreeNode[] | null): children is [TreeNode] {
-  return children !== null && children.length === 1 && children[0].is_dir;
-}
-
 export async function loadTreeNodes(
   path: string,
   previousNodes: TreeNode[],
@@ -151,63 +147,12 @@ export function collectWatchTargets(nodes: TreeNode[], rootPath: string): Set<st
   function walk(items: TreeNode[]) {
     for (const node of items) {
       if (!node.is_dir || !node.expanded) continue;
-      for (const path of compactChainPaths(node)) targets.add(path);
+      targets.add(node.path);
       if (node.children) walk(node.children);
     }
   }
   walk(nodes);
   return targets;
-}
-
-/**
- * 紧凑模式下后端返回的条目 name 形如 "a/b/c"、path 指向链尾;链路中间目录
- * 也要 watch,否则中间目录出现第二个子项(需要解除压缩)时感知不到。
- * 普通条目原样返回自身路径。
- */
-function compactChainPaths(node: TreeNode): string[] {
-  const segments = node.name.split("/");
-  if (segments.length === 1) return [node.path];
-  const sep = pathSeparator(node.path);
-  const paths = [node.path];
-  let current = node.path;
-  for (let i = segments.length - 1; i > 0; i--) {
-    const idx = current.lastIndexOf(sep);
-    if (idx <= 0) break;
-    current = current.slice(0, idx);
-    paths.push(current);
-  }
-  return paths;
-}
-
-function compactNode(node: TreeNode): TreeNode {
-  if (!node.is_dir || !node.children) return node;
-
-  const chain = [node];
-  let target = node;
-  while (isCompactBridge(target.children)) {
-    target = target.children[0];
-    chain.push(target);
-  }
-
-  const children = target.children ? compactTreeNodes(target.children) : target.children;
-  if (chain.length === 1 && children === target.children) return node;
-
-  return {
-    ...target,
-    name: chain.map((part) => part.name).join("/"),
-    is_gitignored: chain.some((part) => part.is_gitignored),
-    children,
-  };
-}
-
-export function compactTreeNodes(nodes: TreeNode[]): TreeNode[] {
-  let changed = false;
-  const nextNodes = nodes.map((node) => {
-    const nextNode = compactNode(node);
-    if (nextNode !== node) changed = true;
-    return nextNode;
-  });
-  return changed ? nextNodes : nodes;
 }
 
 export function flattenVisible(

@@ -229,20 +229,6 @@ pub async fn read_dir_entries(path: String, project_path: String) -> Result<Vec<
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
-pub async fn read_compact_dir_entries(
-    path: String,
-    project_path: String,
-) -> Result<Vec<FsEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        validate_path_within(&path, &project_path, true)?;
-        let entries = read_dir_entries_raw(&path)?;
-        read_compact_dir_entries_blocking(entries, &path)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
 fn read_dir_entries_blocking(path: &str) -> Result<Vec<FsEntry>, String> {
     let mut result = read_dir_entries_raw(path)?;
     mark_gitignored(&mut result, path);
@@ -394,51 +380,6 @@ fn mark_gitignored(result: &mut [FsEntry], dir: &str) {
     let mut matcher = IgnoreMatcher::new(dir);
     for entry in result {
         entry.is_gitignored = matcher.is_ignored(Path::new(&entry.path), entry.is_dir);
-    }
-}
-
-fn read_compact_dir_entries_blocking(
-    entries: Vec<FsEntry>,
-    dir: &str,
-) -> Result<Vec<FsEntry>, String> {
-    let mut matcher = IgnoreMatcher::new(dir);
-    entries
-        .into_iter()
-        .map(|mut entry| {
-            entry.is_gitignored = matcher.is_ignored(Path::new(&entry.path), entry.is_dir);
-            // Gitignored dirs (node_modules, dist, …) are rendered as plain grey folders;
-            // probing them for single-child chains would mean a readdir per package.
-            if entry.is_dir && !entry.is_gitignored {
-                compact_dir_entry(entry, &mut matcher)
-            } else {
-                Ok(entry)
-            }
-        })
-        .collect()
-}
-
-fn compact_dir_entry(mut entry: FsEntry, matcher: &mut IgnoreMatcher) -> Result<FsEntry, String> {
-    let mut names = vec![entry.name.clone()];
-    let mut path = entry.path.clone();
-
-    loop {
-        let mut children = read_dir_entries_raw(&path)?;
-        if children.len() != 1 || !children[0].is_dir {
-            entry.name = names.join("/");
-            entry.path = path;
-            return Ok(entry);
-        }
-
-        let child = children.remove(0);
-        // Stop before folding an ignored dir into the chain: the compacted entry is
-        // not gitignored by construction, so an ignored tail must stay a separate node.
-        if matcher.is_ignored(Path::new(&child.path), true) {
-            entry.name = names.join("/");
-            entry.path = path;
-            return Ok(entry);
-        }
-        names.push(child.name);
-        path = child.path;
     }
 }
 

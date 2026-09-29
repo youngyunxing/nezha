@@ -180,7 +180,6 @@ pub fn run() {
             pty::open_shell,
             pty::kill_shell,
             fs::read_dir_entries,
-            fs::read_compact_dir_entries,
             fs_watcher::watch_dir,
             fs_watcher::unwatch_dir,
             fs::open_in_system_file_manager,
