@@ -765,26 +765,11 @@ export const panels = {
   fileSearchBox: {
     ...searchFieldBase,
   },
-  fileSearchTypeBox: {
-    ...searchFieldBase,
-    width: "100%",
-    color: "var(--text-primary)",
-    fontFamily: "var(--font-ui)",
-    fontSize: 12.5,
-    textAlign: "left" as const,
-    cursor: "pointer",
-    outline: "none",
-  },
   fileSearchTypeValue: {
-    flex: 1,
     minWidth: 0,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
-  },
-  fileSearchTypeChevron: {
-    flexShrink: 0,
-    color: "var(--text-hint)",
   },
   fileSearchIcon: {
     flexShrink: 0,
@@ -815,16 +800,6 @@ export const panels = {
     justifyContent: "center",
     cursor: "pointer",
     flexShrink: 0,
-  },
-  fileSearchTypeContent: {
-    zIndex: 2000,
-    background: "var(--bg-sidebar)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 8,
-    boxShadow: "var(--shadow-md)",
-    padding: 4,
-    minWidth: 168,
-    overflow: "hidden",
   },
   fileSearchTypeList: {
     maxHeight: 260,

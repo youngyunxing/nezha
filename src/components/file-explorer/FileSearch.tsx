@@ -1,6 +1,6 @@
 import * as Popover from "@radix-ui/react-popover";
 import { invoke } from "@tauri-apps/api/core";
-import { Check, ChevronDown, Filter, Search, X } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import s from "../../styles";
 import { useI18n } from "../../i18n";
@@ -158,6 +158,7 @@ export type FileSearchState = ReturnType<typeof useFileSearch>;
 
 export function FileSearchBar({ search }: { search: FileSearchState }) {
   const { t } = useI18n();
+  const [typeOpen, setTypeOpen] = useState(false);
   const firstSelected = FILE_FILTERS.find((filter) => filter.id === search.selectedIds[0]);
   const typeLabel =
     search.selectedIds.length === 0 || !firstSelected
@@ -207,12 +208,11 @@ export function FileSearchBar({ search }: { search: FileSearchState }) {
         )}
       </div>
 
-      <Popover.Root>
+      <Popover.Root open={typeOpen} onOpenChange={setTypeOpen}>
         <Popover.Trigger asChild>
-          <button type="button" aria-label={t("file.searchTypeFilter")} style={s.fileSearchTypeBox}>
-            <Filter size={13} style={s.fileSearchIcon} />
+          <button type="button" aria-label={t("file.searchTypeFilter")} style={s.settingsSelectTrigger}>
             <span style={s.fileSearchTypeValue}>{typeLabel}</span>
-            <ChevronDown size={12} style={s.fileSearchTypeChevron} />
+            <ChevronDown size={13} style={typeOpen ? s.settingsSelectIconOpen : s.settingsSelectIcon} />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -220,7 +220,7 @@ export function FileSearchBar({ search }: { search: FileSearchState }) {
             side="bottom"
             align="start"
             sideOffset={4}
-            style={s.fileSearchTypeContent}
+            style={{ ...s.settingsSelectContent, minWidth: "var(--radix-popover-trigger-width)" }}
           >
             <button
               type="button"
