@@ -25,7 +25,12 @@ import {
   DEFAULT_TASK_DISPLAY_WINDOW,
   normalizeTaskDisplayWindow,
 } from "./types";
-import { DEFAULT_UI_FONT, getDefaultMonoFont, isAutoDefaultMonoFont } from "./types";
+import {
+  DEFAULT_UI_FONT,
+  defaultTaskName,
+  getDefaultMonoFont,
+  isAutoDefaultMonoFont,
+} from "./types";
 import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
 import { load, save } from "./utils";
@@ -948,7 +953,7 @@ function App() {
       id: taskId,
       projectId: project.id,
       prompt,
-      name: name ?? (prompt ? undefined : `task-${taskId}`),
+      name: name ?? (prompt ? undefined : defaultTaskName(agent, taskId)),
       agent,
       permissionMode,
       status: "pending",

@@ -206,6 +206,14 @@ export interface LocalClaudeSession {
   sizeBytes: number;
 }
 
+/** 不填名字时的占位名：按 agent 前缀 + 任务 id（claude-xxx / codex-xxx / terminal-xxx）。
+ *  这个格式也是自动起名的判据（见 App 里 /^(?:claude|codex)-\d+$/），所以快捷按钮
+ *  建出来的任务也能在跑完第一轮后自动拿到标题。 */
+export function defaultTaskName(agent: AgentType, id: string): string {
+  const prefix = agent === "claude" ? "claude" : agent === "codex" ? "codex" : "terminal";
+  return `${prefix}-${id}`;
+}
+
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return (
     status === "pending" ||

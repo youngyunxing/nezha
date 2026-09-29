@@ -49,3 +49,15 @@ describe("快捷创建按钮的存取", () => {
     expect(b.command).toBeUndefined();
   });
 });
+
+describe("占位任务名", () => {
+  it("按 agent 前缀 + 任务 id，快捷按钮建的任务也能被自动起名认出来", async () => {
+    const { defaultTaskName } = await import("../types");
+    expect(defaultTaskName("claude", "1790689805487")).toBe("claude-1790689805487");
+    expect(defaultTaskName("codex", "1")).toBe("codex-1");
+    expect(defaultTaskName("shell", "1")).toBe("terminal-1");
+    // 自动起名的判据要能认出 claude/codex 这两种
+    expect(/^(?:claude|codex)-\d+$/.test(defaultTaskName("claude", "1790689805487"))).toBe(true);
+    expect(/^(?:claude|codex)-\d+$/.test(defaultTaskName("shell", "1790689805487"))).toBe(false);
+  });
+});

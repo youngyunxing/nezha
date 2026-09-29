@@ -6,6 +6,7 @@ import { Check, ChevronDown, Plus, Terminal, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
+import { defaultTaskName } from "../../types";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
@@ -127,8 +128,7 @@ export function NewTaskDialog({
     };
   }, [isolated, projectPath, repoPath]);
 
-  const agentPrefix = agent === "claude" ? "claude" : agent === "codex" ? "codex" : "terminal";
-  const defaultName = `${agentPrefix}-${nameId}`;
+  const defaultName = defaultTaskName(agent, nameId);
   const canSubmit = !isolated || !!baseBranch;
 
   function submit() {
