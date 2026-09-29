@@ -203,8 +203,41 @@ fn release_claimed_session_paths(task_manager: &TaskManager, task_id: &str) {
 // ── 共享 PTY 辅助函数 ────────────────────────────────────────────────────────
 
 /// 设置 CommandBuilder 的标准环境变量。
+/// Claude Code 给自己与它派生的子进程打的一批「会话级」环境变量。Nezha 是终端宿主，
+/// 起的是**顶层**会话：这些变量一旦从 app 自身的进程环境泄漏进 PTY（比如 app 恰好是在
+/// 某个 Claude Code 会话里被拉起来的），claude 就会以为自己是某个父会话的子进程——
+/// 最直接的后果是 `CLAUDE_CODE_CHILD_SESSION` 关掉 transcript 写入
+/// （「⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker」），
+/// 于是续跑的对话不再落盘。
+/// 逐条摘掉；但用户登录 shell 里显式导出的同名变量以登录 shell 为准，不摘。
+const CLAUDE_SESSION_SCOPED_ENV: &[&str] = &[
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_CODE_SSE_PORT",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_PID",
+];
+
+/// 摘掉从 app 进程环境泄漏进来的会话级变量；登录 shell 显式导出的同名变量不摘
+/// （随后由登录 shell 环境覆盖写入，见 setup_env）。
+fn strip_leaked_claude_session_env(cmd: &mut CommandBuilder, login_env: &[(String, String)]) {
+    for key in CLAUDE_SESSION_SCOPED_ENV {
+        if !login_env.iter().any(|(k, _)| k.as_str() == *key) {
+            cmd.env_remove(key);
+        }
+    }
+}
+
 fn setup_env(cmd: &mut CommandBuilder) {
     let login_env = crate::app_settings::get_login_shell_env();
+
+    // 摘变量必须在叠加登录 shell 环境之前：这样 ~/.zshrc 里显式导出的同名变量仍然生效。
+    strip_leaked_claude_session_env(cmd, login_env);
+
     for (key, value) in login_env {
         cmd.env(key, value);
     }
@@ -602,6 +635,36 @@ fn spawn_fork_task_process(
 mod fork_command_tests {
     use super::*;
     use std::ffi::OsStr;
+
+    #[test]
+    fn strips_claude_session_env_leaked_from_the_app_process() {
+        // app 若是在某个 Claude Code 会话里被拉起，它自己的进程环境就带着这些变量，
+        // 不摘的话 claude 会以为自己是子进程并关掉 transcript 写入。
+        let mut command = CommandBuilder::new("claude");
+        command.env("CLAUDE_CODE_CHILD_SESSION", "1");
+        command.env("CLAUDE_CODE_SESSION_ID", "leaked");
+        command.env("CLAUDE_PID", "1234");
+
+        strip_leaked_claude_session_env(&mut command, &[]);
+
+        assert_eq!(command.get_env("CLAUDE_CODE_CHILD_SESSION"), None);
+        assert_eq!(command.get_env("CLAUDE_CODE_SESSION_ID"), None);
+        assert_eq!(command.get_env("CLAUDE_PID"), None);
+    }
+
+    #[test]
+    fn keeps_session_env_names_the_login_shell_also_exports() {
+        let mut command = CommandBuilder::new("claude");
+        command.env("CLAUDECODE", "1");
+
+        // 用户自己导出过同名变量时不摘（setup_env 随后用登录 shell 的值覆盖）。
+        strip_leaked_claude_session_env(
+            &mut command,
+            &[("CLAUDECODE".to_string(), "0".to_string())],
+        );
+
+        assert_eq!(command.get_env("CLAUDECODE"), Some(OsStr::new("1")));
+    }
 
     #[test]
     fn builds_codex_fork_arguments() {
