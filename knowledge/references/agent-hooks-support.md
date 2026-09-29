@@ -127,12 +127,20 @@ Codex 端关键差异：
 `event_watcher.rs::dispatch()` 把归一后的 event 映射为任务状态：
 
 ```
-SessionStart                       → handle_session_start (注册 session + emit task-session)
-Notification | PermissionRequest   → task-status = input_required   (等待用户/审批)
-UserPromptSubmit | PostToolUse     → task-status = running           (复位 input_required)
-Stop                               → task-status = input_required    (本轮结束、等输入)
-SubagentStop | 其它                → 不处理 (交 PTY exit monitor 处理终态)
+SessionStart                       → handle_session_start (注册 session + emit task-session，不改状态)
+Notification                       → 仅 permission_prompt / elicitation_dialog → input_required
+                                     (idle_prompt 等忽略：那只是 Stop 后等输入 ~60s 的延迟通知，
+                                      覆盖会把 Stop 已发的 awaiting_review 打掉)
+PermissionRequest (Codex)          → input_required
+UserPromptSubmit | PostToolUse     → running (复位 input_required；工具审批不触发
+                                     UserPromptSubmit，只能靠 PostToolUse 复位)
+Stop                               → awaiting_review (本轮结束、进程不退、等用户验收)
+SubagentStop | 其它                → 不处理 (终态交 PTY exit monitor，覆写 done/failed)
 ```
+
+> 除 hook 之外还有两处会写活动态：PTY spawn 成功时无条件发一次 `running`
+> （run_task / resume_task / fork_task），以及非 hook 回退路径盯 session 文件的
+> `sync_waiting_for_user`（有待确认的工具调用 / 在等用户回复 → input_required，否则 running）。
 
 > `emit_active_status` 带 `child_handles` 存活守卫：进程真退出后不再误发 `input_required`/`running`，终态统一归 PTY exit monitor。
 
