@@ -332,7 +332,12 @@ export function RunningView({
     >
       {/* Header */}
       <div
-        style={s.runHeader}
+        style={{
+          ...s.runHeader,
+          // 纯终端没有指标行（没有会话文件），分割线就没人画了 —— 补在任务名这一行下面，
+          // 和左侧面板头部的分割线一样落在 36px 处。有指标行时由指标行负责那条线。
+          ...(metrics || sessionPath ? null : { borderBottom: "1px solid var(--border-dim)" }),
+        }}
         onMouseEnter={() => setHoverHeader(true)}
         onMouseLeave={() => setHoverHeader(false)}
       >
