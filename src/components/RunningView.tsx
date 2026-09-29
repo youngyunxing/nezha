@@ -300,6 +300,28 @@ export function RunningView({
     };
   }, [sessionPath, isActive, projectActive]);
 
+  // 终端面板抽成变量：正常运行要用，纯终端任务在「异常中断」态也要用它显示上次屏幕
+  // （否则重启后只剩一条横幅 +「没有会话记录」，看不到记录）。
+  const terminalPane = (
+    <div style={s.terminalContainer}>
+      <TerminalView
+        key={`${task.id}-${runCount}`}
+        onInput={onInput}
+        onResize={onResize}
+        onRegisterTerminal={onRegisterTerminal}
+        onReady={onTerminalReady}
+        onSnapshot={onSnapshot}
+        themeVariant={themeVariant}
+        terminalFontSize={terminalFontSize}
+        terminalScrollback={terminalScrollback}
+        monoFontFamily={monoFontFamily}
+        isActive={visible}
+        initialData={restoreState.initialData}
+        initialSnapshot={restoreState.initialSnapshot}
+      />
+    </div>
+  );
+
   return (
     <div
       style={{
@@ -630,6 +652,8 @@ export function RunningView({
           </div>
           {sessionPath ? (
             <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          ) : task.agent === "shell" ? (
+            terminalPane
           ) : (
             <div style={s.interruptedNoSessionPane}>
               {t(isDetached ? "running.detachedNoSession" : "running.interruptedNoSession")}
@@ -637,23 +661,7 @@ export function RunningView({
           )}
         </div>
       ) : isActive || !sessionPath ? (
-        <div style={s.terminalContainer}>
-          <TerminalView
-            key={`${task.id}-${runCount}`}
-            onInput={onInput}
-            onResize={onResize}
-            onRegisterTerminal={onRegisterTerminal}
-            onReady={onTerminalReady}
-            onSnapshot={onSnapshot}
-            themeVariant={themeVariant}
-            terminalFontSize={terminalFontSize}
-            terminalScrollback={terminalScrollback}
-            monoFontFamily={monoFontFamily}
-            isActive={visible}
-            initialData={restoreState.initialData}
-            initialSnapshot={restoreState.initialSnapshot}
-          />
-        </div>
+        terminalPane
       ) : (
         <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
       )}

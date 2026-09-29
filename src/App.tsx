@@ -303,12 +303,22 @@ function App() {
   );
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // 终端管理器要在回调里读最新的任务表（判断任务在不在跑、属于哪个项目）
+  const tasksRef = useRef<Task[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [projectViews, setProjectViews] = useState<Record<string, ProjectViewState>>({});
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
 
-  const tm = useTerminalManager();
+  tasksRef.current = tasks;
+
+  const tm = useTerminalManager({
+    resolveTaskContext: (taskId) => {
+      const task = tasksRef.current.find((t) => t.id === taskId);
+      if (!task) return null;
+      return { projectId: task.projectId, live: isActiveTaskStatus(task.status) };
+    },
+  });
   const pendingResumeStartsRef = useRef<Record<string, () => void>>({});
 
   const formatSaveProjectsError = useCallback(
@@ -1215,6 +1225,10 @@ function App() {
 
       taskIds.forEach((taskId) => {
         delete pendingResumeStartsRef.current[taskId];
+        const owner = prev.find((task) => task.id === taskId);
+        if (owner) {
+          invoke("delete_task_screen", { projectId: owner.projectId, taskId }).catch(() => {});
+        }
       });
 
       deletingTasks

@@ -159,6 +159,48 @@ pub fn load_project_tasks(project_id: String) -> Result<Vec<Task>, String> {
     })
 }
 
+/// 终端屏幕快照落盘位置。任务记录按 project_id 存放，屏幕也跟着走同一目录，
+/// 删项目时一起留着（和会话记录一个待遇）。
+fn task_screen_path(project_id: &str, task_id: &str) -> Result<PathBuf, String> {
+    Ok(project_dir(project_id)?.join("screens").join(format!("{task_id}.txt")))
+}
+
+/// 保存某任务的终端屏幕（xterm 序列化结果）。空内容视为删除。
+#[tauri::command]
+pub fn save_task_screen(
+    project_id: String,
+    task_id: String,
+    content: String,
+) -> Result<(), String> {
+    let path = task_screen_path(&project_id, &task_id)?;
+    if content.is_empty() {
+        let _ = fs::remove_file(&path);
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    atomic_write(&path, &content)
+}
+
+/// 读回某任务的终端屏幕；没有则 None。
+#[tauri::command]
+pub fn load_task_screen(project_id: String, task_id: String) -> Result<Option<String>, String> {
+    let path = task_screen_path(&project_id, &task_id)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(&path).map(Some).map_err(|e| e.to_string())
+}
+
+/// 任务被删除时清掉它的屏幕快照。
+#[tauri::command]
+pub fn delete_task_screen(project_id: String, task_id: String) -> Result<(), String> {
+    let path = task_screen_path(&project_id, &task_id)?;
+    let _ = fs::remove_file(&path);
+    Ok(())
+}
+
 /// 项目目录里记一份原始路径。任务记录按 project_id 存放，而 id 是「添加项目」
 /// 那一刻生成的；把路径落盘后，「删掉项目再用同一目录重新添加」才能找回旧记录。
 #[derive(Serialize, Deserialize)]

@@ -42,7 +42,12 @@ function SelectField({
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content position="popper" sideOffset={4} style={s.settingsSelectContent}>
+        {/* z-index 要高于 forkDialogOverlay/Box(2100/2101)，否则弹层被压在弹窗底下点不到 */}
+        <Select.Content
+          position="popper"
+          sideOffset={4}
+          style={{ ...s.settingsSelectContent, zIndex: 2200 }}
+        >
           <Select.Viewport style={s.settingsSelectViewport}>
             {options.map((option) => {
               const selected = option.value === value;

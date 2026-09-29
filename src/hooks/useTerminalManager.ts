@@ -6,6 +6,8 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB per task (in-memory limit)
 const MAX_BUFFER_CHUNKS = 256; // compact when chunks array exceeds this
 const DRAIN_FRAME_BUDGET = 128 * 1024; // 每帧最多处理 128KB，避免单帧写入时间过长
+/** 屏幕落盘的最小间隔：频繁写盘没必要，退出时最多丢这几秒。 */
+const SCREEN_SAVE_MIN_INTERVAL_MS = 3000;
 
 // ── Buffer types & helpers ───────────────────────────────────────────────────
 
@@ -16,6 +18,12 @@ interface TaskBuffer {
 }
 
 export type TerminalWriteFn = (data: string, callback?: () => void) => void;
+
+export interface TaskScreenContext {
+  projectId: string;
+  /** 任务是否还在跑（有活进程）。不在跑时屏幕内容以磁盘快照为准。 */
+  live: boolean;
+}
 
 interface TerminalWriteState {
   pending: string[];
@@ -68,7 +76,14 @@ function joinBufferFrom(buf: TaskBuffer, absOffset: number): string {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useTerminalManager() {
+export function useTerminalManager(options?: {
+  /** 落盘/读回屏幕的上下文；任务已被删则返回 null。由 App 注入（它知道 tasks/projects）。 */
+  resolveTaskContext?: (taskId: string) => TaskScreenContext | null;
+}) {
+  const resolveTaskContextRef = useRef(options?.resolveTaskContext);
+  resolveTaskContextRef.current = options?.resolveTaskContext;
+  // 每任务最后落盘的屏幕（用于去重与节流）
+  const screenSavedRef = useRef<Record<string, { snapshot: string; at: number }>>({});
   const taskBufferRef = useRef<Record<string, TaskBuffer>>({});
   const terminalSnapshotRef = useRef<Record<string, { snapshot: string; bufferLength: number }>>(
     {},
@@ -214,6 +229,21 @@ export function useTerminalManager() {
       const state = resetTerminalWriteState(taskId);
       if (fn) {
         terminalWriteRefs.current[taskId] = fn;
+        // 任务已经不在跑（重启后、或异常中断）：把落盘的屏幕回放上来——这就是「关掉
+        // 之后还能看到上次内容」。仍在跑的任务不回放，否则会与实时输出叠在一起。
+        const context = resolveTaskContextRef.current?.(taskId);
+        const buffered = taskBufferRef.current[taskId];
+        const hasBufferedOutput = !!buffered && buffered.chunks.length > 0;
+        if (context && !hasBufferedOutput) {
+          invoke<string | null>("load_task_screen", {
+            projectId: context.projectId,
+            taskId,
+          })
+            .then((screen) => {
+              if (screen && terminalWriteRefs.current[taskId] === fn) fn(screen);
+            })
+            .catch(() => {});
+        }
       } else {
         delete terminalWriteRefs.current[taskId];
       }
@@ -244,6 +274,22 @@ export function useTerminalManager() {
       snapshot,
       bufferLength: buf ? Math.max(0, getBufferAbsLen(buf) - pendingLen) : 0,
     };
+
+    // 顺带落盘：内存里那份只够同一次运行内重挂载用，磁盘这份是给「重启后还能看到上次
+    // 屏幕」用的。内容没变、或离上次写入太近就跳过。
+    const context = resolveTaskContextRef.current?.(taskId);
+    if (!context || !snapshot) return;
+    const saved = screenSavedRef.current[taskId];
+    const now = Date.now();
+    if (saved && (saved.snapshot === snapshot || now - saved.at < SCREEN_SAVE_MIN_INTERVAL_MS)) {
+      return;
+    }
+    screenSavedRef.current[taskId] = { snapshot, at: now };
+    invoke("save_task_screen", {
+      projectId: context.projectId,
+      taskId,
+      content: snapshot,
+    }).catch(() => {});
   }, []);
 
   const getTaskRestoreState = useCallback((taskId: string) => {
