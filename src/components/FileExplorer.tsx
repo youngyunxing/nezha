@@ -206,8 +206,8 @@ export function FileExplorer({
    */
   const refreshDir = useCallback(
     async (dirPath: string) => {
-      // 紧凑模式下链路中间目录(name 为 "a/b/c" 的压缩条目的中段)不是树节点;
-      // 向上回退到最近的真实层级整层重拉,让后端重新计算压缩链。
+      // 事件目录可能已经不在树里(刚被删除,或该层从未加载过):向上回退到最近的
+      // 已存在层级整层重拉,而不是空跑一次读目录。
       let target = dirPath;
       while (target !== projectPath && !findNode(nodesRef.current, target)) {
         const parent = parentPathOf(target);
