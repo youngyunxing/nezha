@@ -147,13 +147,6 @@ export function firstGrapheme(input: string): string {
   return graphemes(trimmed)[0] ?? "";
 }
 
-/** 截取前 max 个 grapheme,并去掉首尾空白。 */
-export function takeGraphemes(input: string, max: number): string {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
-  return graphemes(trimmed).slice(0, max).join("");
-}
-
 function graphemeWidth(grapheme: string): number {
   return WIDE_GRAPHEME_RE.test(grapheme) ? WIDE_GRAPHEME_WIDTH : 1;
 }

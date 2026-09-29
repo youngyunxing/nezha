@@ -119,10 +119,6 @@ export function fileDir(path: string): string {
   return parts.length > 1 ? parts.slice(0, -1).join("/") : "";
 }
 
-export function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : pluralLabel}`;
-}
-
 function resolveStatus(file: DiffFile): DiffFileStatus {
   const headerJoined = file.headerLines.join("\n");
   if (file.renameFrom && file.renameTo) return "renamed";

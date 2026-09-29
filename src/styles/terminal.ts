@@ -213,14 +213,6 @@ export const terminal = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
   },
-  interruptedBannerText: {
-    fontSize: 12,
-    lineHeight: 1.5,
-    color: "var(--text-muted)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-  },
   interruptedBannerActions: {
     display: "inline-flex",
     alignItems: "center",

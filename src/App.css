@@ -1,7 +1,6 @@
 @import "./styles/themes.css";
 @import "./styles/font-selector.css";
 @import "./styles/git-history.css";
-@import "./styles/layout.css";
 @import "./styles/file-explorer.css";
 @import "./styles/app-settings.css";
 @import "./styles/project-rail.css";
@@ -806,34 +805,6 @@ body {
 
 .file-viewer-code .shiki .line:hover {
   background: var(--code-line-hover-bg);
-}
-
-/* Makefile target run button */
-.make-run-btn {
-  position: absolute;
-  left: 40px;
-  top: 0;
-  width: 16px;
-  height: 20px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  padding: 0;
-  color: var(--success);
-  font-size: 13px;
-  opacity: 0.75;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-  transition:
-    opacity 0.1s,
-    transform 0.1s;
-}
-
-.make-run-btn:hover {
-  opacity: 1;
-  transform: scale(1.2);
 }
 
 /* ── CodeMirror 6 – VS Code style floating search panel ─────────── */

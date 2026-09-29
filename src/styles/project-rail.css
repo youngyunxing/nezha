@@ -93,7 +93,6 @@
   border: 2px solid var(--rail-indicator-border, var(--bg-sidebar));
   box-sizing: border-box;
   background: var(--color-success);
-  /* 必须高于 .rail-item-avatar（z-index:1），否则被抬层的头像盖住 */
   z-index: 2;
 }
 

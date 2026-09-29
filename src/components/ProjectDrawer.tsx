@@ -5,7 +5,6 @@ import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
 import { Moon, Settings, Sun } from "lucide-react";
 import { AppSettingsDialog } from "./AppSettingsDialog";
-import { OPEN_APP_SETTINGS_EVENT, type OpenAppSettingsDetail } from "./app-settings/types";
 import type {
   FontFamily,
   TaskDisplayWindow,
@@ -362,18 +361,6 @@ export function ProjectDrawer({
 
   const { t } = useI18n();
   const isDark = themeVariant === "dark" || themeVariant === "midnight";
-
-  // `OPEN_APP_SETTINGS_EVENT` 只在作用域匹配时响应,避免多个同时挂载的 ProjectPage
-  // 各开一个设置对话框(见 OpenAppSettingsDetail)。
-  useEffect(() => {
-    const open = (event: Event) => {
-      const target = (event as CustomEvent<OpenAppSettingsDetail | undefined>).detail?.projectId;
-      if (target !== activeProjectId) return;
-      setShowAppSettings(true);
-    };
-    window.addEventListener(OPEN_APP_SETTINGS_EVENT, open);
-    return () => window.removeEventListener(OPEN_APP_SETTINGS_EVENT, open);
-  }, [activeProjectId]);
 
   return (
     <div className="rail-drawer">

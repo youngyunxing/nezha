@@ -15,28 +15,10 @@ export const font = {
     border: "1px solid var(--border-dim)",
     background: "var(--bg-subtle)",
   },
-  fontPreviewSection: {
-    padding: "14px 18px",
-    borderRadius: 8,
-    border: "1px solid var(--border-dim)",
-    background: "var(--bg-subtle)",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-  },
   fontPreviewLabel: {
     fontSize: 12,
     fontWeight: 600,
     color: "var(--text-secondary)",
-  },
-  fontPreviewInner: {
-    padding: "10px 12px",
-    borderRadius: 6,
-    border: "1px solid var(--border-dim)",
-    background: "var(--bg-card)",
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 6,
   },
   fontInlinePreview: {
     marginTop: 4,
@@ -65,15 +47,6 @@ export const font = {
     fontSize: 13,
     color: "var(--text-primary)",
     lineHeight: 1.5,
-  },
-  fontPreviewCode: {
-    color: "var(--text-secondary)",
-    lineHeight: 1.5,
-  },
-  fontPreviewDivider: {
-    height: 1,
-    background: "var(--border-dim)",
-    margin: "2px 0",
   },
   fontCodePreviewWindow: {
     margin: 0,

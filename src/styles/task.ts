@@ -97,7 +97,6 @@ export const task = {
     color: "var(--text-primary)",
     fontSize: 12.5,
   },
-  newTaskRow: newTaskRowBase,
   newTaskRowActive: {
     ...newTaskRowBase,
     background: "var(--control-active-bg)",
@@ -215,15 +214,6 @@ export const task = {
     fontFamily: "var(--font-ui)",
     outline: "none",
     boxSizing: "border-box" as const,
-  },
-  branchOptGroup: {
-    fontSize: 10.5,
-    fontWeight: 700,
-    color: "var(--text-hint)",
-    letterSpacing: 0.7,
-    padding: "6px 10px 3px",
-    textTransform: "uppercase" as const,
-    userSelect: "none" as const,
   },
   branchDialogError: { fontSize: 12, color: "var(--color-error)", padding: "4px 0" },
   taskListScroll: {
@@ -352,17 +342,5 @@ export const task = {
     color: "var(--text-hint)",
     cursor: "pointer",
     transition: "opacity 0.12s ease, color 0.12s ease",
-  },
-  taskRenameInput: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12.5,
-    fontWeight: 500,
-    color: "var(--text-primary)",
-    background: "var(--bg-input)",
-    border: "1px solid var(--control-active-fg)",
-    borderRadius: 4,
-    padding: "1px 5px",
-    outline: "none",
   },
 } satisfies Record<string, React.CSSProperties>;

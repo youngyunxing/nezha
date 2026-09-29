@@ -64,6 +64,8 @@ ErrorBoundary  (全局兜底)
             └── GitHistory → GitDiffViewer     — 提交日志、提交差异查看器
 ```
 
+> **参考资料**：`knowledge/references/agent-hooks-support.md` 记录了 Claude Code / Codex 的 hook 事件、payload 字段与配置方式的对照，改 hook 链路前先读它。分支与打包约定见 `FORK.md`。
+>
 > **复用小组件**（被多处引用）：`StatusIcon` / `IconButton` / `ProjectAvatar`。
 >
 > **已拆出的子目录**（`src/components/<dir>/`）：`app-settings/` · `task-panel/` · `new-task/` · `file-explorer/` · `file-viewer/` · `git-diff/` · `git-view/` · `skill-hub/` · `project-rail/`——这些目录里是已经从主组件拆出来的子部件，新增功能优先继续往这些子目录加，不要回灌到根目录大文件里。
