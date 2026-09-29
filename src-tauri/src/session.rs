@@ -521,7 +521,7 @@ fn assistant_message_requests_user_input(payload: Option<&serde_json::Value>) ->
 
 // ── Claude Code 会话监视器 ────────────────────────────────────────────────────
 
-fn claude_sessions_dir_for_project(project_path: &str) -> Option<PathBuf> {
+pub(crate) fn claude_sessions_dir_for_project(project_path: &str) -> Option<PathBuf> {
     let home = crate::platform::home_dir()?;
     let encoded: String = project_path
         .chars()

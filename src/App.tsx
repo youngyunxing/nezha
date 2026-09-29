@@ -665,11 +665,15 @@ function App() {
           status: "pending" as TaskStatus,
           attentionRequestedAt: undefined,
         };
-        if (sessionId) {
-          invokeResumeTask(pendingTask, project, sessionId);
-          return;
-        }
-        invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
+        // 先预塞屏幕记录再拉起进程，顺序不能反（见 seedScreenBeforeRestore）。
+        void (async () => {
+          await seedScreenBeforeRestore(task);
+          if (sessionId) {
+            invokeResumeTask(pendingTask, project, sessionId);
+            return;
+          }
+          invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
+        })();
       });
     }
 
@@ -1044,6 +1048,13 @@ function App() {
     });
   }
 
+  /** 纯终端任务重开前，把落盘的屏幕记录预塞进缓冲区，让旧内容出现在新输出之前。
+   *  agent 任务不塞：TUI 启动会自己重画历史，塞了反而重复。 */
+  async function seedScreenBeforeRestore(task: Task) {
+    if (task.agent !== "shell") return;
+    await tm.seedTaskScreen(task.id, { projectId: task.projectId, live: false });
+  }
+
   function handleResumeTask(taskId: string) {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -1076,11 +1087,14 @@ function App() {
     setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
 
     if (isShell) {
-      invokeRunTask(
-        { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined },
-        task.worktreePath ?? project.path,
-        [],
-      );
+      void (async () => {
+        await seedScreenBeforeRestore(task);
+        invokeRunTask(
+          { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined },
+          task.worktreePath ?? project.path,
+          [],
+        );
+      })();
       return;
     }
 
@@ -1096,6 +1110,7 @@ function App() {
           return;
         }
       }
+      await seedScreenBeforeRestore(task);
       invokeResumeTask(task, project, sessionId);
     };
   }

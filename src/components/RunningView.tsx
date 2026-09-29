@@ -8,7 +8,6 @@ import type {
   FontFamily,
   ThemeVariant,
 } from "../types";
-import { permissionModeLabel } from "../types";
 import { StatusIcon } from "./StatusIcon";
 import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
@@ -22,7 +21,6 @@ import {
   Pencil,
   Sparkles,
   GitMerge,
-  GitBranch,
   Trash2,
   AlertTriangle,
 } from "lucide-react";
@@ -535,44 +533,14 @@ export function RunningView({
           />
         )}
       </div>
-      <div
-        style={{
-          padding: "4px 20px 12px",
-          borderBottom: "1px solid var(--border-dim)",
-          flexShrink: 0,
-        }}
-      >
-        <div style={s.runMetaRow}>
-          <span style={s.runMetaFixed}>
-            {task.agent === "shell"
-              ? `>_ ${t("terminal.title")}`
-              : `${task.agent === "claude" ? "✦ Claude Code" : "⬡ Codex"} · ${permissionModeLabel(
-                  task.permissionMode,
-                  task.agent,
-                )}`}
-          </span>
-          {task.worktreePath && task.worktreeBranch && task.baseBranch && (
-            <>
-              <span style={s.runMetaFixed}>·</span>
-              <span
-                title={t("running.worktreeBranchTitle", {
-                  branch: task.worktreeBranch,
-                  base: task.baseBranch,
-                })}
-                style={s.runMetaBranchInline}
-              >
-                <GitBranch size={11} strokeWidth={2.2} />
-                <span style={s.runMetaBranchText}>
-                  {t("running.worktreeBranchInfo", {
-                    branch: task.worktreeBranch,
-                    base: task.baseBranch,
-                  })}
-                </span>
-              </span>
-            </>
-          )}
-        </div>
-        {(metrics || sessionPath) && (
+      {(metrics || sessionPath) && (
+        <div
+          style={{
+            padding: "4px 20px 12px",
+            borderBottom: "1px solid var(--border-dim)",
+            flexShrink: 0,
+          }}
+        >
           <div style={s.runMetricsRow}>
             {metrics && (
               <>
@@ -638,8 +606,8 @@ export function RunningView({
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Main content: terminal when active, session view when done/failed. */}
       {isDetached || isInterrupted ? (

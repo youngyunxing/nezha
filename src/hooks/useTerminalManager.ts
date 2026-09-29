@@ -247,6 +247,23 @@ export function useTerminalManager(options?: {
     [],
   );
 
+  /** 恢复纯终端任务前，把落盘的屏幕记录塞进输出缓冲区的最前面。
+   *  必须抢在新 PTY 有输出之前塞：handleRegisterTerminal 看到「已有实时输出」会跳过回放
+   *  （那是为了不在跑着的任务上重复铺屏），而新 shell 一启动就会吐提示符，不预塞就永远
+   *  看不到旧内容。记录进缓冲区后，落盘时就不能再把它当 prefix 拼一遍，否则下次恢复两份。 */
+  const seedTaskScreen = useCallback(
+    async (taskId: string, context: TaskScreenContext) => {
+      const screen = await loadScreenRecord(taskId, context);
+      if (!screen) return;
+      const buf = taskBufferRef.current[taskId] ?? createTaskBuffer();
+      taskBufferRef.current[taskId] = buf;
+      if (buf.totalLen > 0 || buf.droppedLen > 0) return; // 已经有实时输出，不插队
+      pushToBuffer(buf, screen);
+      restoredPrefixRef.current[taskId] = "";
+    },
+    [loadScreenRecord],
+  );
+
   const handleRegisterTerminal = useCallback(
     (taskId: string, fn: TerminalWriteFn | null): number => {
       const state = resetTerminalWriteState(taskId);
@@ -354,6 +371,7 @@ export function useTerminalManager(options?: {
     handleInput,
     handleResize,
     handleRegisterTerminal,
+    seedTaskScreen,
     handleTerminalReady,
     handleSnapshot,
     getTaskRestoreState,

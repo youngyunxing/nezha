@@ -8,31 +8,6 @@ export const terminal = {
     gap: 10,
     flexShrink: 0,
   },
-  runMetaRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 11,
-    color: "var(--text-muted)",
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  runMetaFixed: {
-    flexShrink: 0,
-  },
-  runMetaBranchInline: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    minWidth: 0,
-    overflow: "hidden",
-  },
-  runMetaBranchText: {
-    minWidth: 0,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-  },
   runMetricsRow: {
     marginTop: 8,
     display: "flex",

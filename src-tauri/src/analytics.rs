@@ -17,123 +17,65 @@ pub(crate) struct SessionMetrics {
     pub(crate) context_tokens: u64,
     /// 模型上下文窗口大小。仅 Codex 自带；Claude session 不暴露此值，留 0 让前端隐藏。
     pub(crate) context_window: u64,
-    /// 当前速度（输出 token/秒）。只算输出 —— 输入里绝大多数是缓存命中，算进去就不是
-    /// 「生成速度」了。走了 cc-switch 代理的会话直接用代理库里的真实生成速度
-    /// （output / (latency − ttft)，最近一次请求）；没有代理日志才退回 transcript 估算。
+    /// 当前速度（输出 token/秒）= 最近一条 assistant 消息的输出 token ÷ 它的生成窗口。
+    /// 只算输出 —— 输入里绝大多数是缓存命中，算进去就不是「生成速度」了。
     pub(crate) tps_current: f64,
-    /// 过去 5 小时的平均速度。有代理日志时 = 窗口内 Σoutput / Σ(latency − ttft)；
-    /// 退回 transcript 估算时 = 输出 token / 有效生成时长（间隔 ≤20 秒的部分，排掉发呆和跑工具）。
+    /// 过去 5 小时的平均速度 = 窗口内 Σ输出 token ÷ Σ生成窗口。
     pub(crate) tps_5h: f64,
     /// 会话最后一次活动的时间（epoch 秒）。前端用它判断「最近没动静」→ 当前速度显示 0。
     pub(crate) last_activity_ts: f64,
 }
 
-/// 相邻记录间隔超过这个秒数就不算在「生成中」（跑工具、发呆都排掉）。
-const ACTIVE_GAP_MAX_SECS: f64 = 20.0;
+/// TPS 全部从会话文件自算，不依赖任何外部程序。
+///
+/// 生成窗口 = (前一条 user 记录的落盘时间, 这条消息最后一行的落盘时间]。
+/// 为什么这两点之间就是生成时间：
+///   - CLI 每写完一个内容块追一行 JSONL（thinking → text → tool_use），最后一行的时间戳
+///     就是这一轮生成结束的时刻；
+///   - 工具是在 tool_result 落盘之前跑完的，而 tool_result 也是 user 记录，所以拿它当起点
+///     天然把工具执行时间排除在外（实测某轮 tool_use 11.253 → tool_result 11.680，
+///     工具耗时 0.43 秒不会被算进生成）。
+/// 代价：窗口里含首字等待（上游排队 + 预填充）和 CLI 自身开销，所以这是「整轮吞吐」，
+/// 比纯生成速度低一档 —— 会话文件里没有逐请求的 ttft/latency，算不出更细的。
+const TPS_WINDOW_SECS: f64 = 5.0 * 3600.0;
+/// 窗口短于这个值多半是生成中用户又插了一条消息把窗口截断，不算。
+const TPS_MIN_WINDOW_SECS: f64 = 0.2;
+/// 速率超过这个上限说明窗口残缺（真实生成速度远低于此），丢掉不污染平均。
+const TPS_MAX_PLAUSIBLE: f64 = 400.0;
 
-/// 当前速度：窗口内输出 token / 窗口长度。窗口按「最后一次活动」对齐，这样同一次生成
-/// 反复读出来的值稳定；空闲时由前端（看 last_activity_ts）显示 0。
-fn window_rate(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
+/// 一条 assistant 消息的生成样本。
+struct TpsSample {
+    end: f64,
+    tokens: u64,
+    window: f64,
+}
+
+impl TpsSample {
+    fn rate(&self) -> f64 {
+        self.tokens as f64 / self.window
+    }
+}
+
+/// 最近一条消息的速度；窗口内没有任何样本时返回 0（前端会再按空闲时间衰减）。
+fn current_rate(samples: &[TpsSample]) -> f64 {
+    samples.last().map(TpsSample::rate).unwrap_or(0.0)
+}
+
+/// 窗口内的平均速度：Σtoken ÷ Σ窗口。按总量聚合比逐条平均稳，
+/// 一条极快或极慢的消息不会把结果带偏。
+fn aggregate_rate(samples: &[TpsSample], end: f64) -> f64 {
     if end <= 0.0 {
         return 0.0;
     }
-    let start = end - window_secs;
-    let tokens: u64 = samples
+    let start = end - TPS_WINDOW_SECS;
+    let (tokens, window) = samples
         .iter()
-        .filter(|(ts, _)| *ts >= start && *ts <= end)
-        .map(|(_, out)| *out)
-        .sum();
-    tokens as f64 / window_secs
-}
-
-/// 生成时的平均速度：窗口内输出 token / 有效生成时长（相邻记录间隔 ≤20 秒的部分）。
-/// 这样既不被发呆时间稀释，也不会因为几条写入挤在一起而爆炸。
-fn active_rate(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
-    let start = end - window_secs;
-    let in_window: Vec<&(f64, u64)> = samples
-        .iter()
-        .filter(|(ts, _)| *ts >= start && *ts <= end)
-        .collect();
-    if in_window.len() < 2 {
+        .filter(|s| s.end >= start && s.end <= end)
+        .fold((0u64, 0.0), |(t, w), s| (t + s.tokens, w + s.window));
+    if window < 1.0 {
         return 0.0;
     }
-    let tokens: u64 = in_window.iter().map(|(_, out)| *out).sum();
-    let active: f64 = in_window
-        .windows(2)
-        .map(|pair| (pair[1].0 - pair[0].0).min(ACTIVE_GAP_MAX_SECS))
-        .sum();
-    if active < 1.0 {
-        return 0.0;
-    }
-    tokens as f64 / active
-}
-
-/// cc-switch 本地代理日志是现在唯一能拿到「真实生成速度」的地方。
-///
-/// transcript 里没有耗时字段（CLI 是流式结束后批量落盘，写入跨度只有真实耗时的零头），
-/// 代理库却逐请求记了 output_tokens / latency_ms / first_token_ms，而且它的 session_id
-/// 就是 Claude Code 的会话 UUID。字段语义照抄 cc-switch 源码（proxy/response_processor.rs、
-/// proxy/handler_context.rs）：
-///   - latency_ms     = 请求开始 → SSE 流结束的总耗时
-///   - first_token_ms = 请求开始 → 第一个 usage 事件（claude 的 message_start）的时间，
-///                      也就是**首字节**而不是首个内容 token；上游自己标注为「近似语义」
-/// 所以生成速度 = output / (latency − ttft) = 纯流式耗时里的生成速度，不含上游排队/预填充。
-/// 少数历史行（data_source='session_log' 的导入数据）没有 ttft，这时退化成
-/// output / latency（整轮吞吐，含首字等待）。
-const CCSWITCH_DB_REL: &str = ".cc-switch/cc-switch.db";
-/// 生成耗时太短的样本（首字刚出就收尾）会算出离谱的值，直接不算。
-const CCSWITCH_MIN_GEN_MS: i64 = 200;
-
-fn is_uuid(s: &str) -> bool {
-    s.len() == 36 && s.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
-}
-
-/// 查 cc-switch 代理库，返回 (当前速度, 5 小时平均速度)。
-/// 查不到（没装 / 这轮没走代理 / 该会话没有记录）返回 None，由调用方退回 transcript 估算。
-fn ccswitch_tps(session_id: &str) -> Option<(f64, f64)> {
-    if !is_uuid(session_id) {
-        return None; // 只放行 UUID，顺便杜绝拼进 SQL
-    }
-    let home = std::env::var_os("HOME")?;
-    let db = std::path::Path::new(&home).join(CCSWITCH_DB_REL);
-    if !db.is_file() {
-        return None;
-    }
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs() as i64;
-    let base = format!("session_id='{session_id}' and output_tokens>0");
-    // 生成耗时（有 ttft 时）/ 整轮耗时（没有 ttft 的历史行）
-    let (gen, whole) = ("(latency_ms-first_token_ms)", "latency_ms");
-    let sql = format!(
-        "select ifnull(\
-           (select round(output_tokens*1000.0/{gen},1) from proxy_request_logs where {base} \
-              and first_token_ms is not null and {gen}>{min} order by created_at desc limit 1), \
-           (select round(output_tokens*1000.0/{whole},1) from proxy_request_logs where {base} \
-              and {whole}>{min} order by created_at desc limit 1)), \
-         ifnull(\
-           (select round(sum(output_tokens)*1000.0/sum({gen}),1) from proxy_request_logs where {base} \
-              and first_token_ms is not null and {gen}>{min} and created_at>={since}), \
-           (select round(sum(output_tokens)*1000.0/sum({whole}),1) from proxy_request_logs where {base} \
-              and {whole}>{min} and created_at>={since}));",
-        min = CCSWITCH_MIN_GEN_MS,
-        since = now - 5 * 3600
-    );
-    let out = std::process::Command::new("/usr/bin/sqlite3")
-        .args(["-noheader", "-separator", "|", "-cmd", ".timeout 1500"])
-        .arg(&db)
-        .arg(&sql)
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let mut parts = text.trim().split('|');
-    let current: f64 = parts.next()?.trim().parse().ok()?;
-    let five_h: f64 = parts.next()?.trim().parse().ok()?;
-    if current <= 0.0 && five_h <= 0.0 {
-        return None;
-    }
-    Some((current, five_h))
+    tokens as f64 / window
 }
 
 /// 缓存：session_path → (file_modified_time, SessionMetrics)
@@ -185,7 +127,8 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
     /// 同一份 usage —— 必须按 message.id 去重，否则 token 总量与 TPS 会成倍虚高
     /// （实测某会话逐行相加比真实值高 2.1 倍）。
     struct MessageUsage {
-        ts: f64,
+        first: f64,
+        last: f64,
         input: u64,
         output: u64,
         cache_creation: u64,
@@ -196,6 +139,8 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
     let mut first_ts: Option<f64> = None;
     let mut last_ts: Option<f64> = None;
     let mut by_message: HashMap<String, MessageUsage> = HashMap::new();
+    // user 记录的落盘时间（提示词、工具结果、斜杠命令都算）—— 生成的起点
+    let mut prompts: Vec<f64> = Vec::new();
 
     for line in content.lines() {
         let Ok(val) = serde_json::from_str::<Value>(line) else {
@@ -203,7 +148,18 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
         };
         track_timestamp(&val, &mut first_ts, &mut last_ts);
 
-        if val.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+        let entry_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if entry_type == "user" {
+            if let Some(ts) = val
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .and_then(parse_rfc3339_secs)
+            {
+                prompts.push(ts);
+            }
+            continue;
+        }
+        if entry_type != "assistant" {
             continue;
         }
         let Some(message) = val.get("message") else {
@@ -237,13 +193,15 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
             .unwrap_or_else(|| format!("ts:{ts}"));
 
         let entry = by_message.entry(key).or_insert(MessageUsage {
-            ts,
+            first: ts,
+            last: ts,
             input: 0,
             output: 0,
             cache_creation: 0,
             cache_read: 0,
         });
-        entry.ts = ts;
+        entry.first = entry.first.min(ts);
+        entry.last = entry.last.max(ts);
         entry.input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
         entry.output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
         entry.cache_creation = usage
@@ -256,26 +214,45 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
             .unwrap_or(0);
     }
 
+    prompts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
     let mut input_tokens: u64 = 0;
     let mut output_tokens: u64 = 0;
     let mut cache_creation: u64 = 0;
     let mut cache_read: u64 = 0;
     let mut last_context: u64 = 0;
     let mut last_context_ts = f64::NEG_INFINITY;
-    let mut samples: Vec<(f64, u64)> = Vec::with_capacity(by_message.len());
+    let mut samples: Vec<TpsSample> = Vec::with_capacity(by_message.len());
     for usage in by_message.values() {
         input_tokens += usage.input;
         output_tokens += usage.output;
         cache_creation += usage.cache_creation;
         cache_read += usage.cache_read;
-        samples.push((usage.ts, usage.output));
         // 最后一条 assistant 的 prompt 总大小 ≈ 当前上下文占用
-        if usage.ts >= last_context_ts {
-            last_context_ts = usage.ts;
+        if usage.last >= last_context_ts {
+            last_context_ts = usage.last;
             last_context = usage.input + usage.cache_creation + usage.cache_read;
         }
+        // 生成起点：这条消息第一行之前最近的那条 user 记录
+        let Some(anchor) = prompts
+            .iter()
+            .rev()
+            .find(|p| **p < usage.first)
+            .copied()
+        else {
+            continue; // 会话开头那几条没有前置记录，给不出窗口
+        };
+        let window = usage.last - anchor;
+        if usage.output == 0 || window < TPS_MIN_WINDOW_SECS {
+            continue;
+        }
+        let sample = TpsSample { end: usage.last, tokens: usage.output, window };
+        if sample.rate() > TPS_MAX_PLAUSIBLE {
+            continue;
+        }
+        samples.push(sample);
     }
-    samples.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    samples.sort_by(|a, b| a.end.partial_cmp(&b.end).unwrap_or(std::cmp::Ordering::Equal));
 
     let end = last_ts.unwrap_or(0.0);
     SessionMetrics {
@@ -285,8 +262,8 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
         total_tokens: input_tokens + output_tokens + cache_creation + cache_read,
         context_tokens: last_context,
         context_window: 0, // Claude session 不带窗口大小
-        tps_current: window_rate(&samples, end, 60.0),
-        tps_5h: active_rate(&samples, end, 5.0 * 3600.0),
+        tps_current: current_rate(&samples),
+        tps_5h: aggregate_rate(&samples, end),
         last_activity_ts: end,
     }
 }
@@ -412,15 +389,7 @@ pub async fn read_session_metrics(session_path: String) -> Result<SessionMetrics
         if !path.exists() {
             return Err(format!("Session file not found: {}", session_path));
         }
-        let mut metrics = parse_session_metrics_cached(path);
-        // 走 cc-switch 代理的会话，用代理库里的真实生成速度盖掉 transcript 的估算。
-        if let Some(session_id) = path.file_stem().and_then(|s| s.to_str()) {
-            if let Some((current, five_h)) = ccswitch_tps(session_id) {
-                metrics.tps_current = current;
-                metrics.tps_5h = five_h;
-            }
-        }
-        Ok(metrics)
+        Ok(parse_session_metrics_cached(path))
     })
     .await
     .map_err(|e| format!("read_session_metrics join error: {}", e))?
@@ -430,11 +399,61 @@ pub async fn read_session_metrics(session_path: String) -> Result<SessionMetrics
 mod tests {
     use super::*;
 
+    /// 造一行 assistant 记录（同一条消息的多个内容块各占一行，usage 重复给）。
+    fn assistant(ts: &str, id: &str, out: u64, block: &str) -> String {
+        format!(
+            r#"{{"type":"assistant","timestamp":"{ts}","message":{{"id":"{id}","role":"assistant","content":[{{"type":"{block}"}}],"usage":{{"input_tokens":10,"output_tokens":{out},"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}}}}"#
+        )
+    }
+
+    fn user(ts: &str) -> String {
+        format!(r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":"hi"}}}}"#)
+    }
+
     #[test]
-    fn ccswitch_tps_only_accepts_uuid() {
-        assert!(is_uuid("781927e0-3296-4763-8211-a456871c84a8"));
-        assert!(!is_uuid("rollout-2026-09-29T12-00-00-781927e0")); // Codex 的 rollout 文件名
-        assert!(!is_uuid("781927e0' or '1'='1"));
-        assert!(!is_uuid(""));
+    fn claude_tps_uses_turn_window() {
+        // 第一轮：提示 00:00:00 → 消息最后一行 00:00:10（200 token / 10 秒 = 20）
+        // 第二轮：工具结果 00:00:20 → 消息 00:00:30（400 token / 10 秒 = 40）
+        let content = [
+            user("2026-01-01T00:00:00.000Z"),
+            assistant("2026-01-01T00:00:05.000Z", "msg_a", 200, "thinking"),
+            assistant("2026-01-01T00:00:10.000Z", "msg_a", 200, "text"),
+            user("2026-01-01T00:00:20.000Z"),
+            assistant("2026-01-01T00:00:30.000Z", "msg_b", 400, "tool_use"),
+        ]
+        .join("\n");
+        let m = parse_claude_metrics(&content);
+        assert_eq!(m.tps_current, 40.0, "当前 = 最近一条消息的窗口速度");
+        assert_eq!(m.tps_5h, 30.0, "5h = Σ600 token / Σ20 秒");
+        // 同一消息的多行不能重复计 token
+        assert_eq!(m.total_tokens, 20 + 600);
+        assert_eq!(m.tool_calls, 1);
+    }
+
+    #[test]
+    fn claude_tps_drops_unusable_windows() {
+        // 010 token 挤在 0.05 秒里、以及 1000 token 只用 1 秒 —— 都是窗口残缺，丢掉
+        let content = [
+            user("2026-01-01T00:00:00.000Z"),
+            assistant("2026-01-01T00:00:00.050Z", "msg_fast", 500, "text"),
+            user("2026-01-01T00:01:00.000Z"),
+            assistant("2026-01-01T00:01:01.000Z", "msg_impossible", 5000, "text"),
+            user("2026-01-01T00:02:00.000Z"),
+            assistant("2026-01-01T00:02:12.000Z", "msg_ok", 1200, "text"),
+        ]
+        .join("\n");
+        let m = parse_claude_metrics(&content);
+        assert_eq!(m.tps_current, 100.0, "只有最后一条是可用的窗口");
+        assert_eq!(m.tps_5h, 100.0, "残缺窗口不进平均");
+    }
+
+    #[test]
+    fn claude_tps_without_anchor_is_zero() {
+        // 会话开头没有前置记录 → 给不出窗口，不能瞎算
+        let content = assistant("2026-01-01T00:00:00.000Z", "msg_first", 500, "text");
+        let m = parse_claude_metrics(&content);
+        assert_eq!(m.tps_current, 0.0);
+        assert_eq!(m.tps_5h, 0.0);
+        assert_eq!(m.total_tokens, 510);
     }
 }

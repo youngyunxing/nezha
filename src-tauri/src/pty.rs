@@ -1005,10 +1005,32 @@ pub async fn resume_task(
         c.arg(&session_id);
         c
     } else {
-        // resume 时 session_id 已知，使用 --resume 标志
         let mut c = build_claude_cmd(&agent_bin, &permission_mode);
-        c.arg("--resume");
-        c.arg(&session_id);
+        // 会话文件不存在、或者存在但是空的（任务刚建好就被崩溃/强退带走，CLI 一次都没落过盘）：
+        // --resume 会直接 `No conversation found with session ID` 退出 1，任务被标成「失败」。
+        // 这种情况改用 --session-id 拿同一个 id 重开一段新对话——任务记录里的 id 和路径不变，
+        // 之后真正聊起来就能正常 resume 了。
+        let transcript_bytes = |path: &str| {
+            crate::session::claude_sessions_dir_for_project(path)
+                .map(|dir| dir.join(format!("{session_id}.jsonl")))
+                .and_then(|f| std::fs::metadata(f).ok())
+                .map(|m| m.len())
+                .unwrap_or(0)
+        };
+        // 按原路径找一遍，再按符号链接解析后的路径找一遍（/tmp → /private/tmp 这种）。
+        let has_transcript = transcript_bytes(&project_path) > 0
+            || std::fs::canonicalize(&project_path)
+                .ok()
+                .and_then(|p| p.to_str().map(str::to_owned))
+                .map(|p| transcript_bytes(&p) > 0)
+                .unwrap_or(false);
+        if has_transcript {
+            c.arg("--resume");
+            c.arg(&session_id);
+        } else {
+            c.arg("--session-id");
+            c.arg(&session_id);
+        }
         // 同 run_task:hooks + force_default_tui 共用 --settings 通道。
         if claude_pass_settings {
             if let Ok(p) = crate::hooks::nezha_claude_settings_path() {
