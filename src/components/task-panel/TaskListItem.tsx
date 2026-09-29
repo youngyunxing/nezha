@@ -7,12 +7,13 @@ import s from "../../styles";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
-function statusLabelKey(status: Task["status"]): string {
+function statusLabelKey(status: Task["status"], agent: Task["agent"]): string {
   switch (status) {
     case "pending":
       return "status.pending";
     case "running":
-      return "status.running";
+      // 纯终端只是「开着」，不是「在干活」
+      return agent === "shell" ? "status.runningShell" : "status.running";
     case "input_required":
       return "status.inputRequired";
     case "awaiting_review":
@@ -27,6 +28,22 @@ function statusLabelKey(status: Task["status"]): string {
       return "status.failed";
     case "cancelled":
       return "status.cancelled";
+  }
+}
+
+/** 悬停解释：这个状态是什么意思、我需要做什么。不常见的状态不给解释。 */
+function statusHintKey(status: Task["status"], agent: Task["agent"]): string | undefined {
+  switch (status) {
+    case "pending":
+      return "status.hint.pending";
+    case "running":
+      return agent === "shell" ? "status.hint.runningShell" : "status.hint.running";
+    case "input_required":
+      return "status.hint.inputRequired";
+    case "awaiting_review":
+      return "status.hint.awaitingReview";
+    default:
+      return undefined;
   }
 }
 
@@ -66,8 +83,11 @@ export const TaskListItem = memo(
             {displayTitle.slice(0, 70)}
             {displayTitle.length > 70 ? "…" : ""}
           </div>
-          <div style={s.taskCardSub}>
-            {t(statusLabelKey(task.status))}
+          <div
+            style={s.taskCardSub}
+            title={statusHintKey(task.status, task.agent) ? t(statusHintKey(task.status, task.agent)!) : undefined}
+          >
+            {t(statusLabelKey(task.status, task.agent))}
             {task.status === "done" &&
               task.worktreePath &&
               task.baseBranch &&
