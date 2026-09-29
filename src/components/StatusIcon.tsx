@@ -5,6 +5,7 @@ import {
   MinusCircle,
   Circle,
   CircleDashed,
+  LoaderCircle,
   AlertCircle,
   AlertTriangle,
 } from "lucide-react";
@@ -20,8 +21,9 @@ export function StatusIcon({ status }: { status: TaskStatus }) {
       // 「正在处理」的绿勾靠形状区分。
       return <Circle size={14} style={{ color: "var(--success)" }} />;
     case "running":
-      // 绿勾：进行中=健康，且不再转圈（转圈在恢复出来的空闲会话上会一直转，语义也不对）。
-      return <CheckCircle2 size={14} style={{ color: "var(--success)" }} />;
+      // 转圈的菊花：只在「大模型真的在干活」时出现（hook 驱动），所以转起来是真有事在
+      // 发生 —— 之前会一直转，是因为拉起进程就当成了 running，那个语义已经拆给 idle。
+      return <LoaderCircle size={14} className="spin" style={{ color: "var(--success)" }} />;
     case "input_required":
       return <AlertCircle size={14} style={{ color: "var(--warning)" }} />;
     case "awaiting_review":
