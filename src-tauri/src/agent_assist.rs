@@ -103,6 +103,12 @@ async fn run_naming_agent_with_timeout(
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
 
+    // 同 PTY 路径：不要把我们自己继承来的会话身份变量传给子进程
+    // （见 platform::SESSION_SCOPED_AGENT_ENV）。这条路径本来就带
+    // --no-session-persistence / --ephemeral，属于一致性加固。
+    for key in crate::platform::SESSION_SCOPED_AGENT_ENV {
+        cmd.env_remove(key);
+    }
     for (key, value) in &login_env {
         cmd.env(key, value);
     }
