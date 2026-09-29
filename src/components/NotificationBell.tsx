@@ -36,9 +36,10 @@ function NotificationEntry({
   item: NotificationItem;
   onMarkRead: (id: string) => void;
 }) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const [hov, setHov] = useState(false);
-  const body = language === "zh" && item.bodyZh ? item.bodyZh : item.body;
+  // 中文单语：优先用通知自带的 bodyZh，缺失时回退 body。
+  const body = item.bodyZh ?? item.body;
 
   const handleClick = async () => {
     if (!item.isRead) onMarkRead(item.id);

@@ -5,7 +5,7 @@ import type { Project, Task, TaskStatus } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { StatusIcon } from "./StatusIcon";
 import { shortenPath } from "../utils";
-import { useI18n, pluralKey } from "../i18n";
+import { useI18n } from "../i18n";
 import s from "../styles";
 
 /** 任何位置触发该 CustomEvent 都会在 App 根挂载看板全屏浮层（见 App.tsx 的监听器）。 */
@@ -124,8 +124,7 @@ function ProjectHeader({
         <span style={s.kanbanProjectPath}>{shortenPath(project.path)}</span>
       ) : null}
       <span style={s.kanbanProjectCount}>
-        {t(
-          pluralKey("kanban.activeCount", "kanban.activeCountPlural", totalActive),
+        {t("kanban.activeCount",
           { count: totalActive },
         )}
       </span>

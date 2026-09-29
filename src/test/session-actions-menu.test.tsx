@@ -39,9 +39,9 @@ describe("session fork actions", () => {
       </I18nProvider>,
     );
 
-    const input = screen.getByLabelText("Task name");
+    const input = screen.getByLabelText("任务名");
     fireEvent.change(input, { target: { value: "  Fork-Renamed  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Fork" }));
+    fireEvent.click(screen.getByRole("button", { name: /Fork/ }));
 
     expect(onFork).toHaveBeenCalledWith("Fork-Renamed");
     expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -54,7 +54,7 @@ describe("session fork actions", () => {
       <I18nProvider>
         <SessionActionsMenu
           defaultForkName="Fork-Current task"
-          forkDisabledReason="Fork is not supported for worktree tasks yet."
+          forkDisabledReason="暂不支持 Fork 工作树任务。"
           canExport
           exporting={false}
           onFork={vi.fn()}
@@ -63,13 +63,13 @@ describe("session fork actions", () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "More session actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "更多会话操作" }));
 
-    const forkItem = await screen.findByRole("menuitem", { name: /Fork session/ });
+    const forkItem = await screen.findByRole("menuitem", { name: /Fork 会话/ });
     expect(forkItem).toBeDisabled();
-    expect(screen.getByText("Fork is not supported for worktree tasks yet.")).toBeVisible();
+    expect(screen.getByText("暂不支持 Fork 工作树任务。")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Export as Markdown" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "导出为 Markdown" }));
     expect(onExport).toHaveBeenCalledOnce();
   });
 });

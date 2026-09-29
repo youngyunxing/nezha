@@ -55,7 +55,7 @@ describe("FileExplorerContextMenu", () => {
 
     renderMenu(315, 235);
 
-    const menu = screen.getByRole("button", { name: "New File" }).parentElement;
+    const menu = screen.getByRole("button", { name: "新建文件" }).parentElement;
 
     expect(menu).toHaveStyle({ left: "132px", top: "22px" });
   });

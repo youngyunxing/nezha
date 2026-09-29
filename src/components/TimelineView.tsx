@@ -3,7 +3,7 @@ import { Clock } from "lucide-react";
 import type { Project, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { StatusIcon } from "./StatusIcon";
-import { useI18n, pluralKey } from "../i18n";
+import { useI18n } from "../i18n";
 import s from "../styles";
 
 type Bucket = "today" | "yesterday" | "earlier";
@@ -155,12 +155,7 @@ export function TimelineView({
             <header style={s.timelineGroupHeader}>
               <span style={s.timelineGroupTitle}>{titleFor(group.bucket)}</span>
               <span style={s.timelineGroupCount}>
-                {t(
-                  pluralKey(
-                    "timeline.taskCount",
-                    "timeline.taskCountPlural",
-                    group.totalCount,
-                  ),
+                {t("timeline.taskCount",
                   { count: group.totalCount },
                 )}
               </span>
@@ -175,12 +170,7 @@ export function TimelineView({
                       {project?.name ?? projectGroup.projectId}
                     </span>
                     <span style={s.timelineProjectCount}>
-                      {t(
-                        pluralKey(
-                          "timeline.taskCount",
-                          "timeline.taskCountPlural",
-                          projectGroup.tasks.length,
-                        ),
+                      {t("timeline.taskCount",
                         { count: projectGroup.tasks.length },
                       )}
                     </span>

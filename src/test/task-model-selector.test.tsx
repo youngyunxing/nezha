@@ -37,8 +37,8 @@ describe("TaskModelSelector", () => {
       </I18nProvider>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Model: Agent default" }));
-    await user.click(screen.getByRole("button", { name: "Model Agent default" }));
+    await user.click(screen.getByRole("button", { name: "模型: 智能体默认" }));
+    await user.click(screen.getByRole("button", { name: "模型 智能体默认" }));
     await user.click(screen.getByRole("button", { name: /Production model/ }));
 
     expect(onSetModel).toHaveBeenCalledWith("provider/model:deployment");
@@ -58,8 +58,8 @@ describe("TaskModelSelector", () => {
       </I18nProvider>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Model: Production model" }));
-    await user.click(screen.getByRole("button", { name: "Thinking Auto" }));
+    await user.click(screen.getByRole("button", { name: "模型: Production model" }));
+    await user.click(screen.getByRole("button", { name: "思考深度 自动" }));
     await user.click(screen.getByRole("button", { name: "high" }));
 
     expect(onSetReasoningEffort).toHaveBeenCalledWith("high");
@@ -79,7 +79,7 @@ describe("TaskModelSelector", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Model: Production model high" }),
+      screen.getByRole("button", { name: "模型: Production model high" }),
     ).toBeInTheDocument();
   });
 });

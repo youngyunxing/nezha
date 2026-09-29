@@ -24,7 +24,7 @@ function renderEditor() {
 describe("ProjectAppearanceEditor", () => {
   it("输入法组合期间不截断、不提交，组合结束后提交中文缩写", () => {
     const { onChange } = renderEditor();
-    const input = screen.getByRole("textbox", { name: "Initials" });
+    const input = screen.getByRole("textbox", { name: "缩写" });
 
     // 拼音组合中:受控值原样回显(超过 3 个字母也不能截断,否则组合被打断)
     fireEvent.compositionStart(input);
@@ -40,7 +40,7 @@ describe("ProjectAppearanceEditor", () => {
 
   it("非组合输入按显示宽度截断到 3 个字母", () => {
     const { onChange } = renderEditor();
-    const input = screen.getByRole("textbox", { name: "Initials" });
+    const input = screen.getByRole("textbox", { name: "缩写" });
     fireEvent.change(input, { target: { value: "nezha" } });
     expect(onChange).toHaveBeenCalledWith({ label: "nez" });
     expect(input).toHaveValue("nez");

@@ -31,8 +31,8 @@ describe("AgentModelCatalogSection", () => {
     invokeMock.mockResolvedValue(DEFAULT_APP_SETTINGS);
     renderSection("claude");
 
-    expect(await screen.findByText(/manual only/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Initialize once" })).not.toBeInTheDocument();
+    expect(await screen.findByText(/只支持手工配置/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "仅初始化一次" })).not.toBeInTheDocument();
   });
 
   it("offers Codex initialization only until the first successful import", async () => {
@@ -60,11 +60,11 @@ describe("AgentModelCatalogSection", () => {
     const user = userEvent.setup();
     renderSection("codex");
 
-    await user.click(await screen.findByRole("button", { name: "Initialize once" }));
+    await user.click(await screen.findByRole("button", { name: "仅初始化一次" }));
 
     await waitFor(() =>
       expect(
-        screen.queryByRole("button", { name: "Initialize once" }),
+        screen.queryByRole("button", { name: "仅初始化一次" }),
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByDisplayValue("gpt-example")).toBeInTheDocument();

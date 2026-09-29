@@ -41,17 +41,17 @@ describe("ProjectListItem", () => {
     const user = userEvent.setup();
     const { onOpen, onRename } = renderItem();
 
-    screen.getByRole("button", { name: "Rename project" }).focus();
+    screen.getByRole("button", { name: "重命名项目" }).focus();
     await user.keyboard("{Enter}");
 
     expect(onOpen).not.toHaveBeenCalled();
-    const input = screen.getByRole("textbox", { name: "Project name" });
+    const input = screen.getByRole("textbox", { name: "项目名称" });
     await user.clear(input);
     await user.type(input, "  Client Web  ");
-    await user.click(screen.getByRole("button", { name: "Save project name" }));
+    await user.click(screen.getByRole("button", { name: "保存项目名称" }));
 
     expect(onRename).toHaveBeenCalledWith("  Client Web  ");
-    expect(screen.queryByRole("textbox", { name: "Project name" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "项目名称" })).not.toBeInTheDocument();
   });
 
   it("keeps editing and presents validation errors", async () => {
@@ -62,13 +62,13 @@ describe("ProjectListItem", () => {
     }));
     renderItem(onRename);
 
-    await user.click(screen.getByRole("button", { name: "Rename project" }));
-    const input = screen.getByRole("textbox", { name: "Project name" });
+    await user.click(screen.getByRole("button", { name: "重命名项目" }));
+    const input = screen.getByRole("textbox", { name: "项目名称" });
     await user.clear(input);
     await user.type(input, "client/api");
-    await user.click(screen.getByRole("button", { name: "Save project name" }));
+    await user.click(screen.getByRole("button", { name: "保存项目名称" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent('Project name cannot contain "/".');
+    expect(screen.getByRole("alert")).toHaveTextContent("项目名称不能包含“/”。");
     expect(input).toHaveAttribute("aria-invalid", "true");
   });
 
@@ -80,13 +80,13 @@ describe("ProjectListItem", () => {
     }));
     renderItem(onRename);
 
-    await user.click(screen.getByRole("button", { name: "Rename project" }));
-    const input = screen.getByRole("textbox", { name: "Project name" });
+    await user.click(screen.getByRole("button", { name: "重命名项目" }));
+    const input = screen.getByRole("textbox", { name: "项目名称" });
     await user.clear(input);
     await user.type(input, "Client Web");
-    await user.click(screen.getByRole("button", { name: "Save project name" }));
+    await user.click(screen.getByRole("button", { name: "保存项目名称" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to save the project name.");
+    expect(screen.getByRole("alert")).toHaveTextContent("项目名称保存失败。");
     expect(input).toHaveValue("Client Web");
   });
 
@@ -94,11 +94,11 @@ describe("ProjectListItem", () => {
     const user = userEvent.setup();
     const { onOpen, onDelete } = renderItem();
 
-    await user.click(screen.getByRole("button", { name: "Rename project" }));
+    await user.click(screen.getByRole("button", { name: "重命名项目" }));
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("textbox", { name: "Project name" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "项目名称" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Delete project" }));
+    await user.click(screen.getByRole("button", { name: "删除项目" }));
     expect(onDelete).toHaveBeenCalledOnce();
     expect(onOpen).not.toHaveBeenCalled();
   });

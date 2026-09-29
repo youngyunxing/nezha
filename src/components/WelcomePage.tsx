@@ -15,7 +15,7 @@ import type { ProjectRenameResult } from "../projectName";
 import { SidebarFooterActions } from "./SidebarFooterActions";
 import { TimelineView } from "./TimelineView";
 import { ProjectListItem } from "./welcome/ProjectListItem";
-import { useI18n, pluralKey } from "../i18n";
+import { useI18n } from "../i18n";
 import s from "../styles";
 
 function SidebarItem({
@@ -229,22 +229,12 @@ export function WelcomePage({
                 <div style={s.projectSectionTitle}>{t("welcome.projects")}</div>
                 <div style={s.projectSectionCaption}>
                   {query.trim()
-                    ? t(
-                        pluralKey(
-                          "welcome.resultCount",
-                          "welcome.resultCountPlural",
-                          filtered.length,
-                        ),
+                    ? t("welcome.resultCount",
                         {
                           count: filtered.length,
                         },
                       )
-                    : t(
-                        pluralKey(
-                          "welcome.projectCount",
-                          "welcome.projectCountPlural",
-                          projects.length,
-                        ),
+                    : t("welcome.projectCount",
                         {
                           count: projects.length,
                         },

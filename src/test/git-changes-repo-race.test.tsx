@@ -48,7 +48,7 @@ describe("GitChanges repository changes", () => {
     });
 
     const view = renderChanges("/workspace/a");
-    fireEvent.click(screen.getByTitle("Generate commit message with AI"));
+    fireEvent.click(screen.getByTitle("用 AI 生成提交信息"));
 
     view.rerender(
       <I18nProvider>
@@ -66,7 +66,7 @@ describe("GitChanges repository changes", () => {
       await generated.promise;
     });
 
-    expect(screen.getByPlaceholderText("Commit message…")).toHaveValue("");
+    expect(screen.getByPlaceholderText("提交信息…")).toHaveValue("");
   });
 
   it("does not clear a new repository draft when an old commit finishes", async () => {
@@ -78,9 +78,9 @@ describe("GitChanges repository changes", () => {
     });
 
     const view = renderChanges("/workspace/a");
-    const textarea = screen.getByPlaceholderText("Commit message…");
+    const textarea = screen.getByPlaceholderText("提交信息…");
     fireEvent.change(textarea, { target: { value: "commit repository A" } });
-    fireEvent.click(screen.getByRole("button", { name: "Commit" }));
+    fireEvent.click(screen.getByRole("button", { name: "提交" }));
 
     view.rerender(
       <I18nProvider>

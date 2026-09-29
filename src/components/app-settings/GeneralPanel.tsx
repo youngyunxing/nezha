@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronDown, AlertTriangle } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { useI18n, type AppLanguage } from "../../i18n";
+import { useI18n } from "../../i18n";
 import {
   clampTerminalScrollback,
   normalizeTaskDisplayWindow,
@@ -31,7 +31,7 @@ export function GeneralPanel({
   terminalScrollback: TerminalScrollback;
   onTerminalScrollbackChange: (value: TerminalScrollback) => void;
 }) {
-  const { language, setLanguage, t } = useI18n();
+  const { t } = useI18n();
 
   // 框选自动复制开关:面板内自包含加载/保存,不经由
   // App.tsx 透传 props),保存后广播 CHANGED 事件,终端侧的单例监听随之刷新。
@@ -76,12 +76,6 @@ export function GeneralPanel({
 
 
 
-  const languageOptions: Array<{ value: AppLanguage; label: string }> = [
-    { value: "en", label: t("language.english") },
-    { value: "zh", label: t("language.chinese") },
-  ];
-  const selectedLanguageLabel =
-    languageOptions.find((option) => option.value === language)?.label ?? language;
   const taskDisplayWindowOptions = TASK_DISPLAY_WINDOW_VALUES.map((value) => ({
     value,
     label:
@@ -101,45 +95,6 @@ export function GeneralPanel({
 
   return (
     <div style={s.settingsBodyColumn}>
-      <div style={s.settingField}>
-        <label style={s.settingFieldLabel}>{t("appSettings.appLanguage")}</label>
-        <Select.Root value={language} onValueChange={(value) => setLanguage(value as AppLanguage)}>
-          <Select.Trigger
-            aria-label={t("appSettings.appLanguage")}
-            style={s.settingsSelectTriggerCompact}
-          >
-            <Select.Value>{selectedLanguageLabel}</Select.Value>
-            <Select.Icon>
-              <ChevronDown size={13} strokeWidth={2.2} color="var(--text-hint)" />
-            </Select.Icon>
-          </Select.Trigger>
-          <Select.Portal>
-            <Select.Content position="popper" sideOffset={4} style={s.settingsSelectContent}>
-              <Select.Viewport style={s.settingsSelectViewport}>
-                {languageOptions.map((option) => {
-                  const selected = option.value === language;
-
-                  return (
-                    <Select.Item
-                      key={option.value}
-                      value={option.value}
-                      className="radix-select-item"
-                      style={selected ? s.settingsSelectOptionSelected : s.settingsSelectOption}
-                    >
-                      <Select.ItemText>{option.label}</Select.ItemText>
-                      <Select.ItemIndicator style={s.settingsSelectIndicator}>
-                        <Check size={13} style={s.settingsSelectCheck} />
-                      </Select.ItemIndicator>
-                    </Select.Item>
-                  );
-                })}
-              </Select.Viewport>
-            </Select.Content>
-          </Select.Portal>
-        </Select.Root>
-        <span style={s.settingFieldHint}>{t("appSettings.languageHint")}</span>
-      </div>
-
       <div style={s.settingFieldSpaced}>
         <label style={s.settingFieldLabel}>{t("appSettings.taskDisplayWindow")}</label>
         <Select.Root

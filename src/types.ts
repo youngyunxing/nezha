@@ -181,36 +181,18 @@ export interface Task {
   deletions?: number;
 }
 
-export const PERM_LABELS: Record<PermissionMode, string> = {
-  ask: "Ask Permission",
-  auto_edit: "Auto-edit",
-  full_access: "Full Access",
+const PERM_LABELS: Record<PermissionMode, string> = {
+  ask: "每次询问",
+  auto_edit: "自动编辑",
+  full_access: "完全访问",
 };
 
-export function permissionModeLabel(
-  mode: PermissionMode,
-  agent?: AgentType,
-  askLabel = PERM_LABELS.ask,
-): string {
+export function permissionModeLabel(mode: PermissionMode, agent?: AgentType): string {
   if (agent === "codex" && mode === "auto_edit") {
-    return "Auto Mode";
+    return "自动模式";
   }
-  if (mode === "ask") return askLabel;
   return PERM_LABELS[mode];
 }
-
-export const STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: "Todo",
-  pending: "Pending",
-  running: "Running...",
-  input_required: "Needs confirmation",
-  awaiting_review: "Awaiting review",
-  detached: "Terminal disconnected",
-  interrupted: "Interrupted",
-  done: "Done",
-  failed: "Failed",
-  cancelled: "Cancelled",
-};
 
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return (
