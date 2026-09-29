@@ -797,13 +797,7 @@ pub async fn run_task(
             .map_err(|e| e.to_string())??
     };
 
-    // 若配置了项目级 prompt_prefix，则拼接到提示词前
-    let config = crate::config::read_project_config(project_path.clone()).unwrap_or_default();
-    let base_prompt = if config.agent.prompt_prefix.is_empty() {
-        prompt.clone()
-    } else {
-        format!("{}\n{}", config.agent.prompt_prefix, prompt)
-    };
+    let base_prompt = prompt.clone();
 
     // 将图片路径追加到提示词，供 Claude Code 通过文件工具读取
     let prompt_with_images = if image_paths.is_empty() {

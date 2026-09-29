@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 
@@ -272,34 +272,6 @@ fn is_protected_project_relative_path(relative_path: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn apply_login_shell_env(cmd: &mut Command) {
-    for (key, value) in crate::app_settings::get_login_shell_env() {
-        cmd.env(key, value);
-    }
-}
-
-fn run_agent_commit_message_command(
-    agent: &str,
-    project_path: &str,
-    prompt: &str,
-) -> Result<Output, String> {
-    let launch = crate::app_settings::get_agent_launch_spec(agent);
-    let mut cmd = Command::new(&launch.program);
-    if agent == "codex" {
-        cmd.args(["exec", prompt]);
-    } else {
-        cmd.args(["-p", prompt, "--output-format", "text"]);
-    }
-    cmd.current_dir(project_path);
-    cmd.stdin(Stdio::null());
-    apply_login_shell_env(&mut cmd);
-    for (key, value) in &launch.extra_env {
-        cmd.env(key, value);
-    }
-    cmd.output()
-        .map_err(|e| format!("Failed to run {agent}: {e}"))
-}
-
 fn create_empty_temp_file() -> Result<PathBuf, String> {
     let path = std::env::temp_dir().join(format!("nezha-empty-{}.tmp", uuid::Uuid::new_v4()));
     std::fs::File::create(&path)
@@ -383,62 +355,6 @@ pub async fn discover_git_roots(project_path: String) -> Result<Vec<GitRoot>, St
     tauri::async_runtime::spawn_blocking(move || discover_git_roots_blocking(&project_path))
         .await
         .map_err(|e| format!("discover_git_roots task panicked: {}", e))?
-}
-
-#[tauri::command]
-pub async fn generate_commit_message(
-    project_path: String,
-    repo_path: Option<String>,
-) -> Result<String, String> {
-    let cwd = resolve_repo_path(&project_path, repo_path.as_deref()).await?;
-    // 1. Get staged diff
-    let diff_output = run_git(&cwd, &["diff", "--staged"])?;
-    let diff = String::from_utf8_lossy(&diff_output.stdout).into_owned();
-    if diff.trim().is_empty() {
-        return Err("No staged changes to generate a commit message for.".to_string());
-    }
-
-    // Truncate diff if too large to avoid CLI arg limits
-    let diff = if diff.len() > 50_000 {
-        format!("{}...(diff truncated)", &diff[..50_000])
-    } else {
-        diff
-    };
-
-    // 2. Read project config for prompt and default agent（配置始终在项目根）
-    let config = crate::config::read_project_config(project_path.clone())?;
-    let commit_prompt = config.git.commit_prompt;
-    let timeout_secs = config.git.commit_message_timeout_secs.clamp(1, 120);
-    let agent = config.agent.default;
-
-    // 3. Build full prompt
-    let full_prompt = format!(
-        "{}\n\nGit diff:\n```diff\n{}\n```\n\nOutput only the commit message, nothing else.",
-        commit_prompt, diff
-    );
-
-    // 4. Run agent in non-interactive exec mode with configurable timeout
-    let output = tokio::time::timeout(
-        Duration::from_secs(timeout_secs),
-        tokio::task::spawn_blocking(move || {
-            run_agent_commit_message_command(&agent, &cwd, &full_prompt)
-        }),
-    )
-    .await
-    .map_err(|_| format!("生成提交信息超时（{}秒）", timeout_secs))?
-    .map_err(|e| format!("生成提交信息线程错误: {}", e))??;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!("Agent failed: {}{}", stderr, stdout));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if result.is_empty() {
-        return Err("Agent returned empty response.".to_string());
-    }
-    Ok(result)
 }
 
 #[derive(Debug, PartialEq, Eq, serde::Serialize)]
@@ -1023,16 +939,6 @@ pub async fn git_unstage_all(
     run_git_check(&cwd, &["restore", "--staged", "."])
 }
 
-#[tauri::command]
-pub async fn git_commit(
-    project_path: String,
-    repo_path: Option<String>,
-    message: String,
-) -> Result<(), String> {
-    let cwd = resolve_repo_path(&project_path, repo_path.as_deref()).await?;
-    run_git_check(&cwd, &["commit", "-m", &message])
-}
-
 fn untracked_files_under_directory<'a>(
     directory_path: &str,
     untracked_files: &'a [String],
@@ -1236,8 +1142,7 @@ fn list_untracked_files(project_path: &str) -> Result<Vec<String>, String> {
 ///   any staged half intact (so MM files don't lose their staged portion).
 ///
 /// We deliberately don't expose a "discard staged" path here — staged-only files have no per-row
-/// discard button in the UI (matching VSCode), and "Discard All" handles the staged side via
-/// `git_discard_all` which correctly undoes renames too.
+/// discard button in the UI (matching VSCode).
 #[tauri::command]
 pub async fn git_discard_file(
     project_path: String,
@@ -1286,41 +1191,6 @@ pub async fn git_discard_files(
         let mut args = vec!["restore".to_string(), "--".to_string()];
         args.extend(file_paths);
         run_git_check(&worktree_root_string, &args)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
-pub async fn git_discard_all(
-    project_path: String,
-    repo_path: Option<String>,
-) -> Result<(), String> {
-    let cwd = resolve_repo_path(&project_path, repo_path.as_deref()).await?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        let worktree_root = git_worktree_root(&cwd)?;
-        let worktree_root_string = path_to_string(&worktree_root)?;
-        // Reset every tracked file (staged + worktree) back to HEAD.
-        // Staged-only adds become untracked after this; they are cleaned in the second pass.
-        if git_has_head(&worktree_root_string)? {
-            run_git_check(
-                &worktree_root_string,
-                &["restore", "--source=HEAD", "--staged", "--worktree", "."],
-            )?;
-        } else {
-            run_git_check(
-                &worktree_root_string,
-                &["rm", "-r", "--cached", "--ignore-unmatch", "--", "."],
-            )?;
-        }
-
-        for rel in list_untracked_files(&worktree_root_string)? {
-            if is_protected_worktree_relative_path(&worktree_root, &cwd, &rel) {
-                continue;
-            }
-            trash_worktree_relative_path(&worktree_root, &cwd, &rel)?;
-        }
-        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?

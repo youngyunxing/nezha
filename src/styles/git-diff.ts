@@ -14,37 +14,6 @@ export function gitHistoryRootStyle(width: number): React.CSSProperties {
   return { "--git-history-width": `${width}px` } as React.CSSProperties;
 }
 
-export function gitChangesHeaderIconStyle(disabled = false): React.CSSProperties {
-  return disabled
-    ? { ...gitDiff.gitChangesHeaderIconBtn, ...gitDiff.gitChangesHeaderIconBtnDisabled }
-    : gitDiff.gitChangesHeaderIconBtn;
-}
-
-export function gitChangesCommitInputStyle(
-  hasError: boolean,
-  focused: boolean,
-): React.CSSProperties {
-  if (hasError) {
-    return { ...gitDiff.gitChangesCommitInput, ...gitDiff.gitChangesCommitInputError };
-  }
-  if (focused) {
-    return { ...gitDiff.gitChangesCommitInput, ...gitDiff.gitChangesCommitInputFocused };
-  }
-  return gitDiff.gitChangesCommitInput;
-}
-
-export function gitChangesGenerateButtonStyle(busy: boolean): React.CSSProperties {
-  return busy
-    ? { ...gitDiff.gitChangesGenerateBtn, ...gitDiff.gitChangesGenerateBtnBusy }
-    : gitDiff.gitChangesGenerateBtn;
-}
-
-export function gitChangesCommitButtonStyle(disabled: boolean): React.CSSProperties {
-  return disabled
-    ? { ...gitDiff.gitChangesCommitBtn, ...gitDiff.gitChangesCommitBtnDisabled }
-    : gitDiff.gitChangesCommitBtn;
-}
-
 export function gitChangesTopSectionStyle(hovered: boolean): React.CSSProperties {
   return hovered
     ? { ...gitDiff.gitChangesTopSectionHeader, ...gitDiff.gitChangesTopSectionHeaderHovered }
@@ -133,7 +102,6 @@ export const gitDiff = {
     borderRadius: 8,
     background: "var(--bg-card)",
   },
-  diffToggleBtn: gitDiffToggleBtnBase,
   diffToggleBtnActive: {
     ...gitDiffToggleBtnBase,
     background: "var(--control-active-bg)",
@@ -282,20 +250,6 @@ export const gitDiff = {
     fontWeight: 650,
     color: "var(--text-primary)",
   },
-  gitChangesHeaderIconBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 4,
-    borderRadius: 4,
-    color: "var(--text-hint)",
-    display: "flex",
-    alignItems: "center",
-  },
-  gitChangesHeaderIconBtnDisabled: {
-    cursor: "default",
-    opacity: 0.4,
-  },
   gitChangesTabs: {
     display: "flex",
     alignItems: "center",
@@ -345,67 +299,6 @@ export const gitDiff = {
     color: "var(--text-hint)",
     textAlign: "center" as const,
   },
-  gitChangesCommitArea: {
-    padding: "8px 10px",
-    borderTop: "1px solid var(--border-dim)",
-    flexShrink: 0,
-  },
-  gitChangesCommitInputWrap: { position: "relative" as const },
-  gitChangesCommitInput: {
-    width: "100%",
-    padding: "8px 36px 8px 10px",
-    background: "var(--bg-card)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 6,
-    color: "var(--text-primary)",
-    fontSize: 12.5,
-    resize: "none" as const,
-    outline: "none",
-    fontFamily: "var(--font-ui)",
-    boxSizing: "border-box" as const,
-    transition: "border-color 0.15s",
-  },
-  gitChangesCommitInputFocused: { borderColor: "var(--control-active-fg)" },
-  gitChangesCommitInputError: { borderColor: "var(--danger-fg)" },
-  gitChangesGenerateBtn: {
-    position: "absolute" as const,
-    top: 6,
-    right: 6,
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 3,
-    borderRadius: 4,
-    color: "var(--text-hint)",
-    display: "flex",
-    alignItems: "center",
-    transition: "color 0.15s",
-  },
-  gitChangesGenerateBtnBusy: {
-    cursor: "default",
-    color: "var(--accent)",
-  },
-  gitChangesCommitError: {
-    fontSize: 11.5,
-    color: "var(--danger-fg)",
-    marginTop: 3,
-    paddingLeft: 2,
-  },
-  gitChangesCommitActions: { marginTop: 3, display: "flex" },
-  gitChangesCommitBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "5px 12px",
-    background: "var(--primary-action-bg)",
-    color: "var(--primary-action-fg)",
-    border: "none",
-    borderRadius: 6,
-    fontSize: 12.5,
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  gitChangesCommitBtnDisabled: { cursor: "default", opacity: 0.7 },
   gitChangesTopSectionHeader: {
     display: "flex",
     alignItems: "center",

@@ -231,23 +231,6 @@ export function NewTaskView({
     return () => window.removeEventListener(APP_SETTINGS_CHANGED_EVENT, loadTaskSettings);
   }, []);
 
-  // Load the default agent from project config when the project changes
-  useEffect(() => {
-    if (initialDraft) return;
-    invoke<{ agent: { default: string } }>(
-      "read_project_config",
-      { projectPath: project.path },
-    )
-      .then((cfg) => {
-        const defaultAgent = cfg.agent.default;
-        if (defaultAgent === "claude" || defaultAgent === "codex") {
-          setAgent(defaultAgent);
-        }
-      })
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id]);
-
   // Hook 就绪状态：版本过低 / 无 node 时软提示用户(任务仍可启动,已回退轮询)。
   const [hookReadiness, setHookReadiness] = useState<HookAgentReadiness[] | null>(null);
 

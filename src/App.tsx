@@ -492,9 +492,6 @@ function App() {
       if (mostRecent) {
         setActiveProject(mostRecent);
         mountProject(mostRecent.id);
-        invoke("init_project_config", { projectPath: mostRecent.path }).catch((e: unknown) => {
-          console.warn("[init] init_project_config failed:", e);
-        });
       }
 
       // Load tasks for all known projects。allSettled 隔离单项目失败:
@@ -604,9 +601,6 @@ function App() {
     setActiveProject(project);
     mountProject(project.id);
     updateProjectView(project.id, createDefaultProjectViewState());
-    invoke("init_project_config", { projectPath: path }).catch((e: unknown) => {
-      showToast(t("toast.initProjectConfigFailed", { error: String(e) }), "warning");
-    });
   }
 
   function handleProjectClick(project: Project) {
@@ -618,9 +612,6 @@ function App() {
     });
     setActiveProject(updated);
     mountProject(updated.id);
-    invoke("init_project_config", { projectPath: project.path }).catch((e: unknown) => {
-      showToast(t("toast.initProjectConfigFailed", { error: String(e) }), "warning");
-    });
   }
 
   function invokeRunTask(task: Task, projectPath: string, images: string[], texts: string[] = []) {

@@ -1,22 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import {
-  RefreshCw,
-  Filter,
-  GitCommit,
-  Sparkles,
-  ChevronRight,
-  ChevronDown,
-  Undo2,
-} from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCancellableInvoke } from "../hooks/useCancellableInvoke";
 import s from "../styles";
 import {
-  gitChangesCommitButtonStyle,
-  gitChangesCommitInputStyle,
-  gitChangesGenerateButtonStyle,
-  gitChangesHeaderIconStyle,
   gitChangesPanelStyle,
   gitChangesSectionActionStyle,
   gitChangesSectionCountStyle,
@@ -61,8 +49,6 @@ export function GitChanges({
   const activeRepoKeyRef = useRef(repoKey);
   activeRepoKeyRef.current = repoKey;
   const refreshSequenceRef = useRef(0);
-  const generateSequenceRef = useRef(0);
-  const commitSequenceRef = useRef(0);
   const [changeState, setChangeState] = useState<{
     repoKey: string;
     changes: GitFileChange[];
@@ -73,12 +59,7 @@ export function GitChanges({
   );
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"task" | "all">("all");
-  const [commitMsg, setCommitMsg] = useState("");
-  const [committing, setCommitting] = useState(false);
-  const [generatingMsg, setGeneratingMsg] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [commitMsgError, setCommitMsgError] = useState(false);
-  const [textareaFocused, setTextareaFocused] = useState(false);
   const [trackedCollapsed, setTrackedCollapsed] = useState(false);
   const [untrackedCollapsed, setUntrackedCollapsed] = useState(false);
   const [fileViewMode, setFileViewMode] = useGitFileViewMode();
@@ -150,13 +131,7 @@ export function GitChanges({
   }, [refresh]);
 
   useEffect(() => {
-    // 切仓后允许新仓库立即发起操作，并让旧仓库尚未完成的响应失效。
-    generateSequenceRef.current += 1;
-    commitSequenceRef.current += 1;
-    setCommitMsg("");
-    setCommitMsgError(false);
-    setGeneratingMsg(false);
-    setCommitting(false);
+    // 切仓后清掉上一个仓库留下的错误提示。在途响应的失效由 activeRepoKeyRef 兜住。
     setError(null);
   }, [repoKey]);
 
@@ -329,93 +304,6 @@ export function GitChanges({
     }
   };
 
-  const handleDiscardAll = async () => {
-    const ok = await confirm(t("git.confirmDiscardAll"), {
-      title: t("git.confirmDiscardAllTitle"),
-      kind: "warning",
-      okLabel: t("git.discardAll"),
-    });
-    if (!ok) return;
-    try {
-      setError(null);
-      await invoke("git_discard_all", { projectPath: projectRoot, repoPath });
-    } catch (err) {
-      setError(t("git.discardFailed", { error: String(err) }));
-    } finally {
-      await refresh({ clearError: false });
-    }
-  };
-
-  const handleGenerateMsg = async () => {
-    const requestRepoKey = repoKey;
-    const sequence = ++generateSequenceRef.current;
-    setGeneratingMsg(true);
-    setError(null);
-    try {
-      const msg = await safeInvoke<string>("generate_commit_message", {
-        projectPath: projectRoot,
-        repoPath,
-      });
-      if (
-        msg === null ||
-        activeRepoKeyRef.current !== requestRepoKey ||
-        generateSequenceRef.current !== sequence
-      ) {
-        return;
-      }
-      setCommitMsg(msg);
-      if (commitMsgError) setCommitMsgError(false);
-    } catch (err) {
-      if (
-        !isCancelled() &&
-        activeRepoKeyRef.current === requestRepoKey &&
-        generateSequenceRef.current === sequence
-      ) {
-        setError(String(err));
-      }
-    } finally {
-      if (
-        !isCancelled() &&
-        activeRepoKeyRef.current === requestRepoKey &&
-        generateSequenceRef.current === sequence
-      ) {
-        setGeneratingMsg(false);
-      }
-    }
-  };
-
-  const handleCommit = async () => {
-    if (!commitMsg.trim()) {
-      setCommitMsgError(true);
-      return;
-    }
-    const requestRepoKey = repoKey;
-    const sequence = ++commitSequenceRef.current;
-    setCommitMsgError(false);
-    setCommitting(true);
-    setError(null);
-    try {
-      await invoke("git_commit", {
-        projectPath: projectRoot,
-        repoPath,
-        message: commitMsg.trim(),
-      });
-      if (activeRepoKeyRef.current !== requestRepoKey || commitSequenceRef.current !== sequence) {
-        return;
-      }
-      setCommitMsg("");
-      refresh();
-    } catch (err) {
-      if (activeRepoKeyRef.current === requestRepoKey && commitSequenceRef.current === sequence) {
-        setError(String(err));
-      }
-    } finally {
-      if (activeRepoKeyRef.current === requestRepoKey && commitSequenceRef.current === sequence) {
-        setCommitting(false);
-      }
-    }
-  };
-
   const taskCount = taskChanges.length;
   const allCount = allChanges.length;
 
@@ -424,24 +312,6 @@ export function GitChanges({
       {/* Header */}
       <div style={s.gitChangesHeader}>
         <span style={s.gitChangesTitle}>{t("git.changes")}</span>
-        <button
-          onClick={() => refresh()}
-          title={t("common.refresh")}
-          style={s.gitChangesHeaderIconBtn}
-        >
-          <RefreshCw size={13} className={loading ? "spin" : ""} />
-        </button>
-        <button
-          onClick={handleDiscardAll}
-          disabled={allChanges.length === 0}
-          title={t("git.discardAll")}
-          style={gitChangesHeaderIconStyle(allChanges.length === 0)}
-        >
-          <Undo2 size={13} />
-        </button>
-        <button title={t("git.filter")} style={s.gitChangesHeaderIconBtn}>
-          <Filter size={13} />
-        </button>
       </div>
 
       {/* Tabs */}
@@ -558,46 +428,6 @@ export function GitChanges({
             )}
           </>
         )}
-      </div>
-
-      {/* Commit area */}
-      <div style={s.gitChangesCommitArea}>
-        <div style={s.gitChangesCommitInputWrap}>
-          <textarea
-            value={commitMsg}
-            onChange={(e) => {
-              setCommitMsg(e.target.value);
-              if (commitMsgError) setCommitMsgError(false);
-            }}
-            onFocus={() => setTextareaFocused(true)}
-            onBlur={() => setTextareaFocused(false)}
-            placeholder={t("git.commitMessage")}
-            rows={3}
-            style={gitChangesCommitInputStyle(commitMsgError, textareaFocused)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleCommit();
-            }}
-          />
-          <button
-            onClick={handleGenerateMsg}
-            disabled={generatingMsg}
-            title={t("git.generateCommitMessage")}
-            style={gitChangesGenerateButtonStyle(generatingMsg)}
-          >
-            <Sparkles size={14} className={generatingMsg ? "spin" : ""} />
-          </button>
-        </div>
-        {commitMsgError && <div style={s.gitChangesCommitError}>{t("git.enterCommitMessage")}</div>}
-        <div style={s.gitChangesCommitActions}>
-          <button
-            onClick={handleCommit}
-            disabled={committing || generatingMsg}
-            style={gitChangesCommitButtonStyle(committing || generatingMsg)}
-          >
-            <GitCommit size={13} />
-            {committing ? t("git.committing") : t("git.commit")}
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -40,29 +40,27 @@ Rust 后端位于 `src-tauri/`，修改后需重启 `tauri dev`。
 ```
 ErrorBoundary  (全局兜底)
 └── App  (+ Toast 全局提示层)
-    ├── WelcomePage              — 项目选择页（含 Timeline 视图入口）
-    │   └── TimelineView         — 跨项目任务时间线（今天 / 昨天 / 更早，按项目二级分组）
-    └── ProjectPage              (头部含 NotificationBell / UsagePopover)
-        ├── ProjectRail          — 左侧导航栏（项目切换器）
+    └── ProjectPage              — 每个项目一个实例，切项目只切可见性
+        ├── ProjectDrawer        — 左侧抽屉（项目切换、重命名、外观、应用设置入口）
+        │   └── AppSettingsDialog
         ├── TaskPanel            — 任务列表侧边栏
         │   ├── BranchBar        — Git 分支切换 / 创建
-        │   ├── TaskList → TaskListItem
-        │   └── SidebarFooterActions → AppSettingsDialog
+        │   └── TaskList → TaskListItem
         ├── NewTaskView          — 任务创建视图
         │   ├── PromptEditor
         │   ├── MentionPopover
         │   ├── ImageAttachments / TextAttachments
-        │   └── AgentPermSelector
+        │   └── ComposeToolbar   — 智能体选择、模型选择、图片、发送
         ├── TodoTaskView         — Todo 任务编辑 / 启动视图
         ├── RunningView          — 运行中任务头部（恢复、取消、worktree 信息）
         │   └── TerminalView     — xterm.js 封装组件
         ├── SessionView          — 会话消息查看器（JSONL 回放）
         ├── ShellTerminalPanel   — 嵌入式交互 Shell 终端
-        ├── SettingsDialog       — 项目级设置（config.toml 编辑器 + 智能体配置）
         ├── RightToolbar         — 右侧面板与 Shell 的开关入口
-        └── 右侧面板（同时只有一个处于激活状态）：
+        └── 右侧面板（同时只有一个处于激活状态，默认展开文件浏览器）：
             ├── FileExplorer → FileViewer → ImagePreviewPane
-            ├── GitChanges → GitDiffViewer     — 暂存/未暂存变更、提交 UI
+            │   └── FileSearch   — 文件列表上方的「文件名 + 文件类型(多选)」两行搜索
+            ├── GitChanges → GitDiffViewer     — 暂存/未暂存变更
             └── GitHistory → GitDiffViewer     — 提交日志、提交差异查看器
 ```
 
@@ -87,16 +85,14 @@ ErrorBoundary  (全局兜底)
 | `storage.rs` | 基于文件的持久化（`load_projects` / `save_projects` / `load_project_tasks` / `save_project_tasks`） |
 | `fs.rs` | 文件系统命令（`read_dir_entries` / `read_file_content` / `read_image_preview` / `write_file_content` / `create_file` / `create_directory` / `delete_path` / `list_project_files` / `search_project_files` / `open_in_system_file_manager`），gitignore 标灰走进程内 `ignore` crate 匹配 |
 | `fs_watcher.rs` | 文件树的 fs 事件监听（`watch_dir` / `unwatch_dir`）：按「项目根 + 可见展开目录」挂**非递归** watch，防抖合并后按目录 emit `fs-changed`；watcher 不可用时前端回退固定间隔轮询。**禁止改成对项目根递归 watch**——Linux inotify 会给 node_modules 数万子目录各挂一个 watch 撞 `max_user_watches` 上限 |
-| `git.rs` | 完整 Git 集成：状态 / 分支 / 日志 / 差异 / 暂存 / 提交 / 推送 / 拉取 / `generate_commit_message`，以及 worktree 系列（`create_task_worktree` / `merge_task_worktree` / `remove_task_worktree` / `worktree_diff_stats`） |
+| `git.rs` | Git 集成：状态 / 分支 / 日志 / 差异 / 暂存 / 单文件回滚 / 推送 / 拉取，以及 worktree 系列（`create_task_worktree` / `merge_task_worktree` / `remove_task_worktree` / `worktree_diff_stats`）。**没有提交与「回滚全部变更」命令**——UI 侧已移除 |
 | `analytics.rs` | 解析会话 JSONL 获取 token / 工具调用指标（`read_session_metrics`，供 RunningView 轮询） |
-| `config.rs` | 项目级 `.nezha/config.toml` 管理（`init_project_config` / `read_project_config` / `write_project_config` / `read_agent_config_file` / `write_agent_config_file` / `get_agent_config_file_path`） |
+| `config.rs` | 智能体本地配置文件读写（`read_agent_config_file` / `write_agent_config_file` / `get_agent_config_file_path`），供应用设置里的「智能体配置」用。**项目级 `.nezha/config.toml` 已废弃** |
 | `app_settings.rs` | 应用级智能体路径、版本、UI 偏好（`load_app_settings` / `save_app_settings` / `save_agent_paths` / `save_send_shortcut` / `save_shift_enter_newline` / `save_claude_force_default_tui` / `save_terminal_scrollback` / `detect_agent_paths` / `detect_agent_versions_for_settings` / `get_system_fonts`） |
 | `hooks.rs` + `nezha-hook.mjs` | Claude Code / Codex 的 hook 集成（能力探测、注入、事件回传、`regenerate_claude_settings`） |
 | `event_watcher.rs` | 监听 `.nezha/events/<taskId>/events.jsonl`，把 hook 事件回投到前端 |
-| `notification.rs` | 系统通知发送（任务状态 / attention） |
 | `agent_assist.rs` | 智能体辅助调用：headless 命令生成任务名、commit message 等 |
 | `subprocess.rs` | 子进程通用封装（带超时 / kill_on_drop） |
-| `usage.rs` | 用量统计（token / 调用次数聚合） |
 | `skills.rs` | Skill 注册表读取（`~/.claude/skills/` 等） |
 | `platform/` | 平台相关辅助（macOS 全屏退出、Windows hook 兼容等） |
 
@@ -160,20 +156,9 @@ interface Task {
 
 ## 项目配置
 
-每个项目首次打开时会自动创建 `.nezha/config.toml`（由 `init_project_config` 触发）：
+**项目级 `.nezha/config.toml` 已移除**：默认智能体、默认权限模式、提示词前缀、提交信息提示词与超时这些字段的消费方都已随对应 UI 一起删掉，`init_project_config` / `read_project_config` / `write_project_config` 三个命令也不复存在。旧项目里遗留的 config.toml 不再被读取，可以直接删。
 
-```toml
-[agent]
-default = "claude"                 # 新任务的默认智能体
-default_permission_mode = "ask"    # 新任务的默认权限模式
-prompt_prefix = ""                 # 拼接到每个任务提示词前面的文本
-
-[git]
-commit_prompt = "..."              # generate_commit_message 使用的提示词
-commit_message_timeout_secs = 60   # 生成 commit message 的超时秒数（headless 调用上限）
-```
-
-> 智能体版本号（Claude Code / Codex）统一由应用级 `app_settings`（`~/.nezha/settings.json` + 带缓存的全局探测）管理，**不再存于项目 config.toml**；hook 能力判断（`hooks::usable_for`）一律走全局探测。
+智能体版本号与路径统一由应用级 `app_settings`（`~/.nezha/settings.json` + 带缓存的全局探测）管理；hook 能力判断（`hooks::usable_for`）一律走全局探测。
 
 附加到任务的图片会保存至 `.nezha/attachments/<taskId>/`，其路径会被追加到提示词末尾，以便智能体通过文件工具读取。任务完成后附件会被自动清理。
 
