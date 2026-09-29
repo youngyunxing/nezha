@@ -404,11 +404,7 @@ function App() {
       const byRecency = (a: Task, b: Task) =>
         (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
 
-      const active = projectTasks.filter((task) => isActiveTaskStatus(task.status)).sort(byRecency);
-      if (active.length > 0) {
-        return { selectedTaskId: active[0].id, isNewTask: false, localSession: null };
-      }
-
+      // ① 上次在这个项目里看的东西优先——「回到我离开时的界面」比「猜我想看活跃会话」更稳。
       const persisted = persistedViewsRef.current[projectId];
       if (
         persisted?.selectedTaskId &&
@@ -418,6 +414,12 @@ function App() {
       }
       if (persisted?.localSession) {
         return { selectedTaskId: null, isNewTask: false, localSession: persisted.localSession };
+      }
+
+      // ② 没有上次记录（比如第一次打开这个项目）才去找正在跑的会话。
+      const active = projectTasks.filter((task) => isActiveTaskStatus(task.status)).sort(byRecency);
+      if (active.length > 0) {
+        return { selectedTaskId: active[0].id, isNewTask: false, localSession: null };
       }
 
       const latest = [...projectTasks].sort(byRecency)[0];
@@ -866,7 +868,11 @@ function App() {
     });
     setActiveProject(project);
     mountProject(project.id);
-    updateProjectView(project.id, { selectedTaskId: taskId, isNewTask: false });
+    updateProjectView(project.id, {
+      selectedTaskId: taskId,
+      isNewTask: false,
+      localSession: null,
+    });
 
 
     // 2) 终端 buffer 在 PTY 启动前就要建好，否则首批输出会进不来 buffer。
@@ -1165,7 +1171,11 @@ function App() {
     });
     setActiveProject(project);
     mountProject(project.id);
-    updateProjectView(project.id, { selectedTaskId: forkedTask.id, isNewTask: false });
+    updateProjectView(project.id, {
+      selectedTaskId: forkedTask.id,
+      isNewTask: false,
+      localSession: null,
+    });
     tm.resetTaskTerminal(forkedTask.id);
     invokeForkTask(forkedTask, project, sourceSessionId);
   }
@@ -1588,10 +1598,18 @@ function App() {
               onSelectLocalSession={(session) => handleSelectLocalSession(project, session)}
               onResumeLocalSession={(session) => handleResumeLocalSession(project, session)}
               onNewTask={() =>
-                updateProjectView(project.id, { selectedTaskId: null, isNewTask: true })
+                updateProjectView(project.id, {
+                  selectedTaskId: null,
+                  isNewTask: true,
+                  localSession: null,
+                })
               }
               onSelectTask={(id) =>
-                updateProjectView(project.id, { selectedTaskId: id, isNewTask: false })
+                updateProjectView(project.id, {
+                  selectedTaskId: id,
+                  isNewTask: false,
+                  localSession: null,
+                })
               }
               onDeleteTask={handleDeleteTask}
               onToggleTaskStar={handleToggleTaskStar}

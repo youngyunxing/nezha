@@ -482,6 +482,7 @@ export function ProjectPage({
                 openFiles.length === 0 &&
                 !openDiff &&
                 !isNewTask &&
+                !localSession &&
                 !!selectedTask &&
                 task.id === selectedTaskId;
               const worktreePath =
