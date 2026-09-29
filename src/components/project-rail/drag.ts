@@ -32,11 +32,12 @@ export function computeRailDropIndex(
   visibleLen: number,
   draggedVisibleIndex: number,
   stride: number = RAIL_ITEM_STRIDE,
+  paddingTop: number = RAIL_PADDING_TOP,
 ): number {
   const escapedX =
     clientX < railRect.left - RAIL_DRAG_ESCAPE_PX || clientX > railRect.right + RAIL_DRAG_ESCAPE_PX;
   if (escapedX) return Math.max(0, draggedVisibleIndex);
-  const relativeY = clientY - railRect.top - RAIL_PADDING_TOP;
+  const relativeY = clientY - railRect.top - paddingTop;
   const rawIndex = Math.round(relativeY / stride);
   return Math.max(0, Math.min(visibleLen, rawIndex));
 }

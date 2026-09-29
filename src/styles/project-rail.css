@@ -1,8 +1,7 @@
-/* ── Project Rail（左侧项目竖条）────────────────────────────────────────────────
+/* ── Project Drawer（项目抽屉）──────────────────────────────────────────────────
  * 与 skill-hub.css 同一套路：静态布局 + hover / data-* 状态全部放在这里，
  * 组件里不写 style={{}}。尺寸常量（item 36 / gap 5 / padding-top 10）由
- * ProjectRail 通过 --rail-item-size / --rail-item-gap / --rail-padding-top 注入，
- * 单一来源在 styles/rail-drag.ts 与 project-rail/drag.ts，拖拽落点计算依赖它们。
+ * 行高/间距常量单一来源在 styles/rail-drag.ts 与 project-rail/drag.ts，拖拽落点计算依赖它们。
  */
 
 /* ── Project Drawer（项目抽屉）──────────────────────────────────────────────────

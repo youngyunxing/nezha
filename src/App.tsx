@@ -1298,9 +1298,9 @@ function App() {
   }
 
   // 拖拽结束时一次性提交新顺序;beforeId === null 表示拖到 visible 末尾。
-  // visibleIds 来自 ProjectRail 内部过滤后的 railProjects(去 hiddenFromRail/hub),
+  // visibleIds 来自抽屉内按搜索词过滤后的顺序（含 hiddenFromRail 的项目），
   // src/dst 必须在这个子集里算,否则会无声打乱隐藏项的相对位置。
-  // 拖拽期间 ProjectRail 内部只用 transform 让位,不会调到这里,避免高频重渲染和写盘。
+  // 拖拽期间抽屉内部只用 transform 让位,不会调到这里,避免高频重渲染和写盘。
   const handleCommitProjectOrder = useCallback(
     (draggedId: string, beforeId: string | null, visibleIds: string[]) => {
       setProjects((prev) => {

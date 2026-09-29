@@ -3,7 +3,7 @@ import type React from "react";
 import type { Project, ProjectAvatarStyle, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
-import { DRAWER_ROW_STRIDE } from "../styles/rail-drag";
+import { DRAWER_ROW_PADDING_TOP, DRAWER_ROW_STRIDE } from "../styles/rail-drag";
 import { Search, Plus } from "lucide-react";
 import { projectMatchesRailSearch } from "./project-rail/search";
 import {
@@ -14,7 +14,6 @@ import {
 import { AttentionIndicator, RailItem, type RailItemPanel } from "./project-rail/RailItem";
 import {
   RAIL_DRAG_THRESHOLD_PX,
-  RAIL_PADDING_TOP,
   RAIL_SUPPRESS_CLICK_MS,
   type DragOrigin,
   type DragViz,
@@ -143,6 +142,7 @@ export function ProjectDrawer({
         visible.length,
         draggedVisibleIdx,
         DRAWER_ROW_STRIDE,
+        DRAWER_ROW_PADDING_TOP,
       );
 
       const nextViz: DragViz = {
@@ -313,9 +313,7 @@ export function ProjectDrawer({
   }, [projectActivityById, railProjects]);
 
   // 尺寸常量注入 CSS 变量:拖拽落点计算(drag.ts)与布局共用同一来源,避免两边漂移。
-  const railVars = {
-    "--rail-padding-top": `${RAIL_PADDING_TOP}px`,
-  } as React.CSSProperties;
+
   const draggedVisibleIdxForRender = draggedVisibleIndex;
 
   const previewVars =
@@ -328,7 +326,7 @@ export function ProjectDrawer({
   const { t } = useI18n();
 
   return (
-    <div ref={railContainerRef} className="rail-drawer" style={railVars}>
+    <div className="rail-drawer">
       <div className="rail-drawer-header">
         <div className="rail-drawer-title">{t("welcome.projects")}</div>
         <div className="rail-drawer-search">
@@ -360,7 +358,7 @@ export function ProjectDrawer({
         </button>
       </div>
 
-      <div className="rail-drawer-list">
+      <div ref={railContainerRef} className="rail-drawer-list">
         {railProjects.length === 0 && (
           <div className="rail-drawer-empty">{t("welcome.noMatchingProjects")}</div>
         )}
