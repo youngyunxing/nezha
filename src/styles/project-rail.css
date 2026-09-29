@@ -153,17 +153,14 @@
 /* ── 「展开全部」抽屉 ─────────────────────────────────────────────────────────── */
 
 .rail-drawer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  position: relative;
+  flex-shrink: 0;
   width: 220px;
-  background: var(--bg-panel);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-dim);
   display: flex;
   flex-direction: column;
-  z-index: 50;
-  box-shadow: var(--shadow-drawer);
+  overflow: hidden;
 }
 
 .rail-drawer-header {
@@ -218,6 +215,7 @@
   background: var(--bg-card);
   color: var(--text-muted);
   font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }

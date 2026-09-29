@@ -155,17 +155,6 @@ export const task = {
     borderBottom: "1px solid var(--border-dim)",
     flexShrink: 0,
   },
-  backBtn: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: "4px 6px",
-    borderRadius: 5,
-    display: "flex",
-    alignItems: "center",
-    color: "var(--text-muted)",
-    flexShrink: 0,
-  },
   panelCollapseBtn: {
     background: "none",
     border: "none",

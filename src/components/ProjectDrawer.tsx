@@ -34,7 +34,6 @@ export function ProjectDrawer({
   onToggleProjectHidden,
   onUpdateProjectAvatar,
   onDelete,
-  onClose,
 }: {
   projects: Project[];
   allTasks: Task[];
@@ -46,7 +45,6 @@ export function ProjectDrawer({
   onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDelete: (projectId: string) => void;
-  onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   // 右键菜单 / 外观编辑器:同一时刻只允许一个 rail 项打开,由这里统一持有。
@@ -275,7 +273,6 @@ export function ProjectDrawer({
       }
       onSwitch(project);
       setOpenPanel(null);
-      onClose();
     },
     [onSwitch],
   );
@@ -337,24 +334,14 @@ export function ProjectDrawer({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key !== "Escape") return;
-              if (query) {
-                setQuery("");
-              } else {
-                onClose();
-              }
+              if (e.key === "Escape" && query) setQuery("");
             }}
             placeholder={t("welcome.searchProjects")}
           />
         </div>
-        <button
-          type="button"
-          className="rail-drawer-add"
-          title={t("welcome.openProject")}
-          aria-label={t("welcome.openProject")}
-          onClick={onOpen}
-        >
+        <button type="button" className="rail-drawer-add" onClick={onOpen}>
           <Plus size={14} strokeWidth={2.4} />
+          <span>{t("welcome.addProject")}</span>
         </button>
       </div>
 

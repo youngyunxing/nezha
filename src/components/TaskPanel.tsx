@@ -1,14 +1,5 @@
 import { useState } from "react";
-import {
-  Search,
-  ChevronLeft,
-  Plus,
-  Trash2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Moon,
-  Sun,
-} from "lucide-react";
+import { Search, Plus, Trash2, PanelLeftClose, PanelLeftOpen, Moon, Sun } from "lucide-react";
 import type {
   Project,
   Task,
@@ -44,8 +35,6 @@ export function TaskPanel({
   onDeleteAllTasks,
   onToggleTaskStar,
   onRunTodo,
-  onBack,
-  backTitle,
   themeVariant,
   themeMode,
   systemPrefersDark,
@@ -86,8 +75,6 @@ export function TaskPanel({
   onDeleteAllTasks: () => void;
   onToggleTaskStar: (id: string) => void;
   onRunTodo: (task: Task) => void;
-  onBack: () => void;
-  backTitle?: string;
   themeVariant: ThemeVariant;
   themeMode: ThemeMode;
   systemPrefersDark: boolean;
@@ -166,9 +153,6 @@ export function TaskPanel({
     <div style={s.taskPanel}>
       {/* Project header */}
       <div style={s.panelHeader}>
-        <button style={s.backBtn} onClick={onBack} title={backTitle ?? t("task.switchProject")}>
-          <ChevronLeft size={15} strokeWidth={2} />
-        </button>
         <ProjectAvatar project={project} size={22} />
         <span style={s.panelProjectName}>{project.name}</span>
         <button

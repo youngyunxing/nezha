@@ -196,7 +196,6 @@ export function ProjectPage({
   const [showSettings, setShowSettings] = useState(false);
   const [showFileSearch, setShowFileSearch] = useState(false);
   const [taskPanelCollapsed, setTaskPanelCollapsed] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
@@ -371,21 +370,18 @@ export function ProjectPage({
 
   return (
     <div style={visible ? s.projectBodyVisible : s.projectBodyHidden}>
-      {drawerOpen && (
-        <ProjectDrawer
-          projects={allProjects}
-          allTasks={tasks}
-          activeProjectId={project.id}
-          attentionBadge={attentionBadge}
-          onSwitch={onSwitchProject}
-          onCommitProjectOrder={onCommitProjectOrder}
-          onOpen={onOpen}
-          onToggleProjectHidden={onToggleProjectHidden}
-          onUpdateProjectAvatar={onUpdateProjectAvatar}
-          onDelete={onDeleteProject}
-          onClose={() => setDrawerOpen(false)}
-        />
-      )}
+      <ProjectDrawer
+        projects={allProjects}
+        allTasks={tasks}
+        activeProjectId={project.id}
+        attentionBadge={attentionBadge}
+        onSwitch={onSwitchProject}
+        onCommitProjectOrder={onCommitProjectOrder}
+        onOpen={onOpen}
+        onToggleProjectHidden={onToggleProjectHidden}
+        onUpdateProjectAvatar={onUpdateProjectAvatar}
+        onDelete={onDeleteProject}
+      />
       <TaskPanel
         project={project}
         repoPath={displayedRepoPath}
@@ -402,7 +398,6 @@ export function ProjectPage({
         onDeleteAllTasks={onDeleteAllTasks}
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
-        onBack={() => setDrawerOpen((v) => !v)}
         themeVariant={themeVariant}
         themeMode={themeMode}
         systemPrefersDark={systemPrefersDark}
