@@ -271,12 +271,15 @@ export function useTerminalManager(options?: {
       const state = resetTerminalWriteState(taskId);
       if (fn) {
         terminalWriteRefs.current[taskId] = fn;
-        // 任务已经不在跑（重启后、或异常中断）：把落盘的屏幕回放上来——这就是「关掉
-        // 之后还能看到上次内容」。仍在跑的任务不回放，否则会与实时输出叠在一起。
+        // 进程已经不在了才回放落盘屏幕（比如打开一个早就结束、没有会话可重画的终端）。
+        // 判据不能用「还没有实时输出」：CLI/shell 启动有几十毫秒空窗，注册正好落在空窗里
+        // 就会先把旧记录铺上，随后被 agent 自己重画的历史盖成两份。跑着的任务里，
+        // 纯终端的旧内容由 seedTaskScreen 预塞进缓冲区、agent 的 TUI 自己会在 --resume
+        // 时重画历史，都不需要这里再回放。
         const context = resolveTaskContextRef.current?.(taskId);
         const buffered = taskBufferRef.current[taskId];
         const hasBufferedOutput = !!buffered && buffered.chunks.length > 0;
-        if (context && !hasBufferedOutput) {
+        if (context && !context.live && !hasBufferedOutput) {
           loadScreenRecord(taskId, context)
             .then((screen) => {
               if (screen && terminalWriteRefs.current[taskId] === fn) fn(screen);
