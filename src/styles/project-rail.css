@@ -163,9 +163,10 @@
 }
 
 .rail-drawer-header {
-  /* 标题已移除以给「添加项目」腾位置，头部不再需要为对齐任务面板而留白。
-     搜索框因此比任务面板的低——这是去掉标题换来的，别再试图对齐。 */
-  padding: 12px 12px 10px;
+  /* 8 + 按钮 32 = 按钮中心落在 24px，与任务面板头部对齐：
+     那边 panelHeader 高 48（全局 border-box）且 align-items: center，
+     22px 的头像中心也是 24px。改 padding-top 或按钮高度都要重算这一行。 */
+  padding: 8px 12px 10px;
   border-bottom: 1px solid var(--border-dim);
 }
 
@@ -197,11 +198,12 @@
 .rail-drawer-add {
   margin-bottom: 8px;
   width: 100%;
+  height: 32px; /* 固定高度，见 .rail-drawer-header 的算术 */
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 7px 9px;
+  padding: 0 9px;
   border-radius: 6px;
   border: 1px solid var(--border-medium);
   background: var(--bg-card);
