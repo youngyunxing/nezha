@@ -100,6 +100,18 @@ fn hide_main_window(window: tauri::Window) {
     hide_window_to_dock(window);
 }
 
+/// Dock 图标角标：前端算出「未读等待」总数（等你确认 + 有新回复，且你还没看过那个
+/// 项目）后调它，0 清除。用 label 而不是 count 是为了能显示「99+」。
+#[tauri::command]
+fn set_dock_badge(window: tauri::Window, count: u32) -> Result<(), String> {
+    let label = match count {
+        0 => None,
+        n if n > 99 => Some("99+".to_string()),
+        n => Some(n.to_string()),
+    };
+    window.set_badge_label(label).map_err(|e| e.to_string())
+}
+
 /// 把主窗口重新显示并聚焦(唤回)。
 /// 窗口可能同时处于 hidden + minimized,故先 unminimize 再 show + focus。
 /// Windows: 托盘左键 / 托盘菜单「显示」/ 单实例第二实例唤回都走这里。
@@ -161,6 +173,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             hide_main_window,
+            set_dock_badge,
             pty::run_task,
             pty::resume_task,
             pty::fork_task,

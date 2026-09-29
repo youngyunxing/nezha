@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import type React from "react";
 import type { Project, ProjectAvatarStyle, Task } from "../types";
+import type { AttentionSeenMap } from "../attentionSeen";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
 import { Moon, Settings, Sun } from "lucide-react";
@@ -36,6 +37,7 @@ export { projectMatchesRailSearch } from "./project-rail/search";
 export function ProjectDrawer({
   projects,
   allTasks,
+  attentionSeen,
   activeProjectId,
   attentionBadge = true,
   onSwitch,
@@ -61,6 +63,8 @@ export function ProjectDrawer({
 }: {
   projects: Project[];
   allTasks: Task[];
+  /** 项目小标的已读时间戳：晚于它的等待事件才亮标（见 attentionSeen.ts） */
+  attentionSeen: AttentionSeenMap;
   activeProjectId: string;
   attentionBadge?: boolean;
   onSwitch: (project: Project) => void;
@@ -109,7 +113,10 @@ export function ProjectDrawer({
     () => projects.filter((p) => projectMatchesRailSearch(p, query)),
     [projects, query],
   );
-  const projectActivityById = useMemo(() => buildProjectActivityMap(allTasks), [allTasks]);
+  const projectActivityById = useMemo(
+    () => buildProjectActivityMap(allTasks, attentionSeen),
+    [allTasks, attentionSeen],
+  );
 
   // 拖拽相关:dragOrigin 一旦设置就开始监听 document 事件;dragViz 高频更新 dropIndex / preview
   // 位置驱动让位动画与浮层。pointerup 时只 commit 一次,projects state 不在拖动过程中变化。
