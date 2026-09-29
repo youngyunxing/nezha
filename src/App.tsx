@@ -371,7 +371,13 @@ function App() {
     load<PersistedProjectViews>(PROJECT_VIEWS_KEY, {}),
   );
 
+  const persistViewsReadyRef = useRef(false);
   useEffect(() => {
+    // 首帧 projectViews 还是空的（初始状态），这时写盘会把刚读出来的存档擦成空。
+    if (!persistViewsReadyRef.current) {
+      persistViewsReadyRef.current = true;
+      return;
+    }
     const reduced: PersistedProjectViews = {};
     for (const [projectId, view] of Object.entries(projectViews)) {
       if (view.localSession) {
@@ -393,8 +399,8 @@ function App() {
    *   ④ 项目里确实没有任务，才回落到新建任务页
    */
   const deriveProjectView = useCallback(
-    (projectId: string): ProjectViewState => {
-      const projectTasks = tasks.filter((task) => task.projectId === projectId);
+    (projectId: string, allTasks: Task[] = tasks): ProjectViewState => {
+      const projectTasks = allTasks.filter((task) => task.projectId === projectId);
       const byRecency = (a: Task, b: Task) =>
         (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
 
@@ -637,6 +643,8 @@ function App() {
       if (startProject) {
         setActiveProject(startProject);
         mountProject(startProject.id);
+        // 落成显式状态：既是本次运行的 sticky 视图，也会被写进持久化。
+        updateProjectView(startProject.id, deriveProjectView(startProject.id, nextTasks));
       }
 
       autoResume.forEach(({ task, project, sessionId }) => {
@@ -777,6 +785,10 @@ function App() {
     });
     setActiveProject(updated);
     mountProject(updated.id);
+    // 该项目本次还没显示过 → 按「活跃会话 → 上次看的 → 最近任务」推导一次并落成状态。
+    if (!projectViews[project.id]) {
+      updateProjectView(project.id, deriveProjectView(project.id));
+    }
   }
 
   function invokeRunTask(task: Task, projectPath: string, images: string[], texts: string[] = []) {
