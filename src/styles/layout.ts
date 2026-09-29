@@ -208,5 +208,4 @@ export const layout = {
     gap: 2,
     overflow: "hidden",
   },
-  rightToolbarSpacer: { flex: 1 },
 } satisfies Record<string, React.CSSProperties>;

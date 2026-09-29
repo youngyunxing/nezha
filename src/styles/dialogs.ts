@@ -209,7 +209,6 @@ export const dialogs = {
     flexShrink: 0,
   },
   settingsContentTitle: { fontSize: 15, fontWeight: 700, color: "var(--text-primary)" },
-  settingsBody: { flex: 1, overflowY: "auto" as const, padding: "18px 20px" },
   // settingsBody 的纵向布局变体(GeneralPanel:字段区块自上而下排列)
   settingsBodyColumn: {
     flex: 1,
@@ -577,24 +576,6 @@ export const dialogs = {
     alignItems: "center",
     color: "var(--text-hint)",
   },
-  modalSection: { marginBottom: 22 },
-  modalSectionTitle: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--text-hint)",
-    letterSpacing: 0.8,
-    textTransform: "uppercase" as const,
-    marginBottom: 10,
-  },
-  modalField: { marginBottom: 14 },
-  modalLabel: {
-    display: "block",
-    fontSize: 12.5,
-    fontWeight: 600,
-    color: "var(--text-secondary)",
-    marginBottom: 5,
-  },
-  modalLabelHint: { fontSize: 11.5, fontWeight: 400, color: "var(--text-hint)", marginLeft: 6 },
   modalSelect: {
     width: "100%",
     padding: "8px 28px 8px 10px",
@@ -635,23 +616,10 @@ export const dialogs = {
     textAlign: "center" as const,
     outline: "none",
   },
-  settingsSelectTrigger: settingsSelectTriggerBase,
   // 通用设置面板的固定宽度下拉(语言 / 任务窗口等)
   settingsSelectTriggerCompact: {
     ...settingsSelectTriggerBase,
     width: 220,
-  },
-  settingsSelectIcon: {
-    flexShrink: 0,
-    color: "var(--text-hint)",
-    transform: "none",
-    transition: "transform 0.15s",
-  },
-  settingsSelectIconOpen: {
-    flexShrink: 0,
-    color: "var(--text-hint)",
-    transform: "rotate(180deg)",
-    transition: "transform 0.15s",
   },
   settingsSelectContent: {
     zIndex: 2000,
@@ -838,32 +806,6 @@ export const dialogs = {
     color: "var(--text-primary)",
     fontWeight: 500,
   },
-  modalTextarea: {
-    width: "100%",
-    padding: "9px 11px",
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 8,
-    color: "var(--text-primary)",
-    fontSize: 12.5,
-    fontFamily: "var(--font-mono)",
-    lineHeight: 1.55,
-    resize: "vertical" as const,
-    outline: "none",
-    minHeight: 120,
-  },
-  modalInput: {
-    width: "100%",
-    padding: "8px 11px",
-    background: "var(--bg-input)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 8,
-    color: "var(--text-primary)",
-    fontSize: 12.5,
-    fontFamily: "var(--font-mono)",
-    outline: "none",
-    boxSizing: "border-box" as const,
-  },
   modalCancelBtn: {
     padding: "6px 14px",
     background: "none",
@@ -926,17 +868,5 @@ export const dialogs = {
     color: "var(--text-primary)",
     cursor: "pointer",
     outline: "none",
-  },
-  settingsFlexRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  settingsInputWithFlex: {
-    flex: 1,
-  },
-  settingsUnitText: {
-    color: "var(--text-hint)",
-    fontSize: 12,
   },
 } satisfies Record<string, React.CSSProperties>;

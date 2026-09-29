@@ -22,7 +22,6 @@ import { GitChanges } from "./GitChanges";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { ProjectDrawer } from "./ProjectDrawer";
-import { SettingsDialog } from "./SettingsDialog";
 import { RightToolbar } from "./RightToolbar";
 import { TodoTaskView } from "./TodoTaskView";
 import { ShellTerminalPanel, type ShellTerminalPanelHandle } from "./ShellTerminalPanel";
@@ -185,7 +184,6 @@ export function ProjectPage({
 
   const [showShellTerminal, setShowShellTerminal] = useState(false);
   const [shellProjectPath, setShellProjectPath] = useState(project.path);
-  const [showSettings, setShowSettings] = useState(false);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
@@ -555,12 +553,7 @@ export function ProjectPage({
         onToggle={handleTogglePanel}
         terminalActive={showShellTerminal}
         onToggleTerminal={handleToggleShellTerminal}
-        onOpenSettings={() => setShowSettings(true)}
       />
-
-      {showSettings && (
-        <SettingsDialog projectPath={project.path} onClose={() => setShowSettings(false)} />
-      )}
     </div>
   );
 }
