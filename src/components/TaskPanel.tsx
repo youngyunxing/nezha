@@ -203,7 +203,6 @@ export function TaskPanel({
           <Plus size={12} strokeWidth={2.4} />
         </button>
       </div>
-      <div style={s.taskDivider} />
 
       <div style={s.taskDivider} />
 
