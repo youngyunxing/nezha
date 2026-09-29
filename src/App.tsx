@@ -527,28 +527,25 @@ function App() {
         activeTaskIds,
       );
 
-      // 异常中断自动恢复：落盘时还是「活动态」、而本进程里没有活子进程的任务，说明它是
-      // 被崩溃 / 强退 / 断电带走的（正常退出的任务会先被标成 cancelled/done）。这类任务
-      // 带着会话 id，直接 --resume 接回去，不用用户逐个点「恢复」。
+      // 异常中断自动恢复：状态是「异常中断」（interrupted）的任务在启动时直接 --resume
+      // 接回去，不用用户逐个点「恢复」。它涵盖两种来源：
+      // - 上次还跑着、被崩溃 / 强退 / 断电带走的（上面那次归一化刚标上 interrupted）；
+      // - 更早就已经是「异常中断」、一直没去管的。
       //
-      // 两条刻意的克制：
-      // - 有活子进程的交给 detached 重连，不在这里抢；
-      // - 「pending 且从没拿到过 transcript 路径」的多半是刚建好就被带走的，会话文件还
-      //   没生成，--resume 必然失败，跳过留给用户手动处理。
-      // 另外不动 updatedAt：任务列表按它排序，改了会让恢复回来的任务全跳到最前面，
+      // 三条刻意的克制：
+      // - 有活子进程的交给 detached 重连，不在这里抢（否则会起第二个 claude）；
+      // - 必须有 transcript 路径：只有 id 没有路径的多半是刚建好就被带走的，会话文件还没
+      //   生成，--resume 必然失败，跳过留给用户手动处理；
+      // - 不想被自动恢复就取消它（cancelled 不在恢复范围内）。
+      // 另外不动 updatedAt：任务列表按它排序，改成 now 会让恢复回来的任务全跳到最前面，
       // 而这里要的是与中断前一致的顺序。
-      const wasActiveById = new Map(
-        rawTasks.filter((task) => isActiveTaskStatus(task.status)).map((task) => [task.id, task]),
-      );
       const autoResume = loadedTasks.flatMap((task) => {
-        const before = wasActiveById.get(task.id);
-        if (!before || activeTaskIds.has(task.id)) return [];
+        if (task.status !== "interrupted" || activeTaskIds.has(task.id)) return [];
         const project = loadedProjects.find((p) => p.id === task.projectId);
         const isCodex = task.agent === "codex";
         const sessionId = isCodex ? task.codexSessionId : task.claudeSessionId;
         const sessionPath = isCodex ? task.codexSessionPath : task.claudeSessionPath;
-        if (!project || !sessionId) return [];
-        if (before.status === "pending" && !sessionPath) return [];
+        if (!project || !sessionId || !sessionPath) return [];
         return [{ task, project, sessionId }];
       });
 
