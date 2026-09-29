@@ -159,6 +159,47 @@ pub fn load_project_tasks(project_id: String) -> Result<Vec<Task>, String> {
     })
 }
 
+/// 项目目录里记一份原始路径。任务记录按 project_id 存放，而 id 是「添加项目」
+/// 那一刻生成的；把路径落盘后，「删掉项目再用同一目录重新添加」才能找回旧记录。
+#[derive(Serialize, Deserialize)]
+struct ProjectMeta {
+    path: String,
+}
+
+fn project_meta_path(project_id: &str) -> Result<PathBuf, String> {
+    Ok(project_dir(project_id)?.join("meta.json"))
+}
+
+#[tauri::command]
+pub fn save_project_meta(project_id: String, path: String) -> Result<(), String> {
+    ensure_project_dir(&project_id)?;
+    let raw = serde_json::to_string_pretty(&ProjectMeta { path }).map_err(|e| e.to_string())?;
+    atomic_write(&project_meta_path(&project_id)?, &raw)
+}
+
+/// 按绝对路径找已有记录的项目 id（没有则 None）。删除项目时任务记录会保留，
+/// 这里就是「重新添加同一目录」时找回它们的唯一线索。
+#[tauri::command]
+pub fn find_project_id_by_path(path: String) -> Result<Option<String>, String> {
+    let dir = nezha_dir()?.join("projects");
+    if !dir.exists() {
+        return Ok(None);
+    }
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        // 单条记录损坏（截断的 meta.json）不该让查找整体失败，跳过即可。
+        let Ok(raw) = fs::read_to_string(entry.path().join("meta.json")) else {
+            continue;
+        };
+        if let Ok(meta) = serde_json::from_str::<ProjectMeta>(&raw) {
+            if meta.path == path {
+                return Ok(Some(entry.file_name().to_string_lossy().into_owned()));
+            }
+        }
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 pub fn save_project_tasks(project_id: String, tasks: Vec<Task>) -> Result<(), String> {
     ensure_project_dir(&project_id)?;

@@ -486,6 +486,12 @@ function App() {
       }
       setProjects(projectsForState);
 
+      // 给已有数据补一份 path 索引：任务记录按 project_id 存放，而 id 是「添加项目」
+      // 那一刻生成的。没有这份索引，删掉项目再重新添加同一目录就找不回旧记录了。
+      projectsForState.forEach((p) => {
+        invoke("save_project_meta", { projectId: p.id, path: p.path }).catch(console.error);
+      });
+
       // 没有首页了：启动直接进入最近打开的项目。只设内存状态，不碰 lastOpenedAt
       // ——否则每次启动都会重写一遍 projects.json。
       const mostRecent = [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
@@ -590,9 +596,19 @@ function App() {
     if (!selected) return;
     const path = selected as string;
     const existing = projects.find((p) => p.path === path);
+    // 同一目录以前加过（哪怕项目已被删）：沿用旧记录的项目 id，磁盘上的 tasks.json
+    // 才能被重新加载回来——删项目不清会话记录，靠的就是这条线索。
+    const reusedId = existing
+      ? null
+      : await invoke<string | null>("find_project_id_by_path", { path });
     const project: Project = existing
       ? { ...existing, lastOpenedAt: Date.now() }
-      : { id: `${Date.now()}`, name: deriveProjectName(path), path, lastOpenedAt: Date.now() };
+      : {
+          id: reusedId ?? `${Date.now()}`,
+          name: deriveProjectName(path),
+          path,
+          lastOpenedAt: Date.now(),
+        };
     setProjects((prev) => {
       const next = existing ? prev.map((p) => (p.path === path ? project : p)) : [project, ...prev];
       persistProjects(next, showToast, formatSaveProjectsError);
@@ -601,21 +617,34 @@ function App() {
     setActiveProject(project);
     mountProject(project.id);
     updateProjectView(project.id, createDefaultProjectViewState());
+    void invoke("save_project_meta", { projectId: project.id, path }).catch(console.error);
 
-    // 新添加的项目直接开一个 Claude Code 本地会话，名字固定 main——省掉「先建任务」
-    // 这一步。已存在的项目不动：它的任务列表里通常已经有 main 了。
-    if (!existing) {
-      void handleSubmitTask(project, {
-        name: "main",
-        prompt: "",
-        agent: "claude",
-        permissionMode: "full_access",
-        images: [],
-        texts: [],
-        launchMode: "local",
-        baseBranch: "",
-      });
+    if (existing) return;
+
+    // 这个目录以前在 Nezha 里跑过就有记录，优先把它们恢复出来；记录里的进程早已
+    // 不在，按「启动时中断归一化」同一套逻辑把活动状态落成 interrupted（可续跑）。
+    const restored = await invoke<Task[]>("load_project_tasks", { projectId: project.id });
+    if (restored.length > 0) {
+      const { tasks: normalizedTasks } = normalizeInterruptedTasksOnStartup(restored, new Set());
+      setTasks((prev) => [
+        ...prev.filter((t) => t.projectId !== project.id),
+        ...normalizedTasks,
+      ]);
+      persistProjectTasks(project.id, normalizedTasks, showToast, formatSaveTasksError);
+      return;
     }
+
+    // 没有任何记录的全新项目：直接开一个 Claude Code 本地会话，名字固定 main。
+    void handleSubmitTask(project, {
+      name: "main",
+      prompt: "",
+      agent: "claude",
+      permissionMode: "full_access",
+      images: [],
+      texts: [],
+      launchMode: "local",
+      baseBranch: "",
+    });
   }
 
   function handleProjectClick(project: Project) {
@@ -1158,8 +1187,31 @@ function App() {
       kind: "warning",
     });
     if (!ok) return;
-    const projectTaskIds = tasks.filter((t) => t.projectId === projectId).map((t) => t.id);
-    deleteTasks(projectTaskIds);
+    // 只把项目从列表里摘掉，会话记录一律保留：磁盘上的 tasks.json 不动，重新添加
+    // 同一目录时会按 path 找回（find_project_id_by_path）。但正在跑的任务必须真杀掉
+    // 进程，否则会变成没有界面的后台 agent；状态落成 interrupted，记录仍可续跑。
+    const projectTasks = tasks.filter((t) => t.projectId === projectId);
+    projectTasks
+      .filter((t) => isActiveTaskStatus(t.status))
+      .forEach((t) => {
+        invoke("cancel_task", {
+          taskId: t.id,
+          projectPath: t.worktreePath ?? project.path,
+        }).catch(() => {});
+      });
+    if (projectTasks.length > 0) {
+      const interruptedAt = Date.now();
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.projectId === projectId && isActiveTaskStatus(t.status)
+            ? { ...t, status: "interrupted" as TaskStatus, updatedAt: interruptedAt }
+            : t,
+        );
+        persistProjectTasks(projectId, next, showToast, formatSaveTasksError);
+        return next;
+      });
+      tm.removeTaskBuffers(projectTasks.map((t) => t.id));
+    }
     setProjects((prev) => {
       const next = prev.filter((p) => p.id !== projectId);
       persistProjects(next, showToast, formatSaveProjectsError);

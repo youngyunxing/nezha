@@ -222,6 +222,8 @@ pub fn run() {
             storage::save_projects,
             storage::load_project_tasks,
             storage::save_project_tasks,
+            storage::save_project_meta,
+            storage::find_project_id_by_path,
             app_settings::load_app_settings,
             app_settings::save_agent_paths,
             app_settings::save_send_shortcut,

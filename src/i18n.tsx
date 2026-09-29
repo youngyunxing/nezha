@@ -186,7 +186,7 @@ const translations: Record<string, string> = {
   "task.deleteTitle": "删除任务",
   "task.deletePrompt": "删除任务“{prompt}”？",
   "task.deleteProjectTitle": "删除项目",
-  "task.deleteProjectPrompt": "删除项目“{project}”及其所有任务记录？",
+  "task.deleteProjectPrompt": "把项目“{project}”从列表移除？会话记录会保留，之后重新添加这个目录即可恢复。",
   "newTask.title": "今天想构建什么？",
   "newTask.hookVersionLow":
     "当前 {agent} 版本 {detected} 低于 {min}，任务状态检测已回退到轮询。升级 {agent} 到 {min}+ 可启用更可靠的 hook 状态检测。",
