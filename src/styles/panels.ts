@@ -765,11 +765,46 @@ export const panels = {
   fileSearchBox: {
     ...searchFieldBase,
   },
+  // 与上面的文件名输入框同一套度量：同高、同圆角、同边框色、同字号，
+  // 只靠右端箭头和 hover 底色区分「这是下拉」。
+  fileSearchTypeBox: {
+    ...searchFieldBase,
+    width: "100%",
+    justifyContent: "space-between",
+    color: "var(--text-primary)",
+    fontFamily: "var(--font-ui)",
+    fontSize: 12.5,
+    textAlign: "left" as const,
+    cursor: "pointer",
+    outline: "none",
+  },
   fileSearchTypeValue: {
     minWidth: 0,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
+  },
+  fileSearchTypeChevron: {
+    flexShrink: 0,
+    color: "var(--text-hint)",
+    transition: "transform 0.15s",
+  },
+  fileSearchTypeContent: {
+    zIndex: 2000,
+    background: "var(--bg-card)",
+    border: "1px solid var(--border-medium)",
+    borderRadius: 8,
+    boxShadow: "var(--shadow-md)",
+    padding: 4,
+    minWidth: "var(--radix-popover-trigger-width)",
+    overflow: "hidden",
+  },
+  // 行高 26 = 输入框里文字行高（fileSearchInput.height），字号 12.5 也与触发器一致，
+  // 列表看起来就是触发器里那行字的自然延伸。
+  fileSearchTypeItem: {
+    height: 26,
+    padding: "0 8px",
+    fontSize: 12.5,
   },
   fileSearchIcon: {
     flexShrink: 0,
@@ -802,7 +837,7 @@ export const panels = {
     flexShrink: 0,
   },
   fileSearchTypeList: {
-    maxHeight: 260,
+    maxHeight: 300,
     overflowY: "auto" as const,
   },
   fileSearchTypeSeparator: {

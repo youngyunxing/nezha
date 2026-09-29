@@ -210,9 +210,25 @@ export function FileSearchBar({ search }: { search: FileSearchState }) {
 
       <Popover.Root open={typeOpen} onOpenChange={setTypeOpen}>
         <Popover.Trigger asChild>
-          <button type="button" aria-label={t("file.searchTypeFilter")} style={s.settingsSelectTrigger}>
+          <button
+            type="button"
+            aria-label={t("file.searchTypeFilter")}
+            style={s.fileSearchTypeBox}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "var(--bg-hover)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "var(--bg-card)";
+            }}
+          >
             <span style={s.fileSearchTypeValue}>{typeLabel}</span>
-            <ChevronDown size={13} style={typeOpen ? s.settingsSelectIconOpen : s.settingsSelectIcon} />
+            <ChevronDown
+              size={12}
+              style={{
+                ...s.fileSearchTypeChevron,
+                transform: typeOpen ? "rotate(180deg)" : "none",
+              }}
+            />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -220,11 +236,12 @@ export function FileSearchBar({ search }: { search: FileSearchState }) {
             side="bottom"
             align="start"
             sideOffset={4}
-            style={{ ...s.settingsSelectContent, minWidth: "var(--radix-popover-trigger-width)" }}
+            style={s.fileSearchTypeContent}
           >
             <button
               type="button"
               className="branch-popover-item"
+              style={s.fileSearchTypeItem}
               onClick={search.selectAllTypes}
             >
               <span className="branch-popover-item-name">{t("file.searchAllTypes")}</span>
@@ -246,6 +263,7 @@ export function FileSearchBar({ search }: { search: FileSearchState }) {
                     key={filter.id}
                     type="button"
                     className="branch-popover-item"
+                    style={s.fileSearchTypeItem}
                     onClick={() => search.toggleType(filter.id)}
                   >
                     <span className="branch-popover-item-name">{filterLabel(filter, t)}</span>
