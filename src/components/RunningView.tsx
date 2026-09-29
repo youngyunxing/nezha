@@ -164,8 +164,10 @@ export function RunningView({
     t("running.untitledTask"),
   );
   // 能 Fork 才算得上「可以 Fork 的会话」：工作树任务和没有会话 id 的（纯终端）都不行，
-  // 这两种情况下按钮直接不出现，而不是置灰占位。
+  // 这两种情况下按钮直接不出现，而不是置灰占位。跑着的会话也能 Fork —— CLI 是读落盘的
+  // transcript 复制，正在生成的那一轮还没落盘、不会被带过去。
   const canFork = !task.worktreePath && Boolean(resumeSessionId) && Boolean(onFork);
+  // 导出不设门槛：只要有会话文件就显示（跑着的任务也能导，等于给当前进度拍个快照）。
   const canExport = Boolean(sessionPath);
 
   const handleExport = async () => {
@@ -483,10 +485,10 @@ export function RunningView({
               </span>
             </button>
           )}
-        {!isActive && canFork && (
+        {canFork && (
           <button
             type="button"
-            style={s.cancelBtn}
+            style={s.resumeBtn}
             title={t("running.forkSession")}
             onClick={() => setForkDialogOpen(true)}
           >
@@ -494,10 +496,10 @@ export function RunningView({
             <span>{t("running.forkSession")}</span>
           </button>
         )}
-        {!isActive && canExport && (
+        {canExport && (
           <button
             type="button"
-            style={{ ...s.cancelBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
+            style={{ ...s.resumeBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
             title={t("running.exportMarkdown")}
             disabled={exporting}
             onClick={handleExport}
