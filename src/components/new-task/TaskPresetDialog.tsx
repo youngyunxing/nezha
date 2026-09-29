@@ -159,7 +159,9 @@ export function TaskPresetAddDialog({
             {t("preset.dialogHint")}
           </Dialog.Description>
 
-          <PresetFields draft={draft} setDraft={setDraft} />
+          <div style={s.presetAddForm}>
+            <PresetFields draft={draft} setDraft={setDraft} />
+          </div>
 
           <div style={s.forkDialogActions}>
             <Dialog.Close asChild>

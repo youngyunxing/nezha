@@ -129,14 +129,15 @@ export const task = {
     cursor: "pointer",
     transition: "background 0.1s, color 0.1s",
   },
-  presetEditBody: { display: "flex", gap: 12, minHeight: 220 },
+  // 固定高度：表单里「命令」只在终端类型出现，切换类型/换一条时高度会变，窗口就会跳
+  presetEditBody: { display: "flex", gap: 12, height: 320 },
   presetEditList: {
     width: 150,
     flexShrink: 0,
     display: "flex",
     flexDirection: "column",
     gap: 2,
-    maxHeight: 300,
+    height: "100%",
     overflowY: "auto",
     paddingRight: 8,
     borderRight: "1px solid var(--border-dim)",
@@ -159,7 +160,13 @@ export const task = {
     color: "var(--control-active-fg)",
     fontWeight: 600,
   },
-  presetEditPanel: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" },
+  presetEditPanel: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+  },
   presetEditEmpty: { fontSize: 12, color: "var(--text-hint)", padding: "8px 4px" },
   presetSectionHeader: {
     padding: 0,
@@ -212,6 +219,8 @@ export const task = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
   },
+  // 添加弹窗的表单区：命令字段随类型出现/消失，给个最小高度免得窗口跟着缩
+  presetAddForm: { minHeight: 250 },
   presetFieldRow: { display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 10 },
   presetSwitchRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 },
   taskDivider: { height: 1, background: "var(--border-dim)", margin: "4px 10px 2px" },
