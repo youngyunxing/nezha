@@ -48,6 +48,8 @@ import {
   TaskPresetEditDialog,
 } from "./components/new-task/TaskPresetDialog";
 import { loadQuickInputs, saveQuickInputs, type QuickInput as QuickInputItem } from "./quickInputs";
+import { buildHandoffPrompt, sessionMessagesToText, type CopyableMessage } from "./sessionText";
+import type { HandoffOptions } from "./components/running-view/FlowHandoff";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
   normalizeProjectNameInput,
@@ -519,6 +521,43 @@ function App() {
   useEffect(() => {
     saveQuickInputs(quickInputs);
   }, [quickInputs]);
+
+  /** 把当前会话的上下文交给另一个 agent：跨 agent 没法恢复对方的会话记录，所以是把
+   *  上下文原样写进新任务的提示词。新任务用占位名，跑完第一轮会自动起标题。 */
+  async function handleHandoff(taskId: string, options: HandoffOptions) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const project = projects.find((p) => p.id === task.projectId);
+    const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
+    if (!project || !sessionPath) return;
+    const sourceLabel = task.agent === "codex" ? "Codex" : "Claude Code";
+    const targetLabel = options.agent === "codex" ? "Codex" : "Claude Code";
+    try {
+      const messages = await invoke<CopyableMessage[]>("read_session_messages", { sessionPath });
+      const contextText = sessionMessagesToText(messages, {
+        count: options.contextCount,
+        assistantLabel: sourceLabel,
+        youLabel: t("copySession.you"),
+      });
+      if (!contextText) {
+        showToast(t("copySession.empty"), "warning");
+        return;
+      }
+      showToast(t("handoff.created", { agent: targetLabel }), "success");
+      await handleSubmitTask(project, {
+        prompt: buildHandoffPrompt({ sourceLabel, contextText, note: options.note }),
+        agent: options.agent,
+        permissionMode: "full_access",
+        images: [],
+        texts: [],
+        launchMode: "local",
+        baseBranch: "",
+        name: defaultTaskName(options.agent, `${Date.now()}`),
+      });
+    } catch (error) {
+      showToast(t("handoff.failed", { error: String(error) }), "error");
+    }
+  }
 
   function handleSaveQuickInput(item: QuickInputItem) {
     setQuickInputs((prev) =>
@@ -1799,6 +1838,7 @@ function App() {
               onMarkTaskRead={markTaskRead}
               attentionSeen={attentionSeen}
               presets={presets}
+              onHandoffTask={handleHandoff}
               quickInputs={quickInputs}
               onSaveQuickInput={handleSaveQuickInput}
               onDeleteQuickInput={handleDeleteQuickInput}

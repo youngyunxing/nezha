@@ -16,6 +16,7 @@ import type {
 import type { AttentionSeenMap } from "../attentionSeen";
 import type { TaskPreset } from "../taskPresets";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
+import type { HandoffOptions } from "./running-view/FlowHandoff";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskDialog } from "./new-task/NewTaskDialog";
@@ -61,6 +62,7 @@ export function ProjectPage({
   attentionSeen,
   presets,
   onRunPreset,
+  onHandoffTask,
   quickInputs,
   onSaveQuickInput,
   onDeleteQuickInput,
@@ -135,6 +137,8 @@ export function ProjectPage({
   /** 快捷创建按钮 */
   presets: TaskPreset[];
   onRunPreset: (preset: TaskPreset, repoPath: string) => void;
+  /** 把当前会话流转给另一个 agent（会话右下角）*/
+  onHandoffTask: (taskId: string, options: HandoffOptions) => void;
   /** 快捷输入（会话右下角） */
   quickInputs: QuickInputItem[];
   onSaveQuickInput: (item: QuickInputItem) => void;
@@ -437,6 +441,7 @@ export function ProjectPage({
                   onDiscardWorktree={() => onDiscardWorktree(task.id)}
                   onReconnect={() => onReconnectTask(task.id)}
                   onMarkRead={() => onMarkTaskRead(task.id)}
+                  onHandoff={(options) => onHandoffTask(task.id, options)}
                   quickInputs={quickInputs}
                   onSaveQuickInput={onSaveQuickInput}
                   onDeleteQuickInput={onDeleteQuickInput}

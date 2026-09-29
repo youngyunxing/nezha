@@ -14,12 +14,14 @@ import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
 import { CopySession } from "./running-view/CopySession";
+import { FlowHandoff, type HandoffOptions } from "./running-view/FlowHandoff";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
 import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
 import s from "../styles";
 import {
+  ArrowRightLeft,
   RotateCcw,
   Pencil,
   GitMerge,
@@ -96,6 +98,7 @@ export function RunningView({
   onDiscardWorktree,
   onReconnect,
   onMarkRead,
+  onHandoff,
   quickInputs,
   onSaveQuickInput,
   onDeleteQuickInput,
@@ -123,6 +126,8 @@ export function RunningView({
   onReconnect: () => void;
   /** 这一轮的新回复已被看到：把「有新回复」落回「空闲待命」 */
   onMarkRead?: () => void;
+  /** 把当前会话流转给另一个 agent */
+  onHandoff: (options: HandoffOptions) => void;
   /** 会话右下角的快捷输入 */
   quickInputs: QuickInputItem[];
   onSaveQuickInput: (item: QuickInputItem) => void;
@@ -169,6 +174,7 @@ export function RunningView({
   const [worktreeBusy, setWorktreeBusy] = useState<"merge" | "discard" | null>(null);
   const [exporting, setExporting] = useState(false);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
   const [bannerCompact, setBannerCompact] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const interruptedBannerRef = useRef<HTMLDivElement>(null);
@@ -345,8 +351,20 @@ export function RunningView({
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
-      {/* 会话右下角：复制会话（左）+ 快捷输入（右） */}
+      {/* 会话右下角：流转 + 复制会话 + 快捷输入 */}
       <div style={s.sessionCornerActions}>
+        {sessionPath && (
+          <button
+            type="button"
+            className="quick-input-trigger"
+            style={s.quickInputTrigger}
+            title={t("handoff.button")}
+            onClick={() => setHandoffOpen(true)}
+          >
+            <ArrowRightLeft size={12} strokeWidth={2.3} />
+            <span>{t("handoff.button")}</span>
+          </button>
+        )}
         {sessionPath && (
           <CopySession
             sessionPath={sessionPath}
@@ -558,6 +576,16 @@ export function RunningView({
           </button>
         )}
       </div>
+      <FlowHandoff
+        open={handoffOpen}
+        sourceLabel={task.agent === "codex" ? "Codex" : "Claude Code"}
+        defaultTarget={task.agent === "codex" ? "claude" : "codex"}
+        onOpenChange={setHandoffOpen}
+        onHandoff={(options) => {
+          setHandoffOpen(false);
+          onHandoff(options);
+        }}
+      />
       <ForkTaskDialog
         open={forkDialogOpen}
         defaultName={defaultForkName}

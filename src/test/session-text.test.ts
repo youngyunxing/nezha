@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sessionMessagesToText, type CopyableMessage } from "../sessionText";
+import { buildHandoffPrompt, sessionMessagesToText, type CopyableMessage } from "../sessionText";
 
 const LABELS = { assistantLabel: "Claude Code", youLabel: "你" };
 
@@ -36,5 +36,24 @@ describe("复制会话的文本化", () => {
     expect(
       sessionMessagesToText([{ role: "assistant", content: [{ type: "tool_use" }] }], LABELS),
     ).toBe("");
+  });
+});
+
+describe("流转的开场白", () => {
+  it("带上来源、上下文和交接说明", () => {
+    const prompt = buildHandoffPrompt({
+      sourceLabel: "Claude Code",
+      contextText: "**你**\n\n你好",
+      note: "接着把测试补上",
+    });
+    expect(prompt).toContain("从另一个会话（Claude Code）流转过来");
+    expect(prompt).toContain("<上下文>\n**你**\n\n你好\n</上下文>");
+    expect(prompt).toContain("交接说明：接着把测试补上");
+  });
+
+  it("没写交接说明时给一句默认指令，不留空", () => {
+    const prompt = buildHandoffPrompt({ sourceLabel: "Codex", contextText: "x", note: "   " });
+    expect(prompt).toContain("请先看懂上面的上下文");
+    expect(prompt).not.toContain("交接说明：");
   });
 });

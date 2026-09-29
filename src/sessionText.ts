@@ -39,3 +39,25 @@ export function sessionMessagesToText(
   }
   return blocks.join("\n\n---\n\n");
 }
+
+/**
+ * 流转用的开场白：把源会话的上下文原样交给另一个 agent，并说明这是接手不是新任务。
+ * 目标 agent 读不懂源会话的私有记录格式，所以只能靠这段文本接手。
+ */
+export function buildHandoffPrompt(options: {
+  sourceLabel: string;
+  contextText: string;
+  note?: string;
+}): string {
+  const note = options.note?.trim();
+  const lines = [
+    `下面是从另一个会话（${options.sourceLabel}）流转过来的上下文，请接着往下做，不要从头重来。`,
+    "",
+    "<上下文>",
+    options.contextText,
+    "</上下文>",
+    "",
+    note ? `交接说明：${note}` : "请先看懂上面的上下文，然后告诉我你打算怎么接手。",
+  ];
+  return lines.join("\n");
+}
