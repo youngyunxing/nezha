@@ -40,6 +40,7 @@ import {
   type ProjectRenameResult,
 } from "./projectName";
 import { useI18n } from "./i18n";
+import { ProjectDrawer } from "./components/ProjectDrawer";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -263,6 +264,8 @@ function getInitialFontFamily(key: string, fallback: FontFamily): FontFamily {
   // tokenize 成多个 family 全部 miss；读出时统一 normalize 一次。
   return quoteFontName(stored);
 }
+
+const noop = () => {};
 
 function App() {
   const { showToast } = useToast();
@@ -1450,10 +1453,33 @@ function App() {
         })}
       </div>
       {!activeProject && projects.length === 0 && (
-        <div style={s.appWelcomeLayer}>
-          <button style={s.emptyOpenBtn} type="button" onClick={handleOpen}>
-            {t("welcome.openProjectFolder")}
-          </button>
+        <div style={s.appEmptyShell}>
+          <ProjectDrawer
+            projects={[]}
+            allTasks={[]}
+            activeProjectId=""
+            onSwitch={noop}
+            onCommitProjectOrder={noop}
+            onOpen={handleOpen}
+            onToggleProjectHidden={noop}
+            onUpdateProjectAvatar={noop}
+            onDelete={noop}
+            onRenameProject={async () => ({ ok: false, error: "save_failed" })}
+            themeVariant={themeVariant}
+            onToggleTheme={handleToggleTheme}
+            terminalFontSize={terminalFontSize}
+            onTerminalFontSizeChange={setTerminalFontSize}
+            taskDisplayWindow={taskDisplayWindow}
+            onTaskDisplayWindowChange={setTaskDisplayWindow}
+            attentionBadge={attentionBadge}
+            onAttentionBadgeChange={setAttentionBadge}
+            terminalScrollback={terminalScrollback}
+            onTerminalScrollbackChange={handleTerminalScrollbackChange}
+            uiFontFamily={uiFontFamily}
+            onUiFontFamilyChange={setUiFontFamily}
+            monoFontFamily={monoFontFamily}
+            onMonoFontFamilyChange={setMonoFontFamily}
+          />
         </div>
       )}
     </div>

@@ -26,6 +26,15 @@ export const layout = {
     inset: 0,
     zIndex: 5,
   },
+  /** 一条项目都没有时的外壳：只挂抽屉（它不依赖 project），右侧留空。
+      任务面板强依赖真实 Project，此处无法渲染。 */
+  appEmptyShell: {
+    position: "absolute" as const,
+    inset: 0,
+    zIndex: 5,
+    display: "flex",
+    background: "var(--bg-shell)",
+  },
   welcomeBody: {
     height: "100%",
     display: "flex",
@@ -137,20 +146,6 @@ export const layout = {
     height: "100%",
     padding: 32,
     textAlign: "center",
-  },
-  emptyOpenBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "10px 18px",
-    background: "var(--bg-card)",
-    color: "var(--text-secondary)",
-    border: "1px solid var(--border-medium)",
-    borderRadius: 12,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "var(--shadow-sm)",
   },
   projectBody: { flex: 1, display: "flex", overflow: "hidden" },
   // 非激活项目必须 display:none：visibility:hidden 仍留在 layout tree，会让 macOS
