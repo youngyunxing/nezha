@@ -17,7 +17,6 @@ import { TaskPanel } from "./TaskPanel";
 import { NewTaskView, type NewTaskDraft } from "./NewTaskView";
 import { RunningView } from "./RunningView";
 import { FileExplorer } from "./FileExplorer";
-import { FileSearchDialog } from "./file-explorer/SearchPanel";
 import { FileViewer } from "./FileViewer";
 import { GitChanges } from "./GitChanges";
 import { GitHistory } from "./GitHistory";
@@ -168,7 +167,6 @@ export function ProjectPage({
     rightPanelWidth,
     terminalHeight,
     setOpenDiff,
-    openRightPanel,
     handleTogglePanel,
     handleFileSelect,
     handleFileTabSelect,
@@ -188,7 +186,6 @@ export function ProjectPage({
   const [showShellTerminal, setShowShellTerminal] = useState(false);
   const [shellProjectPath, setShellProjectPath] = useState(project.path);
   const [showSettings, setShowSettings] = useState(false);
-  const [showFileSearch, setShowFileSearch] = useState(false);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
@@ -226,14 +223,6 @@ export function ProjectPage({
     // diff 的 path/hash 都属于旧仓库；切换上下文后继续复用会展示另一个仓库的内容。
     setOpenDiff(null);
   }, [gitContextPath, setOpenDiff]);
-
-  const handleSearchFileSelect = useCallback(
-    (path: string, name: string) => {
-      handleFileSelect(path, name);
-      openRightPanel("files");
-    },
-    [handleFileSelect, openRightPanel],
-  );
 
   // 只挂载当前选中的任务的 xterm 实例，其他任务通过 snapshot 序列化后卸载。
   // 这样同时只有 1 个 WebGL context 存活，避免长时间运行后 GPU 内存累积。
@@ -566,17 +555,8 @@ export function ProjectPage({
         onToggle={handleTogglePanel}
         terminalActive={showShellTerminal}
         onToggleTerminal={handleToggleShellTerminal}
-        onOpenSearch={() => setShowFileSearch(true)}
         onOpenSettings={() => setShowSettings(true)}
       />
-
-      {showFileSearch && (
-        <FileSearchDialog
-          projectPath={project.path}
-          onFileSelect={handleSearchFileSelect}
-          onClose={() => setShowFileSearch(false)}
-        />
-      )}
 
       {showSettings && (
         <SettingsDialog projectPath={project.path} onClose={() => setShowSettings(false)} />

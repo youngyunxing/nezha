@@ -208,6 +208,5 @@ export const layout = {
     gap: 2,
     overflow: "hidden",
   },
-  rightToolbarDivider: { width: 20, height: 1, background: "var(--border-dim)", margin: "4px 0" },
   rightToolbarSpacer: { flex: 1 },
 } satisfies Record<string, React.CSSProperties>;

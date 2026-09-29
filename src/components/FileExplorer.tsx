@@ -19,6 +19,7 @@ import { FileExplorerContextMenu } from "./file-explorer/ContextMenu";
 import { CreateInputRow } from "./file-explorer/CreateInputRow";
 import { FileIcon } from "./FileIcon";
 import { TreeItem } from "./file-explorer/TreeItem";
+import { FileSearchBar, FileSearchResults, useFileSearch } from "./file-explorer/FileSearch";
 import { dispatchFileTreePointerDrag } from "./pathDrop";
 import {
   FALLBACK_REFRESH_MS,
@@ -171,6 +172,9 @@ export function FileExplorer({
   useEffect(() => {
     nodesRef.current = nodes;
   }, [nodes]);
+
+  // 文件名 + 类型两个条件都空时不算搜索，面板照常显示文件树。
+  const search = useFileSearch(projectPath, (result) => onFileSelect(result.path, result.name));
 
   const readEntries = useCallback(
     (path: string) =>
@@ -696,88 +700,102 @@ export function FileExplorer({
           onCopyPath={(event, path, withAt) => void copyPath(event, path, withAt)}
         />
       )}
-      {/* Header */}
-      <div style={s.fileExplorerHeader}>
-        <span style={s.fileExplorerHeaderTitle}>{t("file.files")}</span>
-        <button
-          style={s.fileExplorerIconButton}
-          onClick={() => void refresh()}
-          title={t("common.refresh")}
-          aria-label={t("common.refresh")}
-          onMouseEnter={(e) => setIconButtonHoverStyle(e.currentTarget, true)}
-          onMouseLeave={(e) => setIconButtonHoverStyle(e.currentTarget, false)}
-        >
-          <RotateCcw size={13} />
-        </button>
-      </div>
-      {/* Project root label */}
-      <div style={s.fileExplorerRootLabel}>
-        <span style={s.fileExplorerRootIcon} />
-        {projectName}
-      </div>
-      {/* Tree */}
-      <div
-        ref={scrollRef}
-        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        onContextMenu={handleEmptyContextMenu}
-        style={s.fileExplorerTreeScroll}
-      >
-        {loading ? (
-          <div onContextMenu={handleEmptyContextMenu} style={s.fileExplorerEmpty}>
-            {t("common.loading")}
-          </div>
-        ) : flat.length === 0 ? (
-          <div onContextMenu={handleEmptyContextMenu} style={s.fileExplorerEmpty}>
-            {t("file.emptyDirectory")}
-          </div>
-        ) : (
-          <div
-            style={{ position: "relative", height: flat.length * ROW_HEIGHT + 12 }}
-            onContextMenu={handleEmptyContextMenu}
+      {/* Header + search */}
+      <div style={s.fileExplorerTopBar}>
+        <div style={s.fileExplorerHeader}>
+          <span style={s.fileExplorerHeaderTitle}>{t("file.files")}</span>
+          <button
+            style={s.fileExplorerIconButton}
+            onClick={() => void refresh()}
+            title={t("common.refresh")}
+            aria-label={t("common.refresh")}
+            onMouseEnter={(e) => setIconButtonHoverStyle(e.currentTarget, true)}
+            onMouseLeave={(e) => setIconButtonHoverStyle(e.currentTarget, false)}
           >
-            {flat.slice(startIdx, endIdx + 1).map((row, i) => {
-              if (row.kind === "input") return null;
-              const top = (startIdx + i) * ROW_HEIGHT + 2;
-              return (
-                <div key={row.node.path} style={{ ...s.fileExplorerVirtualRow, top }}>
-                  <TreeItem
-                    node={row.node}
-                    depth={row.depth}
-                    selectedPath={selectedPath}
-                    contextPath={ctxMenu?.path ?? null}
-                    draggingPath={dragPreview?.path ?? null}
-                    onSelect={handleSelect}
-                    onToggle={handleToggle}
-                    onContextMenu={handleContextMenu}
-                    onPointerDown={handlePointerDown}
+            <RotateCcw size={13} />
+          </button>
+        </div>
+        <FileSearchBar search={search} />
+      </div>
+      {search.searchActive ? (
+        <div style={s.fileSearchResults}>
+          <FileSearchResults
+            search={search}
+            onOpen={(result) => onFileSelect(result.path, result.name)}
+          />
+        </div>
+      ) : (
+        <>
+        {/* Project root label */}
+        <div style={s.fileExplorerRootLabel}>
+          <span style={s.fileExplorerRootIcon} />
+          {projectName}
+        </div>
+        {/* Tree */}
+        <div
+          ref={scrollRef}
+          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          onContextMenu={handleEmptyContextMenu}
+          style={s.fileExplorerTreeScroll}
+        >
+          {loading ? (
+            <div onContextMenu={handleEmptyContextMenu} style={s.fileExplorerEmpty}>
+              {t("common.loading")}
+            </div>
+          ) : flat.length === 0 ? (
+            <div onContextMenu={handleEmptyContextMenu} style={s.fileExplorerEmpty}>
+              {t("file.emptyDirectory")}
+            </div>
+          ) : (
+            <div
+              style={{ position: "relative", height: flat.length * ROW_HEIGHT + 12 }}
+              onContextMenu={handleEmptyContextMenu}
+            >
+              {flat.slice(startIdx, endIdx + 1).map((row, i) => {
+                if (row.kind === "input") return null;
+                const top = (startIdx + i) * ROW_HEIGHT + 2;
+                return (
+                  <div key={row.node.path} style={{ ...s.fileExplorerVirtualRow, top }}>
+                    <TreeItem
+                      node={row.node}
+                      depth={row.depth}
+                      selectedPath={selectedPath}
+                      contextPath={ctxMenu?.path ?? null}
+                      draggingPath={dragPreview?.path ?? null}
+                      onSelect={handleSelect}
+                      onToggle={handleToggle}
+                      onContextMenu={handleContextMenu}
+                      onPointerDown={handlePointerDown}
+                    />
+                  </div>
+                );
+              })}
+              {creating && creatingPlacement && (
+                <div
+                  key="__create_row__"
+                  style={{
+                    ...s.fileExplorerVirtualRow,
+                    top: creatingPlacement.index * ROW_HEIGHT + 2,
+                  }}
+                >
+                  <CreateInputRow
+                    depth={creatingPlacement.depth}
+                    kind={creatingPlacement.kind}
+                    value={creatingValue}
+                    onChange={setCreatingValue}
+                    onCommit={() => {
+                      void commitCreate();
+                    }}
+                    onCancel={cancelCreate}
+                    inputRef={inputRef}
                   />
                 </div>
-              );
-            })}
-            {creating && creatingPlacement && (
-              <div
-                key="__create_row__"
-                style={{
-                  ...s.fileExplorerVirtualRow,
-                  top: creatingPlacement.index * ROW_HEIGHT + 2,
-                }}
-              >
-                <CreateInputRow
-                  depth={creatingPlacement.depth}
-                  kind={creatingPlacement.kind}
-                  value={creatingValue}
-                  onChange={setCreatingValue}
-                  onCommit={() => {
-                    void commitCreate();
-                  }}
-                  onCancel={cancelCreate}
-                  inputRef={inputRef}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+              )}
+            </div>
+          )}
+        </div>
+        </>
+      )}
     </div>
   );
 }

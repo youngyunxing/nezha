@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconButton } from "./IconButton";
-import { Folder, Search, GitBranch, History, Settings, Terminal } from "lucide-react";
+import { Folder, GitBranch, History, Settings, Terminal } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { RightPanel } from "../hooks/useProjectPanels";
 import s from "../styles";
@@ -10,14 +10,12 @@ export function RightToolbar({
   onToggle,
   terminalActive,
   onToggleTerminal,
-  onOpenSearch,
   onOpenSettings,
 }: {
   activePanel: RightPanel;
   onToggle: (panel: Exclude<RightPanel, null>) => void;
   terminalActive: boolean;
   onToggleTerminal: () => void;
-  onOpenSearch: () => void;
   onOpenSettings: () => void;
 }) {
   const { t } = useI18n();
@@ -53,10 +51,6 @@ export function RightToolbar({
         active={terminalActive}
         onClick={onToggleTerminal}
       />
-
-      <div style={s.rightToolbarDivider} />
-
-      <IconButton icon={<Search size={17} />} title={t("toolbar.search")} onClick={onOpenSearch} />
 
       <div style={s.rightToolbarSpacer} />
 
