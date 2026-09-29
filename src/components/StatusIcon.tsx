@@ -16,8 +16,9 @@ export function StatusIcon({ status }: { status: TaskStatus }) {
       // 虚线圆：进程正在起来，转瞬即逝的状态
       return <CircleDashed size={14} style={{ color: "var(--text-hint)" }} />;
     case "idle":
-      // 空心圆：会话就绪、没在干活（等你说话）
-      return <Circle size={14} style={{ color: "var(--text-hint)" }} />;
+      // 绿色空心圆：会话就绪、没在干活（等你说话）。绿=健康，空心=没在干活，和
+      // 「正在处理」的绿勾靠形状区分。
+      return <Circle size={14} style={{ color: "var(--success)" }} />;
     case "running":
       // 绿勾：进行中=健康，且不再转圈（转圈在恢复出来的空闲会话上会一直转，语义也不对）。
       return <CheckCircle2 size={14} style={{ color: "var(--success)" }} />;
@@ -25,8 +26,6 @@ export function StatusIcon({ status }: { status: TaskStatus }) {
       return <AlertCircle size={14} style={{ color: "var(--warning)" }} />;
     case "awaiting_review":
       return <CircleCheck size={14} style={{ color: "var(--accent)" }} />;
-    case "detached":
-      return <AlertTriangle size={14} style={{ color: "var(--warning)" }} />;
     case "interrupted":
       return <AlertTriangle size={14} style={{ color: "var(--warning)" }} />;
     case "done":

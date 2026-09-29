@@ -7,7 +7,7 @@ import s from "../../styles";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
-function statusLabelKey(status: Task["status"], agent: Task["agent"]): string {
+function statusLabelKey(status: Task["status"], agent: Task["agent"], alive = false): string {
   switch (status) {
     case "pending":
       return "status.pending";
@@ -20,10 +20,8 @@ function statusLabelKey(status: Task["status"], agent: Task["agent"]): string {
       return "status.inputRequired";
     case "awaiting_review":
       return "status.awaitingReview";
-    case "detached":
-      return "status.detached";
     case "interrupted":
-      return "status.interrupted";
+      return alive ? "status.interruptedAlive" : "status.interrupted";
     case "done":
       return "status.done";
     case "failed":
@@ -91,7 +89,7 @@ export const TaskListItem = memo(
             style={s.taskCardSub}
             title={statusHintKey(task.status, task.agent) ? t(statusHintKey(task.status, task.agent)!) : undefined}
           >
-            {t(statusLabelKey(task.status, task.agent))}
+            {t(statusLabelKey(task.status, task.agent, task.processAlive))}
             {task.status === "done" &&
               task.worktreePath &&
               task.baseBranch &&

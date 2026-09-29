@@ -92,6 +92,7 @@ export function RunningView({
   onMergeWorktree,
   onDiscardWorktree,
   onReconnect,
+  onMarkRead,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -114,6 +115,8 @@ export function RunningView({
   onMergeWorktree?: () => Promise<void>;
   onDiscardWorktree?: () => Promise<void>;
   onReconnect: () => void;
+  /** 这一轮的新回复已被看到：把「有新回复」落回「空闲待命」 */
+  onMarkRead?: () => void;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
@@ -134,8 +137,9 @@ export function RunningView({
     task.status === "running" ||
     task.status === "input_required" ||
     task.status === "awaiting_review";
-  const isDetached = task.status === "detached";
   const isInterrupted = task.status === "interrupted";
+  // 中断的两种情况：进程还活着（点重连接回去）、进程没了（点恢复重新拉起）
+  const canReconnect = isInterrupted && Boolean(task.processAlive);
   const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
   const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
   // 纯终端没有会话 id 可 resume：恢复 = 重开一个 shell（屏幕内容由终端快照/输出缓冲带回）。
@@ -241,7 +245,23 @@ export function RunningView({
     const observer = new ResizeObserver(updateCompact);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [isDetached, isInterrupted, sessionPath]);
+  }, [isInterrupted, sessionPath]);
+
+  // 「有新回复」是未读状态：这个任务正显示在前台（visible）、窗口有焦点，就算你看过了。
+  // 窗口重新获得焦点、页面重新可见时再判一次 —— 切出去再切回来也算看过。
+  useEffect(() => {
+    if (!onMarkRead || !visible || !projectActive || task.status !== "awaiting_review") return;
+    const markIfFocused = () => {
+      if (document.hasFocus()) onMarkRead();
+    };
+    markIfFocused();
+    window.addEventListener("focus", markIfFocused);
+    document.addEventListener("visibilitychange", markIfFocused);
+    return () => {
+      window.removeEventListener("focus", markIfFocused);
+      document.removeEventListener("visibilitychange", markIfFocused);
+    };
+  }, [onMarkRead, visible, projectActive, task.status]);
 
   useEffect(() => {
     if (!sessionPath) {
@@ -422,7 +442,6 @@ export function RunningView({
           </>
         )}
         {!isActive &&
-          !isDetached &&
           !isInterrupted &&
           onResume &&
           canResume &&
@@ -600,7 +619,7 @@ export function RunningView({
       )}
 
       {/* Main content: terminal when active, session view when done/failed. */}
-      {isDetached || isInterrupted ? (
+      {isInterrupted ? (
         <div style={s.interruptedSessionWrap}>
           <div ref={interruptedBannerRef} style={s.interruptedBanner}>
             <div style={s.interruptedBannerIcon}>
@@ -608,7 +627,7 @@ export function RunningView({
             </div>
             <div style={s.interruptedBannerBody}>
               <div style={s.interruptedBannerTitle}>
-                {t(isDetached ? "running.detachedTitle" : "running.interruptedTitle")}
+                {t(canReconnect ? "running.detachedTitle" : "running.interruptedTitle")}
               </div>
             </div>
             <div style={s.interruptedBannerActions}>
@@ -621,11 +640,11 @@ export function RunningView({
                   cursor: canResume ? "pointer" : "not-allowed",
                 }}
                 disabled={!canResume}
-                onClick={isDetached ? onReconnect : onResume}
+                onClick={canReconnect ? onReconnect : onResume}
               >
                 <RotateCcw size={12} strokeWidth={2.1} />
                 <span>
-                  {isDetached
+                  {canReconnect
                     ? bannerCompact
                       ? t("running.reconnect")
                       : t("running.reconnectTask")
@@ -642,7 +661,7 @@ export function RunningView({
             terminalPane
           ) : (
             <div style={s.interruptedNoSessionPane}>
-              {t(isDetached ? "running.detachedNoSession" : "running.interruptedNoSession")}
+              {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
             </div>
           )}
         </div>
@@ -653,7 +672,7 @@ export function RunningView({
       )}
 
       {/* Status bar when task is done and no session path (terminal fallback) */}
-      {!isActive && !isDetached && !isInterrupted && !sessionPath && (
+      {!isActive && !isInterrupted && !sessionPath && (
         <div
           style={{
             padding: "10px 20px",

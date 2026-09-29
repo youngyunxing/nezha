@@ -35,6 +35,8 @@ import { isHideWindowShortcut } from "./shortcuts";
 import { ProjectAppearanceProvider } from "./hooks/useProjectAppearance";
 import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
+import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
+import { buildProjectActivityMap } from "./components/project-rail/activity";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
   normalizeProjectNameInput,
@@ -200,22 +202,13 @@ function normalizeInterruptedTasksOnStartup(
       return task;
     }
 
-    if (hasLiveChild) {
-      if (task.status === "detached") return task;
-      changedProjectIds.add(task.projectId);
-      return {
-        ...task,
-        status: "detached" as TaskStatus,
-        updatedAt: interruptedAt,
-        attentionRequestedAt: task.attentionRequestedAt ?? interruptedAt,
-      };
-    }
-
-    if (task.status === "interrupted") return task;
+    // 一律落成 interrupted，用 processAlive 区分「进程还在 → 点重连」和「进程没了 → 点恢复」
+    if (!hasLiveChild && task.status === "interrupted" && !task.processAlive) return task;
     changedProjectIds.add(task.projectId);
     return {
       ...task,
       status: "interrupted" as TaskStatus,
+      processAlive: hasLiveChild,
       updatedAt: interruptedAt,
       attentionRequestedAt: task.attentionRequestedAt ?? interruptedAt,
     };
@@ -224,12 +217,7 @@ function normalizeInterruptedTasksOnStartup(
   return { tasks: normalized, changedProjectIds };
 }
 
-function shouldIgnoreTaskStatusTransition(current: TaskStatus, next: TaskStatus): boolean {
-  return (
-    current === "detached" &&
-    (next === "running" || next === "input_required" || next === "awaiting_review")
-  );
-}
+
 
 function getSystemPrefersDark() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -306,6 +294,8 @@ function App() {
   // 终端管理器要在回调里读最新的任务表（判断任务在不在跑、属于哪个项目）
   const tasksRef = useRef<Task[]>([]);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
+  // 项目小标的「已读」时间戳：点开项目就标已读，小标随之消失（见 attentionSeen.ts）
+  const [attentionSeen, setAttentionSeen] = useState<AttentionSeenMap>(() => loadAttentionSeen());
   const [projectViews, setProjectViews] = useState<Record<string, ProjectViewState>>({});
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
@@ -485,6 +475,35 @@ function App() {
   }, []);
 
   useEffect(() => {
+    saveAttentionSeen(attentionSeen);
+  }, [attentionSeen]);
+
+  // Dock 角标 = 所有项目「未读等待」之和：有任务在等你确认 / 有新回复、且你还没看过那个
+  // 项目时点亮；点开项目看过、或把等待处理掉（状态离开等待、任务被删）就归零消失。
+  // 应用没在前台时它就是「回来看看」的提示，在前台时它也如实反映还有几处没看。
+  const unreadAttentionTotal = useMemo(() => {
+    let total = 0;
+    for (const activity of buildProjectActivityMap(tasks, attentionSeen).values()) {
+      total += activity.attentionCount;
+    }
+    return total;
+  }, [tasks, attentionSeen]);
+
+  useEffect(() => {
+    invoke("set_dock_badge", { count: unreadAttentionTotal }).catch(() => {});
+  }, [unreadAttentionTotal]);
+
+  // 打开一个项目 = 看过它的等待项，小标消失；之后再出现新的等待事件才会重新亮标/招手。
+  // 同一秒内的重复激活直接跳过，避免无谓的 setState。
+  const activeProjectId = activeProject?.id;
+  useEffect(() => {
+    if (!activeProjectId) return;
+    setAttentionSeen((prev) =>
+      Date.now() - (prev[activeProjectId] ?? 0) < 1000 ? prev : { ...prev, [activeProjectId]: Date.now() },
+    );
+  }, [activeProjectId]);
+
+  useEffect(() => {
     localStorage.setItem("nezha:terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
 
@@ -604,7 +623,7 @@ function App() {
       // - 更早就已经是「异常中断」、一直没去管的。
       //
       // 三条刻意的克制：
-      // - 有活子进程的交给 detached 重连，不在这里抢（否则会起第二个 claude）；
+      // - 有活子进程的不在这里抢，交给「重连」路径（否则会起第二个 claude）；
       //   纯终端没有会话可 resume，但同样自动重开一个 shell（屏幕由落盘记录回放）；
       // - 必须有 transcript 路径：只有 id 没有路径的多半是刚建好就被带走的，会话文件还没
       //   生成，--resume 必然失败，跳过留给用户手动处理；
@@ -631,7 +650,12 @@ function App() {
       const resumedIds = new Set(autoResume.map((item) => item.task.id));
       const nextTasks = loadedTasks.map((task) =>
         resumedIds.has(task.id)
-          ? { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined }
+          ? {
+              ...task,
+              status: "pending" as TaskStatus,
+              processAlive: undefined,
+              attentionRequestedAt: undefined,
+            }
           : task,
       );
       // 先把要恢复的终端屏幕备进输出缓冲区，再让任务转 pending —— 面板一变成 pending
@@ -1056,6 +1080,22 @@ function App() {
   async function seedScreenBeforeRestore(task: Task) {
     if (task.agent !== "shell") return;
     await tm.seedTaskScreen(task.id, { projectId: task.projectId, live: false });
+  }
+
+  /** 「有新回复」是未读状态：你看到了就落回「空闲待命」，列表里不再一直挂着它。
+   *  只改状态和注意力标记，不动 updatedAt —— 否则看一眼任务就把它顶到列表最前面。 */
+  function markTaskRead(taskId: string) {
+    setTasks((prev) => {
+      const target = prev.find((t) => t.id === taskId);
+      if (!target || target.status !== "awaiting_review") return prev;
+      const next = prev.map((t) =>
+        t.id === taskId
+          ? { ...t, status: "idle" as TaskStatus, attentionRequestedAt: undefined }
+          : t,
+      );
+      persistProjectTasks(target.projectId, next, showToast, formatSaveTasksError);
+      return next;
+    });
   }
 
   function handleResumeTask(taskId: string) {
@@ -1564,7 +1604,6 @@ function App() {
       let changed = false;
       const next = prev.map((task) => {
         if (task.id !== taskId) return task;
-        if (shouldIgnoreTaskStatusTransition(task.status, status)) return task;
 
         const attentionRequestedAt =
           status === "input_required" || status === "awaiting_review"
@@ -1671,6 +1710,8 @@ function App() {
               onMergeWorktree={handleMergeWorktree}
               onDiscardWorktree={handleDiscardWorktree}
               onReconnectTask={handleReconnectTask}
+              onMarkTaskRead={markTaskRead}
+              attentionSeen={attentionSeen}
               onInput={tm.handleInput}
               onResize={tm.handleResize}
               onRegisterTerminal={tm.handleRegisterTerminal}
@@ -1706,6 +1747,7 @@ function App() {
           <ProjectDrawer
             projects={[]}
             allTasks={[]}
+            attentionSeen={attentionSeen}
             activeProjectId=""
             onSwitch={noop}
             onCommitProjectOrder={noop}

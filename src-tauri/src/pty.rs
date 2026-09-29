@@ -60,6 +60,19 @@ fn wait_for_session(app: &AppHandle, task_id: &str, is_codex: bool) {
     }
 }
 
+/// 进程退出后落什么状态。
+///
+/// 不能只看退出码：`claude` 用 `/exit` 正常退出时退出码也是 1（实测）。改用两个真实信号 ——
+/// 有没有产生过会话、退出时 hook 记的最近状态是不是 `running`（在干活）。只有「压根没起来」
+/// 和「干活途中挂了」才算失败，其余都是正常结束（记录都在，可续跑）。
+fn exit_status(exit_ok: bool, had_session: bool, was_working: bool) -> &'static str {
+    if !exit_ok && (!had_session || was_working) {
+        "failed"
+    } else {
+        "done"
+    }
+}
+
 fn finalize_task_exit(
     app: &AppHandle,
     task_id: &str,
@@ -102,11 +115,24 @@ fn finalize_task_exit(
         return;
     }
 
-    let status = if exit_ok || had_agent_session { "done" } else { "failed" };
-    let payload = if status == "failed" {
-        let reason = match exit_code {
-            Some(code) => format!("Process exited with code {}", code),
-            None => "Process exited with non-zero status".to_string(),
+    // 退出算完成还是失败：`claude` 用 /exit 正常退出时退出码也是 1（实测），所以不能只看退出码。
+    // 用两个真实信号：从没产生过会话（CLI 起不来 / --resume 失败）、退出时 hook 记的最近状态
+    // 是 running（干活途中崩了）。其余都算正常结束。
+    let was_working = crate::event_watcher::last_status()
+        .lock()
+        .get(task_id)
+        .map(|s| s == "running")
+        .unwrap_or(false);
+    let status = exit_status(exit_ok, had_agent_session, was_working);
+    let failed = status == "failed";
+    let payload = if failed {
+        let reason = if !had_agent_session {
+            "没有建立会话：CLI 没起来，或 --resume 失败".to_string()
+        } else {
+            match exit_code {
+                Some(code) => format!("干活途中退出（code {}）", code),
+                None => "干活途中被中断".to_string(),
+            }
         };
         serde_json::json!({ "task_id": task_id, "status": status, "failure_reason": reason })
     } else {
@@ -845,6 +871,7 @@ pub async fn run_task(
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
 
+    crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
         "task-status",
         serde_json::json!({ "task_id": task_id, "status": "idle" }),
@@ -1057,6 +1084,7 @@ pub async fn resume_task(
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
 
+    crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
         "task-status",
         serde_json::json!({ "task_id": task_id, "status": "idle" }),
@@ -1132,6 +1160,7 @@ pub async fn fork_task(
     } = spawned;
     register_pty_handles(&task_manager, &task_id, master, writer, child)?;
 
+    crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
         "task-status",
         serde_json::json!({ "task_id": task_id, "status": "idle" }),
@@ -1205,3 +1234,30 @@ pub async fn resize_pty(
     Ok(())
 }
 
+#[cfg(test)]
+mod exit_status_tests {
+    use super::exit_status;
+
+    #[test]
+    fn exit_code_alone_does_not_decide() {
+        // 正常 /exit（退出码 1）但没在干活 → 已完成，别标红
+        assert_eq!(exit_status(false, true, false), "done");
+    }
+
+    #[test]
+    fn never_started_is_failed() {
+        // CLI 起不来 / --resume 失败：从没产生过会话
+        assert_eq!(exit_status(false, false, false), "failed");
+    }
+
+    #[test]
+    fn crashed_while_working_is_failed() {
+        assert_eq!(exit_status(false, true, true), "failed");
+    }
+
+    #[test]
+    fn clean_exit_is_done() {
+        assert_eq!(exit_status(true, true, false), "done");
+        assert_eq!(exit_status(true, false, false), "done");
+    }
+}

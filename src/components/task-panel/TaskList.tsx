@@ -104,12 +104,10 @@ export function TaskList({
       const aNeedsAttention =
         a.status === "input_required" ||
         a.status === "awaiting_review" ||
-        a.status === "detached" ||
         a.status === "interrupted";
       const bNeedsAttention =
         b.status === "input_required" ||
         b.status === "awaiting_review" ||
-        b.status === "detached" ||
         b.status === "interrupted";
       if (aNeedsAttention && !bNeedsAttention) return -1;
       if (!aNeedsAttention && bNeedsAttention) return 1;
@@ -132,20 +130,19 @@ export function TaskList({
   }, [taskDisplayWindow]);
 
   const rows = useMemo<VirtualRow[]>(() => {
-    const attentionTasks: Task[] = [];
+    const waitingTasks: Task[] = [];
+    const resumeTasks: Task[] = [];
     const pendingMergeTasks: Task[] = [];
     const starredTasks: Task[] = [];
     const todayTasks: Task[] = [];
     const earlierTasks: Task[] = [];
 
     for (const task of sorted) {
-      if (
-        task.status === "input_required" ||
-        task.status === "awaiting_review" ||
-        task.status === "detached" ||
-        task.status === "interrupted"
-      ) {
-        attentionTasks.push(task);
+      if (task.status === "input_required" || task.status === "awaiting_review") {
+        // 都是「轮到你了」：一个是被卡住必须回，一个是刚答完等你读
+        waitingTasks.push(task);
+      } else if (task.status === "interrupted") {
+        resumeTasks.push(task);
       } else if (
         task.status === "done" &&
         !!task.worktreePath &&
@@ -178,7 +175,8 @@ export function TaskList({
       });
     };
 
-    appendGroup("attention", t("task.needsAttention"), attentionTasks);
+    appendGroup("waiting", t("task.waitingForYou"), waitingTasks);
+    appendGroup("resume", t("task.needsResume"), resumeTasks);
     appendGroup("pending_merge", t("task.pendingMerge"), pendingMergeTasks);
     appendGroup("starred", t("task.starred"), starredTasks);
     appendGroup("today", t("task.today"), todayTasks);

@@ -139,7 +139,6 @@ export type TaskStatus =
   | "running"
   | "input_required"
   | "awaiting_review"
-  | "detached"
   | "interrupted"
   | "done"
   | "failed"
@@ -163,6 +162,9 @@ export interface Task {
   codexSessionPath?: string;
   claudeSessionId?: string;
   claudeSessionPath?: string;
+  /** 重启归一化时的判定：进程还活着=true（点重连即可），进程没了=false（需要恢复）。
+   *  两者都是 interrupted 状态，只有按钮和文案不同。 */
+  processAlive?: boolean;
   /** fork 出来的任务记下源会话 id：fork 完没说过话时，源会话的 transcript 才是唯一能恢复的记录 */
   forkedFromSessionId?: string;
   worktreePath?: string;
@@ -208,7 +210,6 @@ export function isActiveTaskStatus(status: TaskStatus): boolean {
     status === "idle" ||
     status === "running" ||
     status === "input_required" ||
-    status === "awaiting_review" ||
-    status === "detached"
+    status === "awaiting_review"
   );
 }

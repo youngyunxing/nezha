@@ -260,8 +260,15 @@ fn handle_session_start(app: &AppHandle, ev: &HookEvent) {
 /// 高频触发,若每次都 emit `running` 会导致前端无谓的 setState/重渲染,这里做去重。
 static LAST_STATUS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
-fn last_status() -> &'static Mutex<HashMap<String, String>> {
+pub(crate) fn last_status() -> &'static Mutex<HashMap<String, String>> {
     LAST_STATUS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 记录一次状态（含后端自己发的 spawn/idle），供退出时判断「是不是在干活时挂的」。
+pub(crate) fn note_status(task_id: &str, status: &str) {
+    last_status()
+        .lock()
+        .insert(task_id.to_string(), status.to_string());
 }
 
 /// 仅当任务进程仍存活(本进程持有子进程句柄)且状态相比上次有变化时才广播,

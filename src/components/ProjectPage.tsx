@@ -13,6 +13,7 @@ import type {
   FontFamily,
   LocalClaudeSession,
 } from "../types";
+import type { AttentionSeenMap } from "../attentionSeen";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskDialog } from "./new-task/NewTaskDialog";
@@ -52,6 +53,8 @@ export function ProjectPage({
   onMergeWorktree,
   onDiscardWorktree,
   onReconnectTask,
+  onMarkTaskRead,
+  attentionSeen,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -113,6 +116,9 @@ export function ProjectPage({
   onMergeWorktree: (id: string) => Promise<void>;
   onDiscardWorktree: (id: string) => Promise<void>;
   onReconnectTask: (id: string) => void;
+  /** 任务正显示在前台时把它从「有新回复」落回「空闲待命」 */
+  onMarkTaskRead: (id: string) => void;
+  attentionSeen: AttentionSeenMap;
   onInput: (taskId: string, data: string) => void;
   onResize: (taskId: string, cols: number, rows: number) => void;
   onRegisterTerminal: (
@@ -262,6 +268,7 @@ export function ProjectPage({
       <ProjectDrawer
         projects={allProjects}
         allTasks={tasks}
+        attentionSeen={attentionSeen}
         activeProjectId={project.id}
         onSwitch={onSwitchProject}
         onCommitProjectOrder={onCommitProjectOrder}
@@ -409,6 +416,7 @@ export function ProjectPage({
                   onMergeWorktree={() => onMergeWorktree(task.id)}
                   onDiscardWorktree={() => onDiscardWorktree(task.id)}
                   onReconnect={() => onReconnectTask(task.id)}
+                  onMarkRead={() => onMarkTaskRead(task.id)}
                   onInput={(data) => onInput(task.id, data)}
                   onResize={(cols, rows) => onResize(task.id, cols, rows)}
                   onRegisterTerminal={(fn) => onRegisterTerminal(task.id, fn)}
