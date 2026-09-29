@@ -9,7 +9,8 @@ type OpenDiff =
   | { kind: "commit-file"; hash: string; filePath: string; label: string };
 
 export function useProjectPanels() {
-  const [rightPanel, setRightPanel] = useState<RightPanel>(null);
+  // 默认展开文件浏览器；点同一图标可收起，点其他图标切到对应面板。
+  const [rightPanel, setRightPanel] = useState<RightPanel>("files");
   const [openFilesState, setOpenFilesState] = useState<{
     tabs: OpenFileTab[];
     activePath: string | null;
