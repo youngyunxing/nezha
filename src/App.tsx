@@ -47,6 +47,7 @@ import {
   TaskPresetAddDialog,
   TaskPresetEditDialog,
 } from "./components/new-task/TaskPresetDialog";
+import { loadQuickInputs, saveQuickInputs, type QuickInput as QuickInputItem } from "./quickInputs";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
   normalizeProjectNameInput,
@@ -309,6 +310,8 @@ function App() {
   // 快捷创建按钮（预设）：存在 localStorage，跟着应用走（命令在哪个项目里跑就用哪个项目的目录）
   const [presets, setPresets] = useState<TaskPreset[]>(() => loadTaskPresets());
   // 快捷命令的两个弹窗：添加（一张表单）/ 编辑（左列表 + 右面板）
+  // 快捷输入（会话右下角）：预设文本，点一下填进当前会话的输入框
+  const [quickInputs, setQuickInputs] = useState<QuickInputItem[]>(() => loadQuickInputs());
   const [presetDialog, setPresetDialog] = useState<
     { mode: "add" } | { mode: "edit"; focusId?: string } | null
   >(null);
@@ -512,6 +515,22 @@ function App() {
   useEffect(() => {
     saveTaskPresets(presets);
   }, [presets]);
+
+  useEffect(() => {
+    saveQuickInputs(quickInputs);
+  }, [quickInputs]);
+
+  function handleSaveQuickInput(item: QuickInputItem) {
+    setQuickInputs((prev) =>
+      prev.some((q) => q.id === item.id)
+        ? prev.map((q) => (q.id === item.id ? item : q))
+        : [...prev, item],
+    );
+  }
+
+  function handleDeleteQuickInput(id: string) {
+    setQuickInputs((prev) => prev.filter((q) => q.id !== id));
+  }
 
   function handleSavePreset(preset: TaskPreset) {
     setPresets((prev) => {
@@ -1780,6 +1799,9 @@ function App() {
               onMarkTaskRead={markTaskRead}
               attentionSeen={attentionSeen}
               presets={presets}
+              quickInputs={quickInputs}
+              onSaveQuickInput={handleSaveQuickInput}
+              onDeleteQuickInput={handleDeleteQuickInput}
               onRunPreset={(preset, repoPath) => handleRunPreset(project, preset, repoPath)}
               onAddPreset={() => setPresetDialog({ mode: "add" })}
               onEditPresets={(presetId) => setPresetDialog({ mode: "edit", focusId: presetId })}

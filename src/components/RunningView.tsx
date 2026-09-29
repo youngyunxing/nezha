@@ -12,6 +12,8 @@ import { StatusIcon } from "./StatusIcon";
 import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
+import { QuickInput } from "./running-view/QuickInput";
+import type { QuickInput as QuickInputItem } from "../quickInputs";
 import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
@@ -93,6 +95,9 @@ export function RunningView({
   onDiscardWorktree,
   onReconnect,
   onMarkRead,
+  quickInputs,
+  onSaveQuickInput,
+  onDeleteQuickInput,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -117,6 +122,10 @@ export function RunningView({
   onReconnect: () => void;
   /** 这一轮的新回复已被看到：把「有新回复」落回「空闲待命」 */
   onMarkRead?: () => void;
+  /** 会话右下角的快捷输入 */
+  quickInputs: QuickInputItem[];
+  onSaveQuickInput: (item: QuickInputItem) => void;
+  onDeleteQuickInput: (id: string) => void;
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
@@ -334,6 +343,13 @@ export function RunningView({
         isActive={visible}
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
+      />
+      {/* 快捷输入：终端和 agent 会话都走同一条 PTY 写入通道 */}
+      <QuickInput
+        items={quickInputs}
+        onInsert={onInput}
+        onSave={onSaveQuickInput}
+        onDelete={onDeleteQuickInput}
       />
     </div>
   );
