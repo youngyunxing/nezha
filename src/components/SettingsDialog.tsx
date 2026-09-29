@@ -2,14 +2,12 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as RadixSelect from "@radix-ui/react-select";
 import { X, FolderOpen, ChevronDown, Check } from "lucide-react";
-import { permissionModeLabel, type PermissionMode, type AgentType } from "../types";
 import { useI18n } from "../i18n";
 import s from "../styles";
 
 interface ProjectConfig {
   agent: {
     default: string;
-    default_permission_mode: string;
     prompt_prefix: string;
   };
   git: {
@@ -18,7 +16,6 @@ interface ProjectConfig {
   };
 }
 
-const PERMISSION_MODES: PermissionMode[] = ["ask", "auto_edit", "full_access"];
 const MIN_COMMIT_MESSAGE_TIMEOUT_SECS = 1;
 const MAX_COMMIT_MESSAGE_TIMEOUT_SECS = 120;
 const DEFAULT_COMMIT_MESSAGE_TIMEOUT_SECS = 15;
@@ -80,7 +77,6 @@ function ProjectSettings({ projectPath, onClose }: { projectPath: string; onClos
   const { t } = useI18n();
   const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [agentDefault, setAgentDefault] = useState("claude");
-  const [defaultPermissionMode, setDefaultPermissionMode] = useState<PermissionMode>("ask");
   const [promptPrefix, setPromptPrefix] = useState("");
   const [commitPrompt, setCommitPrompt] = useState("");
   const [commitMessageTimeoutSecs, setCommitMessageTimeoutSecs] = useState(
@@ -94,10 +90,6 @@ function ProjectSettings({ projectPath, onClose }: { projectPath: string; onClos
       .then((c) => {
         setConfig(c);
         setAgentDefault(c.agent.default);
-        const mode = c.agent.default_permission_mode;
-        if (mode === "ask" || mode === "auto_edit" || mode === "full_access") {
-          setDefaultPermissionMode(mode);
-        }
         setPromptPrefix(c.agent.prompt_prefix ?? "");
         setCommitPrompt(c.git.commit_prompt);
         const timeoutSecs = c.git.commit_message_timeout_secs ?? DEFAULT_COMMIT_MESSAGE_TIMEOUT_SECS;
@@ -159,7 +151,6 @@ function ProjectSettings({ projectPath, onClose }: { projectPath: string; onClos
         config: {
           agent: {
             default: agentDefault,
-            default_permission_mode: defaultPermissionMode,
             prompt_prefix: promptPrefix,
           },
           git: {
@@ -201,22 +192,6 @@ function ProjectSettings({ projectPath, onClose }: { projectPath: string; onClos
                     { value: "claude", label: "Claude Code" },
                     { value: "codex", label: "Codex" },
                   ]}
-                />
-              </div>
-              <div style={s.modalField}>
-                <label style={s.modalLabel}>
-                  {t("settings.defaultPermissionMode")}
-                  <span style={s.modalLabelHint}>
-                    {t("settings.defaultPermissionModeHint")}
-                  </span>
-                </label>
-                <Select
-                  value={defaultPermissionMode}
-                  onChange={(v) => setDefaultPermissionMode(v as PermissionMode)}
-                  options={PERMISSION_MODES.map((mode) => ({
-                    value: mode,
-                    label: permissionModeLabel(mode, agentDefault as AgentType),
-                  }))}
                 />
               </div>
               <div style={s.modalField}>
