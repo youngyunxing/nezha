@@ -18,7 +18,8 @@ interface Draft {
   useWorktree: boolean;
 }
 
-const EMPTY_DRAFT: Draft = { id: null, name: "", agent: "claude", command: "", useWorktree: false };
+// 新增时默认「终端」：自定义按钮多半是给第三方 CLI / 启动命令用的，不是开 Claude 会话
+const EMPTY_DRAFT: Draft = { id: null, name: "", agent: "shell", command: "", useWorktree: false };
 
 function toDraft(preset: TaskPreset): Draft {
   return {

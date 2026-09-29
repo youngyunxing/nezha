@@ -50,7 +50,7 @@ describe("快捷按钮编辑器", () => {
     expect(nameInput().value).toBe("跑全部测试");
   });
 
-  it("从「+」打开是空白表单，保存即新增", () => {
+  it("从「+」打开是空白表单、默认选中终端，保存即新增", () => {
     const onSave = vi.fn();
     render(dialog([KIMI], undefined, onSave));
     expect(nameInput().value).toBe("");
@@ -58,7 +58,7 @@ describe("快捷按钮编辑器", () => {
     fireEvent.change(nameInput(), { target: { value: "Kimi" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
     const saved = onSave.mock.calls[0][0] as TaskPreset;
-    expect(saved).toMatchObject({ name: "Kimi", agent: "claude" });
+    expect(saved).toMatchObject({ name: "Kimi", agent: "shell" });
     expect(saved.id).not.toBe("a");
   });
 
