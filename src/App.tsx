@@ -28,6 +28,7 @@ import {
 import { DEFAULT_UI_FONT, getDefaultMonoFont, isAutoDefaultMonoFont } from "./types";
 import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
+import { load, save } from "./utils";
 import { ProjectPage } from "./components/ProjectPage";
 import { useToast } from "./components/Toast";
 import { isHideWindowShortcut } from "./shortcuts";
@@ -117,6 +118,17 @@ function persistProjectTasksQuietly(projectId: string, allTasks: Task[]) {
 // 让上来看到的 rail 顺序和旧版本(railProjects useMemo 里的 sort)一致。
 // 之后用户拖拽产生的顺序由 projects 数组本身承载,不再排序。
 const RAIL_PROJECTS_ORDERED_KEY = "nezha:rail-projects-ordered";
+
+/** 跨重启保留「上次在这个项目里看的是哪条会话」。只存用户主动选的会话——
+ *  「停在新建任务页」是有意为之，不该粘到下次启动。 */
+const PROJECT_VIEWS_KEY = "nezha:project-views";
+
+interface PersistedProjectView {
+  selectedTaskId?: string;
+  localSession?: LocalClaudeSession;
+}
+
+type PersistedProjectViews = Record<string, PersistedProjectView>;
 
 function isProjectsIdAscending(projects: Project[]): boolean {
   for (let i = 1; i < projects.length; i++) {
@@ -354,8 +366,66 @@ function App() {
     });
   }, []);
 
+  // 上次各项目看的会话（跨重启）。用 ref 是因为要在 render 期间读，不引入额外依赖。
+  const persistedViewsRef = useRef<PersistedProjectViews>(
+    load<PersistedProjectViews>(PROJECT_VIEWS_KEY, {}),
+  );
+
+  useEffect(() => {
+    const reduced: PersistedProjectViews = {};
+    for (const [projectId, view] of Object.entries(projectViews)) {
+      if (view.localSession) {
+        reduced[projectId] = { localSession: view.localSession };
+      } else if (view.selectedTaskId) {
+        reduced[projectId] = { selectedTaskId: view.selectedTaskId };
+      }
+    }
+    persistedViewsRef.current = reduced;
+    save(PROJECT_VIEWS_KEY, reduced);
+  }, [projectViews]);
+
+  /**
+   * 某个项目**首次显示**时的默认视图。以前一律落到「新建任务」页，等于每次打开、每次切
+   * 项目都要自己去任务列表里点一下会话。现在按优先级推导：
+   *   ① 正在跑的会话（打开时最想看的就是它，启动自动恢复的也是它）
+   *   ② 上次在这个项目里看的会话（跨重启保留）
+   *   ③ 最近一条任务
+   *   ④ 项目里确实没有任务，才回落到新建任务页
+   */
+  const deriveProjectView = useCallback(
+    (projectId: string): ProjectViewState => {
+      const projectTasks = tasks.filter((task) => task.projectId === projectId);
+      const byRecency = (a: Task, b: Task) =>
+        (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
+
+      const active = projectTasks.filter((task) => isActiveTaskStatus(task.status)).sort(byRecency);
+      if (active.length > 0) {
+        return { selectedTaskId: active[0].id, isNewTask: false, localSession: null };
+      }
+
+      const persisted = persistedViewsRef.current[projectId];
+      if (
+        persisted?.selectedTaskId &&
+        projectTasks.some((task) => task.id === persisted.selectedTaskId)
+      ) {
+        return { selectedTaskId: persisted.selectedTaskId, isNewTask: false, localSession: null };
+      }
+      if (persisted?.localSession) {
+        return { selectedTaskId: null, isNewTask: false, localSession: persisted.localSession };
+      }
+
+      const latest = [...projectTasks].sort(byRecency)[0];
+      if (latest) {
+        return { selectedTaskId: latest.id, isNewTask: false, localSession: null };
+      }
+      return createDefaultProjectViewState();
+    },
+    [tasks],
+  );
+
   function getProjectView(projectId: string): ProjectViewState {
-    return projectViews[projectId] ?? createDefaultProjectViewState();
+    // 没记过状态 = 这个项目本次还没显示过 → 推导一个，避免先闪一下新建任务页。
+    return projectViews[projectId] ?? deriveProjectView(projectId);
   }
 
   useEffect(() => {
@@ -495,14 +565,6 @@ function App() {
         invoke("save_project_meta", { projectId: p.id, path: p.path }).catch(console.error);
       });
 
-      // 没有首页了：启动直接进入最近打开的项目。只设内存状态，不碰 lastOpenedAt
-      // ——否则每次启动都会重写一遍 projects.json。
-      const mostRecent = [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
-      if (mostRecent) {
-        setActiveProject(mostRecent);
-        mountProject(mostRecent.id);
-      }
-
       // Load tasks for all known projects。allSettled 隔离单项目失败:
       // 一个 tasks.json 损坏不能让所有项目的任务在 UI 里消失(Promise.all
       // 整体 reject 曾造成这个假象),失败项目单独提示并禁止写盘。
@@ -562,6 +624,20 @@ function App() {
       touchedProjectIds.forEach((projectId) => {
         persistProjectTasksQuietly(projectId, nextTasks);
       });
+
+      // 没有首页了：启动要直接落到某个项目。优先选「有活跃会话」的第一个项目——打开就能
+      // 看到正在跑（或刚被自动恢复）的 agent；都没有才回落到最近打开的项目。
+      // 只设内存状态，不碰 lastOpenedAt，否则每次启动都会重写一遍 projects.json。
+      const startProject =
+        projectsForState.find((project) =>
+          nextTasks.some(
+            (task) => task.projectId === project.id && isActiveTaskStatus(task.status),
+          ),
+        ) ?? [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
+      if (startProject) {
+        setActiveProject(startProject);
+        mountProject(startProject.id);
+      }
 
       autoResume.forEach(({ task, project, sessionId }) => {
         tm.resetTaskTerminal(task.id);
