@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
-import { Search, FolderOpen, Layers, Plus, Clock } from "lucide-react";
+import { Search, FolderOpen, Plus } from "lucide-react";
 import type {
   Project,
-  Task,
   ThemeMode,
   ThemeVariant,
   TerminalFontSize,
@@ -13,37 +12,9 @@ import type {
 } from "../types";
 import type { ProjectRenameResult } from "../projectName";
 import { SidebarFooterActions } from "./SidebarFooterActions";
-import { TimelineView } from "./TimelineView";
 import { ProjectListItem } from "./welcome/ProjectListItem";
 import { useI18n } from "../i18n";
 import s from "../styles";
-
-function SidebarItem({
-  icon,
-  label,
-  active,
-  meta,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  meta?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="welcome-sidebar-item"
-      data-active={Boolean(active)}
-      onClick={onClick}
-    >
-      <span className="welcome-sidebar-item-icon">{icon}</span>
-      <span className="welcome-sidebar-item-label">{label}</span>
-      {meta && <span style={s.sidebarItemMeta}>{meta}</span>}
-    </button>
-  );
-}
 
 function WelcomeEmpty({ hasProjects, onOpen }: { hasProjects: boolean; onOpen: () => void }) {
   const { t } = useI18n();
@@ -70,8 +41,6 @@ function WelcomeEmpty({ hasProjects, onOpen }: { hasProjects: boolean; onOpen: (
 
 export function WelcomePage({
   projects,
-  allProjects,
-  tasks,
   onOpen,
   onProjectClick,
   onDeleteProject,
@@ -97,8 +66,6 @@ export function WelcomePage({
   onMonoFontFamilyChange,
 }: {
   projects: Project[];
-  allProjects: Project[];
-  tasks: Task[];
   onOpen: () => void;
   onProjectClick: (p: Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -125,7 +92,6 @@ export function WelcomePage({
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"projects" | "timeline">("projects");
 
   const filtered = useMemo(() => {
     if (!query.trim()) return projects;
@@ -148,22 +114,6 @@ export function WelcomePage({
               <div style={s.sidebarBrandMeta}>{t("welcome.agentWorkspace")}</div>
             </div>
           </div>
-
-          <nav style={s.sidebarNav}>
-            <div style={s.sidebarSectionTitle}>{t("welcome.workspace")}</div>
-            <SidebarItem
-              icon={<Layers size={15} />}
-              label={t("welcome.projects")}
-              active={view === "projects"}
-              onClick={() => setView("projects")}
-            />
-            <SidebarItem
-              icon={<Clock size={15} />}
-              label={t("welcome.timeline")}
-              active={view === "timeline"}
-              onClick={() => setView("timeline")}
-            />
-          </nav>
 
           <div style={s.sidebarFooter}>
             <SidebarFooterActions
@@ -188,16 +138,7 @@ export function WelcomePage({
           </div>
         </div>
 
-        {view === "timeline" ? (
-          <TimelineView
-            projects={allProjects}
-            tasks={tasks}
-            onTaskClick={(task) => {
-              const project = allProjects.find((p) => p.id === task.projectId);
-              if (project) onProjectClick(project);
-            }}
-          />
-        ) : (
+        {
           <div style={s.welcomePane}>
             <div style={s.searchRow}>
               <div className="welcome-search-box">
@@ -229,16 +170,12 @@ export function WelcomePage({
                 <div style={s.projectSectionTitle}>{t("welcome.projects")}</div>
                 <div style={s.projectSectionCaption}>
                   {query.trim()
-                    ? t("welcome.resultCount",
-                        {
-                          count: filtered.length,
-                        },
-                      )
-                    : t("welcome.projectCount",
-                        {
-                          count: projects.length,
-                        },
-                      )}
+                    ? t("welcome.resultCount", {
+                        count: filtered.length,
+                      })
+                    : t("welcome.projectCount", {
+                        count: projects.length,
+                      })}
                 </div>
               </div>
             </div>
@@ -261,7 +198,7 @@ export function WelcomePage({
               )}
             </div>
           </div>
-        )}
+        }
       </div>
     </div>
   );

@@ -1462,14 +1462,13 @@ function App() {
       <div style={s.appProjectLayer}>
         {mountedProjects.map((project) => {
           const view = getProjectView(project.id);
-          const railProjectsFiltered = railProjects;
           const otherProjectsFiltered = sortedProjects.filter((p) => p.id !== project.id);
           return (
             <ProjectPage
               key={project.id}
               project={project}
               visible={activeProject?.id === project.id}
-              allProjects={railProjectsFiltered}
+              allProjects={railProjects}
               otherProjects={otherProjectsFiltered}
               tasks={tasks}
               getTaskRestoreState={tm.getTaskRestoreState}
@@ -1547,8 +1546,6 @@ function App() {
         <div style={s.appWelcomeLayer}>
           <WelcomePage
             projects={visibleProjectsForWelcome}
-            allProjects={sortedProjects}
-            tasks={tasks}
             onOpen={handleOpen}
             onProjectClick={handleProjectClick}
             onDeleteProject={handleDeleteProject}
