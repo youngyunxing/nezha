@@ -222,7 +222,7 @@ const translations: Record<string, string> = {
   "preset.worktreeHint": "基于项目当前分支开独立副本",
   "preset.cancelEdit": "取消编辑",
   "preset.rightClickHint": "\n右键或长按可以直接改它 / 删掉",
-  "preset.editHint": "表单是空的：填好点「保存」就是新按钮。上面列表里点一条、或在快捷按钮上右键 / 长按，都是改它。",
+  "preset.editHint": "填好点「保存」就是新按钮；要改已有的，在快捷命令上右键或长按它。",
   "preset.editingHint": "正在改「{name}」；点「取消编辑」回到新增。",
   "preset.saved": "已保存快捷按钮「{name}」",
   "preset.deleted": "已删除快捷按钮",

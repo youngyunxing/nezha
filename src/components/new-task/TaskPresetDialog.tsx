@@ -4,7 +4,7 @@ import { Terminal, Trash2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
-import { makePresetId, presetSummary, type TaskPreset } from "../../taskPresets";
+import { makePresetId, type TaskPreset } from "../../taskPresets";
 import { SelectField } from "./NewTaskDialog";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
@@ -75,12 +75,6 @@ export function TaskPresetDialog({
     { value: "shell", label: t("terminal.title"), icon: <Terminal size={13} strokeWidth={2.2} /> },
   ];
 
-  const summaryLabels = {
-    claude: "Claude Code",
-    codex: "Codex",
-    shell: t("terminal.title"),
-    worktree: t("newTask.dialogIsolated"),
-  };
 
   function submit() {
     if (!canSave) return;
@@ -112,37 +106,6 @@ export function TaskPresetDialog({
           <Dialog.Description style={s.forkDialogDescription}>
             {t("preset.dialogHint")}
           </Dialog.Description>
-
-          <div style={s.presetDialogList}>
-            {presets.map((preset) => (
-              <div
-                key={preset.id}
-                style={{
-                  ...s.presetDialogRow,
-                  ...(draft.id === preset.id ? s.presetDialogRowActive : null),
-                }}
-                onClick={() => setDraft(toDraft(preset))}
-              >
-                <span style={s.presetDialogRowText}>
-                  <span style={s.presetDialogRowName}>{preset.name}</span>
-                  <span style={s.presetDialogRowHint}>{presetSummary(preset, summaryLabels)}</span>
-                </span>
-                <button
-                  type="button"
-                  title={t("common.delete")}
-                  aria-label={t("common.delete")}
-                  style={s.modalCloseBtn}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDelete(preset.id);
-                    if (draft.id === preset.id) setDraft({ ...EMPTY_DRAFT });
-                  }}
-                >
-                  <Trash2 size={13} strokeWidth={2.1} />
-                </button>
-              </div>
-            ))}
-          </div>
 
           <div style={{ ...s.newTaskDialogHint, marginBottom: 8 }}>
             {draft.id ? t("preset.editingHint", { name: draft.name }) : t("preset.editHint")}
