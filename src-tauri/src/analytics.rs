@@ -68,10 +68,18 @@ fn active_rate(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
     tokens as f64 / active
 }
 
-/// cc-switch 本地代理日志是现在唯一能拿到「真实生成速度」的地方：
-/// transcript 只有落盘时间戳（CLI 是流式结束后批量写入，写入跨度只有真实耗时的零头），
+/// cc-switch 本地代理日志是现在唯一能拿到「真实生成速度」的地方。
+///
+/// transcript 里没有耗时字段（CLI 是流式结束后批量落盘，写入跨度只有真实耗时的零头），
 /// 代理库却逐请求记了 output_tokens / latency_ms / first_token_ms，而且它的 session_id
-/// 就是 Claude Code 的会话 UUID。口径跟 cc-switch 保持一致：生成速度 = output / (latency − ttft)。
+/// 就是 Claude Code 的会话 UUID。字段语义照抄 cc-switch 源码（proxy/response_processor.rs、
+/// proxy/handler_context.rs）：
+///   - latency_ms     = 请求开始 → SSE 流结束的总耗时
+///   - first_token_ms = 请求开始 → 第一个 usage 事件（claude 的 message_start）的时间，
+///                      也就是**首字节**而不是首个内容 token；上游自己标注为「近似语义」
+/// 所以生成速度 = output / (latency − ttft) = 纯流式耗时里的生成速度，不含上游排队/预填充。
+/// 少数历史行（data_source='session_log' 的导入数据）没有 ttft，这时退化成
+/// output / latency（整轮吞吐，含首字等待）。
 const CCSWITCH_DB_REL: &str = ".cc-switch/cc-switch.db";
 /// 生成耗时太短的样本（首字刚出就收尾）会算出离谱的值，直接不算。
 const CCSWITCH_MIN_GEN_MS: i64 = 200;
@@ -92,15 +100,21 @@ fn ccswitch_tps(session_id: &str) -> Option<(f64, f64)> {
         return None;
     }
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs() as i64;
-    let gen_ms = "(latency_ms-coalesce(first_token_ms,0))";
-    let filter = format!(
-        "session_id='{session_id}' and output_tokens>0 and {gen_ms}>{CCSWITCH_MIN_GEN_MS}"
-    );
+    let base = format!("session_id='{session_id}' and output_tokens>0");
+    // 生成耗时（有 ttft 时）/ 整轮耗时（没有 ttft 的历史行）
+    let (gen, whole) = ("(latency_ms-first_token_ms)", "latency_ms");
     let sql = format!(
-        "select ifnull((select round(output_tokens*1000.0/{gen_ms},1) from proxy_request_logs \
-           where {filter} order by created_at desc limit 1),0), \
-         ifnull((select round(sum(output_tokens)*1000.0/sum({gen_ms}),1) from proxy_request_logs \
-           where {filter} and created_at>={since}),0);",
+        "select ifnull(\
+           (select round(output_tokens*1000.0/{gen},1) from proxy_request_logs where {base} \
+              and first_token_ms is not null and {gen}>{min} order by created_at desc limit 1), \
+           (select round(output_tokens*1000.0/{whole},1) from proxy_request_logs where {base} \
+              and {whole}>{min} order by created_at desc limit 1)), \
+         ifnull(\
+           (select round(sum(output_tokens)*1000.0/sum({gen}),1) from proxy_request_logs where {base} \
+              and first_token_ms is not null and {gen}>{min} and created_at>={since}), \
+           (select round(sum(output_tokens)*1000.0/sum({whole}),1) from proxy_request_logs where {base} \
+              and {whole}>{min} and created_at>={since}));",
+        min = CCSWITCH_MIN_GEN_MS,
         since = now - 5 * 3600
     );
     let out = std::process::Command::new("/usr/bin/sqlite3")

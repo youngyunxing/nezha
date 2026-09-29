@@ -580,6 +580,33 @@ export function RunningView({
                   label={t("running.duration")}
                   value={formatDuration(metrics.duration_secs)}
                 />
+              </>
+            )}
+            {sessionPath && (
+              <SessionFilePill
+                label={t("running.sessionFileLabel")}
+                value={
+                  currentMetricsState?.status === "ready" && metrics
+                    ? formatFileSize(metrics.session_file_bytes)
+                    : currentMetricsState?.status === "failed"
+                      ? "0B"
+                      : "..."
+                }
+                tone={
+                  currentMetricsState?.status === "ready" && metrics
+                    ? metrics.session_file_bytes > 0
+                      ? "success"
+                      : "error"
+                    : currentMetricsState?.status === "failed"
+                      ? "error"
+                      : "warning"
+                }
+                copiedLabel={t("running.sessionFilePathCopied")}
+                onCopy={handleCopySessionPath}
+              />
+            )}
+            {metrics && (
+              <>
                 <MetricPill
                   label={t("running.tokens")}
                   value={formatTokens(metrics.total_tokens)}
@@ -609,29 +636,6 @@ export function RunningView({
                   />
                 )}
               </>
-            )}
-            {sessionPath && (
-              <SessionFilePill
-                label={t("running.sessionFileLabel")}
-                value={
-                  currentMetricsState?.status === "ready" && metrics
-                    ? formatFileSize(metrics.session_file_bytes)
-                    : currentMetricsState?.status === "failed"
-                      ? "0B"
-                      : "..."
-                }
-                tone={
-                  currentMetricsState?.status === "ready" && metrics
-                    ? metrics.session_file_bytes > 0
-                      ? "success"
-                      : "error"
-                    : currentMetricsState?.status === "failed"
-                      ? "error"
-                      : "warning"
-                }
-                copiedLabel={t("running.sessionFilePathCopied")}
-                onCopy={handleCopySessionPath}
-              />
             )}
           </div>
         )}
