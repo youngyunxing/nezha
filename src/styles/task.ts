@@ -58,7 +58,9 @@ const newTaskRowBase = {
 export const task = {
   taskPanel: taskPanelBase,
   panelHeader: {
-    height: 48,
+    /* 40 而非 48：分割线要夹在项目名与搜索框正中，见 project-rail.css 的联立式子。
+       22px 头像居中 → 上下各 9px，等于 panelSearchWrap 的 margin-top。 */
+    height: 40,
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -79,9 +81,9 @@ export const task = {
     display: "flex",
     alignItems: "center",
     gap: 7,
-    /* 上边距 4 而非 8：与抽屉那边的搜索框对齐到 52px（那边是 8+32+12）。
-       抽屉侧按钮高度固定，所以收紧间距要在这里让。 */
-    margin: "4px 12px 4px",
+    /* 上边距 9 = 分割线到项目名的距离，使分割线居中；搜索框落在 40+9=49px，
+       与抽屉那边的 4+32+13 齐平。 */
+    margin: "9px 12px 4px",
     padding: "6px 9px",
     background: "var(--bg-card)",
     border: "1px solid var(--border-dim)",

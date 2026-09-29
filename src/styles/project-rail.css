@@ -163,11 +163,12 @@
 }
 
 .rail-drawer-header {
-  /* 两条对齐线：
-       按钮中心 = 8 + 32/2 = 24px，对齐任务面板头部 48px 里居中的 22px 头像
-       搜索框顶 = 8 + 32 + 12 = 52px，对齐任务面板那边的 48 + 4（见 panelSearchWrap）
-     右边那侧的目标值是可调的，按钮高度不是——想收紧间距就调面板侧，别撑高按钮。 */
-  padding: 8px 12px 10px;
+  /* 四条约束联立后的解（右侧头部 H=40）：
+       ① 按钮↔搜索 = 搜索↔分割线 = S = 13px（下内边距同值）
+       ② 搜索框顶 = 4 + 32 + 13 = 49px，与任务面板的 40 + 9 齐平
+       ③ 按钮中心 = 4 + 16 = 20px，与任务面板头部里居中的头像一致
+     改右侧 H 就要重解，见 task.ts 的 panelSearchWrap / panelHeader。 */
+  padding: 4px 12px 13px;
   border-bottom: 1px solid var(--border-dim);
 }
 
@@ -197,9 +198,9 @@
 }
 
 .rail-drawer-add {
-  margin-bottom: 12px; /* 见 .rail-drawer-header 的两条对齐线 */
+  margin-bottom: 13px; /* = S，见 .rail-drawer-header */
   width: 100%;
-  height: 32px; /* 固定高度，见 .rail-drawer-header 的两条对齐线 */
+  height: 32px; /* 固定高度，见 .rail-drawer-header */
   display: flex;
   align-items: center;
   justify-content: center;
