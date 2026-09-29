@@ -601,6 +601,21 @@ function App() {
     setActiveProject(project);
     mountProject(project.id);
     updateProjectView(project.id, createDefaultProjectViewState());
+
+    // 新添加的项目直接开一个 Claude Code 本地会话，名字固定 main——省掉「先建任务」
+    // 这一步。已存在的项目不动：它的任务列表里通常已经有 main 了。
+    if (!existing) {
+      void handleSubmitTask(project, {
+        name: "main",
+        prompt: "",
+        agent: "claude",
+        permissionMode: "full_access",
+        images: [],
+        texts: [],
+        launchMode: "local",
+        baseBranch: "",
+      });
+    }
   }
 
   function handleProjectClick(project: Project) {
@@ -644,6 +659,7 @@ function App() {
       launchMode,
       baseBranch,
       repoPath,
+      name,
     }: {
       prompt: string;
       agent: AgentType;
@@ -655,6 +671,8 @@ function App() {
       /** 任务关联的 git 根（worktree 创建于此目录的 .nezha/worktrees）。
        *  缺省时回落 project.path，向后兼容老调用方。 */
       repoPath?: string;
+      /** 显式指定任务名（如添加项目时自动建的 main 会话）；缺省时按提示词推断。 */
+      name?: string;
     },
   ) {
     const effectiveRepoPath = repoPath ?? project.path;
@@ -672,7 +690,7 @@ function App() {
       id: taskId,
       projectId: project.id,
       prompt,
-      name: prompt ? undefined : `task-${taskId}`,
+      name: name ?? (prompt ? undefined : `task-${taskId}`),
       agent,
       permissionMode,
       status: "pending",
