@@ -97,15 +97,14 @@ export const task = {
     color: "var(--text-primary)",
     fontSize: 12.5,
   },
-  newTaskRowActive: {
+  // 新建任务 = 主操作：用实心主按钮配色（--primary-action-bg，和弹窗里的「保存」同一套），
+  // 一眼看出是按钮而不是一行文案；下面的快捷按钮是浅色 chip，层级自然分开。
+  newTaskRowPrimary: {
     ...newTaskRowBase,
-    background: "var(--control-active-bg)",
-    color: "var(--control-active-fg)",
-  },
-  newTaskRowInactive: {
-    ...newTaskRowBase,
-    background: "var(--bg-card)",
-    color: "var(--text-secondary)",
+    background: "var(--primary-action-bg)",
+    color: "var(--primary-action-fg)",
+    fontWeight: 600,
+    transition: "filter 0.1s",
   },
   newTaskRowLabel: { fontSize: 13, fontWeight: 500 },
   // 快捷创建按钮：一排胶囊 chip，末尾的「+」是新增/管理

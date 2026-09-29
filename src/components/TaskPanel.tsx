@@ -65,6 +65,7 @@ export function TaskPanel({
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [hoverPresetId, setHoverPresetId] = useState<string | null>(null);
+  const [newTaskHover, setNewTaskHover] = useState(false);
   // 右击 / 长按快捷按钮 = 打开它的编辑面板；长按后要吃掉那次 click，不能顺手把任务建了
   const longPressTimer = useRef<number | null>(null);
   const longPressed = useRef(false);
@@ -122,8 +123,16 @@ export function TaskPanel({
       <BranchBar projectRoot={project.path} repoPath={branchRepoPath} active={active} />
 
       {/* New Task row */}
-      <button style={isNewTask ? s.newTaskRowActive : s.newTaskRowInactive} onClick={onNewTask}>
-        <Plus size={14} strokeWidth={2.5} style={s.flexShrinkIcon} />
+      <button
+        style={{
+          ...s.newTaskRowPrimary,
+          ...(newTaskHover ? { filter: "brightness(1.07)" } : null),
+        }}
+        onMouseEnter={() => setNewTaskHover(true)}
+        onMouseLeave={() => setNewTaskHover(false)}
+        onClick={onNewTask}
+      >
+        <Plus size={14} strokeWidth={2.6} style={s.flexShrinkIcon} />
         <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
       </button>
 
