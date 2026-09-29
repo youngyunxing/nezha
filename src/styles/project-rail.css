@@ -163,14 +163,18 @@
 }
 
 .rail-drawer-header {
-  /* 35 + 标题 13 + 标题下边距 8 = 搜索框顶部 56px，与任务面板的搜索框同高。
-     任务面板那边是 panelHeader 的 48px + panelSearchWrap 的 margin-top 8px。 */
-  padding: 35px 12px 10px;
+  /* 32 + 标题 16 + 标题下边距 8 = 搜索框顶部 56px。
+     任务面板那边是 panelHeader 的 48px（全局 border-box，含 1px 边框）
+     + panelSearchWrap 的 margin-top 8px = 同样 56px。
+     两处都靠固定行高算，别改成 line-height: normal——那样标题行盒会涨到 ~16px
+     以上，搜索框就比对面低几个像素。 */
+  padding: 32px 12px 10px;
   border-bottom: 1px solid var(--border-dim);
 }
 
 .rail-drawer-title {
   margin: 0 2px 8px;
+  line-height: 16px; /* 固定，见 .rail-drawer-header 的算术 */
   font-size: 11px;
   font-weight: 700;
   color: var(--text-hint);
