@@ -43,7 +43,10 @@ import { useTerminalManager } from "./hooks/useTerminalManager";
 import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
 import { buildProjectActivityMap } from "./components/project-rail/activity";
 import { loadTaskPresets, saveTaskPresets, type TaskPreset } from "./taskPresets";
-import { TaskPresetDialog } from "./components/new-task/TaskPresetDialog";
+import {
+  TaskPresetAddDialog,
+  TaskPresetEditDialog,
+} from "./components/new-task/TaskPresetDialog";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
   normalizeProjectNameInput,
@@ -305,7 +308,10 @@ function App() {
   const [attentionSeen, setAttentionSeen] = useState<AttentionSeenMap>(() => loadAttentionSeen());
   // 快捷创建按钮（预设）：存在 localStorage，跟着应用走（命令在哪个项目里跑就用哪个项目的目录）
   const [presets, setPresets] = useState<TaskPreset[]>(() => loadTaskPresets());
-  const [presetDialog, setPresetDialog] = useState<{ open: boolean; focusId?: string }>({ open: false });
+  // 快捷命令的两个弹窗：添加（一张表单）/ 编辑（左列表 + 右面板）
+  const [presetDialog, setPresetDialog] = useState<
+    { mode: "add" } | { mode: "edit"; focusId?: string } | null
+  >(null);
 
   /** 快捷按钮：按预设参数直接建任务。worktree 的基准分支留空，由 handleSubmitTask 解析成当前分支。 */
   function handleRunPreset(project: Project, preset: TaskPreset, repoPath?: string) {
@@ -1775,7 +1781,8 @@ function App() {
               attentionSeen={attentionSeen}
               presets={presets}
               onRunPreset={(preset, repoPath) => handleRunPreset(project, preset, repoPath)}
-              onManagePresets={(presetId) => setPresetDialog({ open: true, focusId: presetId })}
+              onAddPreset={() => setPresetDialog({ mode: "add" })}
+              onEditPresets={(presetId) => setPresetDialog({ mode: "edit", focusId: presetId })}
               onInput={tm.handleInput}
               onResize={tm.handleResize}
               onRegisterTerminal={tm.handleRegisterTerminal}
@@ -1807,13 +1814,16 @@ function App() {
           );
         })}
       </div>
-      <TaskPresetDialog
-        open={presetDialog.open}
+      <TaskPresetAddDialog
+        open={presetDialog?.mode === "add"}
+        onOpenChange={(open) => setPresetDialog(open ? { mode: "add" } : null)}
+        onSave={handleSavePreset}
+      />
+      <TaskPresetEditDialog
+        open={presetDialog?.mode === "edit"}
         presets={presets}
-        focusPresetId={presetDialog.focusId}
-        onOpenChange={(open) =>
-          setPresetDialog(open ? { open: true, focusId: undefined } : { open: false })
-        }
+        focusPresetId={presetDialog?.mode === "edit" ? presetDialog.focusId : undefined}
+        onOpenChange={(open) => setPresetDialog(open ? { mode: "edit" } : null)}
         onSave={handleSavePreset}
         onDelete={handleDeletePreset}
       />

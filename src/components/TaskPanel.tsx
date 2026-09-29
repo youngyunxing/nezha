@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Search, Terminal } from "lucide-react";
 import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
@@ -27,7 +27,8 @@ export function TaskPanel({
   onNewTask,
   presets,
   onRunPreset,
-  onManagePresets,
+  onAddPreset,
+  onEditPresets,
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
@@ -54,8 +55,10 @@ export function TaskPanel({
   /** 快捷创建按钮（预设）：点一下直接建任务 */
   presets: TaskPreset[];
   onRunPreset: (preset: TaskPreset) => void;
-  /** 打开预设编辑器；带 presetId 表示直接进那条的编辑态 */
-  onManagePresets: (presetId?: string) => void;
+  /** 打开「添加」弹窗 */
+  onAddPreset: () => void;
+  /** 打开「编辑」弹窗；带 presetId 表示直接选中那条 */
+  onEditPresets: (presetId?: string) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
@@ -66,29 +69,6 @@ export function TaskPanel({
   const [query, setQuery] = useState("");
   const [hoverPresetId, setHoverPresetId] = useState<string | null>(null);
   const [newTaskHover, setNewTaskHover] = useState(false);
-  // 右击 / 长按快捷按钮 = 打开它的编辑面板；长按后要吃掉那次 click，不能顺手把任务建了
-  const longPressTimer = useRef<number | null>(null);
-  const longPressed = useRef(false);
-
-  function startLongPress(presetId: string) {
-    longPressed.current = false;
-    longPressTimer.current = window.setTimeout(() => {
-      longPressTimer.current = null;
-      longPressed.current = true;
-      onManagePresets(presetId);
-      // 面板弹出后那次 click 可能被吃掉，标记自己过一会儿清掉，免得吃掉下一次点击
-      window.setTimeout(() => {
-        longPressed.current = false;
-      }, 800);
-    }, 500);
-  }
-
-  function cancelLongPress() {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  }
 
   return (
     <div style={s.taskPanel}>
@@ -136,93 +116,80 @@ export function TaskPanel({
         <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
       </button>
 
-      {/* 快捷命令：单独划一块，上下各一条分割线，和下面的任务列表分开。
-          每颗 chip 分两段：点名字直接建任务，点右边的铅笔改它（右键 / 长按也行）。 */}
+      {/* 快捷命令：标题右侧是「添加」「编辑」两个按钮；下面排列按钮本身，点一下直接建任务。
+          单颗按钮上右键 = 直接进编辑面板并选中它。 */}
       <div style={s.taskDivider} />
-      <div style={s.presetSectionHeader}>{t("preset.sectionTitle")}</div>
+      <div style={s.presetSectionHeaderRow}>
+        <span style={s.presetSectionHeader}>{t("preset.sectionTitle")}</span>
+        <span style={s.presetSectionActions}>
+          <button
+            type="button"
+            style={{
+              ...s.presetHeaderBtn,
+              ...(hoverPresetId === "__add__" ? { background: "var(--bg-hover)", color: "var(--text-primary)" } : null),
+            }}
+            title={t("preset.addButton")}
+            aria-label={t("preset.addButton")}
+            onMouseEnter={() => setHoverPresetId("__add__")}
+            onMouseLeave={() => setHoverPresetId((prev) => (prev === "__add__" ? null : prev))}
+            onClick={onAddPreset}
+          >
+            <Plus size={13} strokeWidth={2.4} />
+          </button>
+          <button
+            type="button"
+            style={{
+              ...s.presetHeaderBtn,
+              opacity: presets.length === 0 ? 0.4 : 1,
+              cursor: presets.length === 0 ? "not-allowed" : "pointer",
+              ...(hoverPresetId === "__edit__" ? { background: "var(--bg-hover)", color: "var(--text-primary)" } : null),
+            }}
+            title={t("preset.editButton")}
+            aria-label={t("preset.editButton")}
+            disabled={presets.length === 0}
+            onMouseEnter={() => setHoverPresetId("__edit__")}
+            onMouseLeave={() => setHoverPresetId((prev) => (prev === "__edit__" ? null : prev))}
+            onClick={() => onEditPresets()}
+          >
+            <Pencil size={12} strokeWidth={2.2} />
+          </button>
+        </span>
+      </div>
       <div style={s.presetChipRow}>
-        {presets.map((preset) => {
-          const hovering = hoverPresetId === preset.id;
-          return (
-            <div
-              key={preset.id}
-              style={{
-                ...s.presetChip,
-                ...(hovering ? { borderColor: "var(--border-medium)" } : null),
-              }}
-              onMouseEnter={() => setHoverPresetId(preset.id)}
-              onMouseLeave={() => {
-                setHoverPresetId((prev) => (prev === preset.id ? null : prev));
-                cancelLongPress();
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                onManagePresets(preset.id);
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  ...s.presetChipRun,
-                  ...(hovering ? { color: "var(--text-primary)" } : null),
-                }}
-                title={presetSummary(preset, {
-                  claude: "Claude Code",
-                  codex: "Codex",
-                  shell: t("terminal.title"),
-                  worktree: t("newTask.dialogIsolated"),
-                })}
-                onPointerDown={() => startLongPress(preset.id)}
-                onPointerUp={cancelLongPress}
-                onPointerLeave={cancelLongPress}
-                onClick={() => {
-                  if (longPressed.current) {
-                    longPressed.current = false;
-                    return; // 长按已经打开编辑面板了，不再建任务
-                  }
-                  onRunPreset(preset);
-                }}
-              >
-                {preset.agent === "claude" ? (
-                  <img src={claudeLogo} style={s.presetChipIcon} />
-                ) : preset.agent === "codex" ? (
-                  <img src={chatgptLogo} style={s.presetChipIcon} />
-                ) : (
-                  <Terminal size={11} strokeWidth={2.2} style={s.flexShrinkIcon} />
-                )}
-                <span style={s.presetChipLabel}>{preset.name}</span>
-              </button>
-              <button
-                type="button"
-                style={{
-                  ...s.presetChipEdit,
-                  ...(hovering ? { color: "var(--text-secondary)" } : null),
-                }}
-                title={t("preset.editThis")}
-                aria-label={t("preset.editThis")}
-                onClick={() => onManagePresets(preset.id)}
-              >
-                <Pencil size={11} strokeWidth={2.2} />
-              </button>
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          style={{
-            ...s.presetChipAdd,
-            ...(hoverPresetId === "__add__"
-              ? { background: "var(--bg-hover)", color: "var(--text-secondary)" }
-              : null),
-          }}
-          title={t("preset.manage")}
-          aria-label={t("preset.manage")}
-          onMouseEnter={() => setHoverPresetId("__add__")}
-          onMouseLeave={() => setHoverPresetId((prev) => (prev === "__add__" ? null : prev))}
-          onClick={() => onManagePresets()}
-        >
-          <Plus size={12} strokeWidth={2.4} />
-        </button>
+        {presets.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            style={{
+              ...s.presetChip,
+              ...(hoverPresetId === preset.id
+                ? { background: "var(--bg-hover)", color: "var(--text-primary)" }
+                : null),
+            }}
+            title={presetSummary(preset, {
+              claude: "Claude Code",
+              codex: "Codex",
+              shell: t("terminal.title"),
+              worktree: t("newTask.dialogIsolated"),
+            })}
+            onMouseEnter={() => setHoverPresetId(preset.id)}
+            onMouseLeave={() => setHoverPresetId((prev) => (prev === preset.id ? null : prev))}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              onEditPresets(preset.id);
+            }}
+            onClick={() => onRunPreset(preset)}
+          >
+            {preset.agent === "claude" ? (
+              <img src={claudeLogo} style={s.presetChipIcon} />
+            ) : preset.agent === "codex" ? (
+              <img src={chatgptLogo} style={s.presetChipIcon} />
+            ) : (
+              <Terminal size={11} strokeWidth={2.2} style={s.flexShrinkIcon} />
+            )}
+            <span style={s.presetChipLabel}>{preset.name}</span>
+          </button>
+        ))}
       </div>
 
       <div style={s.taskDivider} />

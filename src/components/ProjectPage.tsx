@@ -58,7 +58,8 @@ export function ProjectPage({
   attentionSeen,
   presets,
   onRunPreset,
-  onManagePresets,
+  onAddPreset,
+  onEditPresets,
   onInput,
   onResize,
   onRegisterTerminal,
@@ -128,7 +129,8 @@ export function ProjectPage({
   /** 快捷创建按钮 */
   presets: TaskPreset[];
   onRunPreset: (preset: TaskPreset, repoPath: string) => void;
-  onManagePresets: (presetId?: string) => void;
+  onAddPreset: () => void;
+  onEditPresets: (presetId?: string) => void;
   onInput: (taskId: string, data: string) => void;
   onResize: (taskId: string, cols: number, rows: number) => void;
   onRegisterTerminal: (
@@ -318,7 +320,8 @@ export function ProjectPage({
         onNewTask={handleNewTask}
         presets={presets}
         onRunPreset={(preset) => onRunPreset(preset, subRepoPath)}
-        onManagePresets={onManagePresets}
+        onAddPreset={onAddPreset}
+        onEditPresets={onEditPresets}
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
