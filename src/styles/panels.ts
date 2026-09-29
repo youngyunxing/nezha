@@ -180,6 +180,11 @@ export const panels = {
   // 平台不适用(如 macOS 上的 Windows 专属项)或加载中:置灰且不可点
   // 新建任务弹窗：字段间距 / 开关的说明行
   newTaskDialogField: { marginTop: 12 },
+  newTaskDialogSelectValue: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+  },
   newTaskDialogToggleText: {
     display: "flex",
     flexDirection: "column" as const,

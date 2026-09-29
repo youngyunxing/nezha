@@ -6,6 +6,11 @@ import { Check, ChevronDown, Plus, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
+import claudeLogo from "../../assets/claude.svg";
+import chatgptLogo from "../../assets/chatgpt.svg";
+
+/** 名字留空（或清空）时的占位名。 */
+const DEFAULT_TASK_NAME = "新任务";
 
 interface GitBranchInfo {
   name: string;
@@ -22,13 +27,19 @@ function SelectField({
 }: {
   value: string;
   label: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; icon?: string }>;
   onChange: (value: string) => void;
 }) {
+  const current = options.find((o) => o.value === value);
   return (
     <Select.Root value={value} onValueChange={onChange}>
       <Select.Trigger aria-label={label} style={s.settingsSelectTriggerCompact}>
-        <Select.Value>{options.find((o) => o.value === value)?.label ?? value}</Select.Value>
+        <Select.Value>
+          <span style={s.newTaskDialogSelectValue}>
+            {current?.icon && <img src={current.icon} style={s.toolbarMenuItemIcon} />}
+            {current?.label ?? value}
+          </span>
+        </Select.Value>
         <Select.Icon>
           <ChevronDown size={13} strokeWidth={2.2} color="var(--text-hint)" />
         </Select.Icon>
@@ -45,7 +56,12 @@ function SelectField({
                   className="radix-select-item"
                   style={selected ? s.settingsSelectOptionSelected : s.settingsSelectOption}
                 >
-                  <Select.ItemText>{option.label}</Select.ItemText>
+                  <Select.ItemText>
+                    <span style={s.newTaskDialogSelectValue}>
+                      {option.icon && <img src={option.icon} style={s.toolbarMenuItemIcon} />}
+                      {option.label}
+                    </span>
+                  </Select.ItemText>
                   <Select.ItemIndicator style={s.settingsSelectIndicator}>
                     <Check size={13} style={s.settingsSelectCheck} />
                   </Select.ItemIndicator>
@@ -80,7 +96,8 @@ export function NewTaskDialog({
   }) => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
+  // 名字给个占位默认值，用户不改也能直接创建；清空则回落到同一个占位名。
+  const [name, setName] = useState(DEFAULT_TASK_NAME);
   const [agent, setAgent] = useState<AgentType>("claude");
   const [isolated, setIsolated] = useState(false);
   const [branches, setBranches] = useState<GitBranchInfo[]>([]);
@@ -104,17 +121,12 @@ export function NewTaskDialog({
     };
   }, [isolated, projectPath, repoPath]);
 
-  const agentLabel = agent === "claude" ? "Claude Code" : "Codex";
   const canSubmit = !isolated || !!baseBranch;
 
   function submit() {
     if (!canSubmit) return;
-    const fallbackName = `${agentLabel} · ${new Date().toLocaleTimeString(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    })}`;
     onCreate({
-      name: name.trim() || fallbackName,
+      name: name.trim() || DEFAULT_TASK_NAME,
       agent,
       launchMode: isolated ? "worktree" : "local",
       baseBranch: isolated ? baseBranch : "",
@@ -125,7 +137,7 @@ export function NewTaskDialog({
     <Dialog.Root open onOpenChange={(open) => { if (!open) onCancel(); }}>
       <Dialog.Portal>
         <Dialog.Overlay style={s.forkDialogOverlay} />
-        <Dialog.Content style={s.forkDialogBox}>
+        <Dialog.Content style={s.forkDialogBox} aria-describedby={undefined}>
           <div style={s.forkDialogHeader}>
             <div style={s.forkDialogHeading}>
               <span style={s.forkDialogIcon}>
@@ -139,9 +151,6 @@ export function NewTaskDialog({
               </button>
             </Dialog.Close>
           </div>
-          <Dialog.Description style={s.forkDialogDescription}>
-            {t("newTask.dialogDescription")}
-          </Dialog.Description>
 
           <form
             onSubmit={(event) => {
@@ -158,7 +167,6 @@ export function NewTaskDialog({
                 style={s.forkDialogInput}
                 value={name}
                 maxLength={120}
-                placeholder={t("newTask.dialogNamePlaceholder")}
                 onChange={(event) => setName(event.currentTarget.value)}
               />
             </div>
@@ -169,8 +177,8 @@ export function NewTaskDialog({
                 value={agent}
                 label={t("settings.agent")}
                 options={[
-                  { value: "claude", label: "Claude Code" },
-                  { value: "codex", label: "Codex" },
+                  { value: "claude", label: "Claude Code", icon: claudeLogo },
+                  { value: "codex", label: "Codex", icon: chatgptLogo },
                 ]}
                 onChange={(value) => setAgent(value as AgentType)}
               />

@@ -194,11 +194,9 @@ const translations: Record<string, string> = {
   "task.deleteProjectPrompt": "把项目“{project}”从列表移除？会话记录会保留，之后重新添加这个目录即可恢复。",
   "newTask.title": "今天想构建什么？",
   "newTask.dialogTitle": "新建任务",
-  "newTask.dialogDescription": "会立刻启动一个会话，提示词直接在终端里跟它说。",
   "newTask.dialogName": "任务名字（可选）",
-  "newTask.dialogNamePlaceholder": "留空则按时间自动命名",
-  "newTask.dialogIsolated": "独立副本",
-  "newTask.dialogIsolatedHint": "在单独的分支副本里改，完成后再合并回来",
+  "newTask.dialogIsolated": "创建 worktree",
+  "newTask.dialogIsolatedHint": "用 git worktree 在单独的分支副本里改，完成后再合并回来",
   "newTask.dialogCreate": "创建",
   "newTask.hookVersionLow":
     "当前 {agent} 版本 {detected} 低于 {min}，任务状态检测已回退到轮询。升级 {agent} 到 {min}+ 可启用更可靠的 hook 状态检测。",
