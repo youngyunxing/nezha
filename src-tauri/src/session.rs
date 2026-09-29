@@ -744,11 +744,23 @@ pub(crate) enum SessionContent {
 pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMessage>, String> {
     let content = std::fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
     let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-    if is_codex_format(&lines) {
-        Ok(parse_codex_session(&lines))
+    let mut messages = if is_codex_format(&lines) {
+        parse_codex_session(&lines)
     } else {
-        Ok(parse_claude_session(&lines))
-    }
+        parse_claude_session(&lines)
+    };
+
+    // 回放只呈现「双方的对话」：工具调用与思考块在解析出口就丢掉——它们往往占会话文件的
+    // 绝大部分（一次 bash 的 stdout 就能顶几十条消息），前端不渲染却要照样跨 IPC 传一遍。
+    messages.retain_mut(|message| {
+        message.content.retain(|part| match part {
+            SessionContent::Text { text } => !text.trim().is_empty(),
+            _ => false,
+        });
+        !message.content.is_empty()
+    });
+
+    Ok(messages)
 }
 
 fn is_codex_format(lines: &[&str]) -> bool {

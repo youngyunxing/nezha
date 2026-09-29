@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronDown, ChevronRight, Wrench, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { marked } from "marked";
 import { useI18n } from "../i18n";
 
@@ -16,113 +16,6 @@ interface SessionContent {
 interface SessionMessage {
   role: "user" | "assistant";
   content: SessionContent[];
-}
-
-function ToolUseCard({ name, input }: { name: string; input: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div
-      style={{
-        margin: "6px 0",
-        border: "1px solid var(--border-dim)",
-        borderRadius: 6,
-        overflow: "hidden",
-        fontSize: 12,
-      }}
-    >
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          padding: "5px 10px",
-          background: "var(--bg-input)",
-          border: "none",
-          cursor: "pointer",
-          textAlign: "left",
-          color: "var(--text-secondary)",
-        }}
-      >
-        {expanded ? (
-          <ChevronDown size={11} style={{ flexShrink: 0 }} />
-        ) : (
-          <ChevronRight size={11} style={{ flexShrink: 0 }} />
-        )}
-        <Wrench size={11} style={{ color: "var(--text-hint)", flexShrink: 0 }} />
-        <span
-          style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}
-        >
-          {name}
-        </span>
-      </button>
-      {expanded && (
-        <pre
-          style={{
-            margin: 0,
-            padding: "8px 12px",
-            fontSize: 11,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-secondary)",
-            background: "var(--bg-root)",
-            overflowX: "auto",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-            maxHeight: 280,
-            overflowY: "auto",
-          }}
-        >
-          {input}
-        </pre>
-      )}
-    </div>
-  );
-}
-
-function ThinkingBlock({ thinking }: { thinking: string }) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 5,
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          padding: "2px 0",
-          color: "var(--text-hint)",
-          fontSize: 11.5,
-          fontStyle: "italic",
-        }}
-      >
-        {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-        <span>{t("session.thinking")}</span>
-      </button>
-      {expanded && (
-        <div
-          style={{
-            padding: "6px 12px",
-            fontSize: 12,
-            color: "var(--text-muted)",
-            fontStyle: "italic",
-            borderLeft: "2px solid var(--border-dim)",
-            marginLeft: 4,
-            marginTop: 4,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            lineHeight: 1.55,
-          }}
-        >
-          {thinking}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function UserMessageBubble({ text }: { text: string }) {
@@ -204,26 +97,19 @@ function MessageBlock({ message }: { message: SessionMessage }) {
     return <UserMessageBubble text={text} />;
   }
 
-  const textParts = message.content.filter((c) => c.type === "text");
-  const toolParts = message.content.filter((c) => c.type === "tool_use");
-  const thinkingParts = message.content.filter((c) => c.type === "thinking");
-
-  if (textParts.length === 0 && toolParts.length === 0 && thinkingParts.length === 0) return null;
+  // 只留「助手说过的话」：工具调用（bash / 读写文件…）与思考块一律不展示——回放的
+  // 价值是双方对话本身，工具噪声会把对话冲散。
+  const textParts = message.content.filter((c) => c.type === "text" && (c.text ?? "").trim());
+  if (textParts.length === 0) return null;
 
   return (
-    <div style={{ marginBottom: 18 }}>
-      {thinkingParts.map((t, i) => (
-        <ThinkingBlock key={i} thinking={t.thinking ?? ""} />
-      ))}
+    <div style={{ marginBottom: 18, maxWidth: "82%" }}>
       {textParts.map((t, i) => (
         <div
           key={i}
           className="session-prose"
           dangerouslySetInnerHTML={{ __html: marked(t.text ?? "", { async: false }) as string }}
         />
-      ))}
-      {toolParts.map((t, i) => (
-        <ToolUseCard key={i} name={t.name ?? ""} input={t.input ?? ""} />
       ))}
     </div>
   );

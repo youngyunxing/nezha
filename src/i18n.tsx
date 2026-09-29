@@ -359,7 +359,6 @@ const translations: Record<string, string> = {
   "running.exportSaveDialogTitle": "保存会话为 Markdown",
   "running.exportSuccess": "会话已导出到 {path}",
   "running.exportFailed": "导出失败：{error}",
-  "session.thinking": "思考中…",
   "session.loading": "正在加载会话…",
   "session.unableToLoad": "无法加载会话：{error}",
   "session.noMessages": "会话文件中没有消息。",
