@@ -634,7 +634,15 @@ function App() {
           ? { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined }
           : task,
       );
+      // 先把要恢复的终端屏幕备进输出缓冲区，再让任务转 pending —— 面板一变成 pending
+      // 就会挂载并读一次缓冲区，预塞晚于挂载就永远画不出来（重启后纯终端记录丢失就是这么来的）。
+      for (const item of autoResume) {
+        tm.resetTaskTerminal(item.task.id);
+        await seedScreenBeforeRestore(item.task);
+      }
+
       setTasks(nextTasks);
+
 
       const touchedProjectIds = new Set(changedProjectIds);
       autoResume.forEach((item) => touchedProjectIds.add(item.task.projectId));
@@ -659,21 +667,16 @@ function App() {
       }
 
       autoResume.forEach(({ task, project, sessionId }) => {
-        tm.resetTaskTerminal(task.id);
         const pendingTask = {
           ...task,
           status: "pending" as TaskStatus,
           attentionRequestedAt: undefined,
         };
-        // 先预塞屏幕记录再拉起进程，顺序不能反（见 seedScreenBeforeRestore）。
-        void (async () => {
-          await seedScreenBeforeRestore(task);
-          if (sessionId) {
-            invokeResumeTask(pendingTask, project, sessionId);
-            return;
-          }
-          invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
-        })();
+        if (sessionId) {
+          invokeResumeTask(pendingTask, project, sessionId);
+          return;
+        }
+        invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
       });
     }
 
@@ -1068,51 +1071,53 @@ function App() {
     const project = projects.find((p) => p.id === task.projectId);
     if (!project) return;
 
-    // Reset task status, clear buffer, and bump run counter to remount the terminal
-    setTasks((prev) => {
-      const next = prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: "pending" as TaskStatus,
-              updatedAt: Date.now(),
-              attentionRequestedAt: undefined,
-            }
-          : t,
-      );
-      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
-      return next;
-    });
-    tm.resetTaskTerminal(taskId);
-    setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
+    // 顺序要紧：先清缓冲、再预塞屏幕记录，最后才把状态置成 pending —— 面板在 pending 时
+    // 挂载并读一次缓冲区，预塞晚一步就画不出来。
+    void (async () => {
+      tm.resetTaskTerminal(taskId);
+      await seedScreenBeforeRestore(task);
 
-    if (isShell) {
-      void (async () => {
-        await seedScreenBeforeRestore(task);
+      // Reset task status and bump run counter to remount the terminal
+      setTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                status: "pending" as TaskStatus,
+                updatedAt: Date.now(),
+                attentionRequestedAt: undefined,
+              }
+            : t,
+        );
+        persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
+        return next;
+      });
+      setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
+
+      if (isShell) {
         invokeRunTask(
           { ...task, status: "pending" as TaskStatus, attentionRequestedAt: undefined },
           task.worktreePath ?? project.path,
           [],
         );
-      })();
-      return;
-    }
-
-    // 类型收窄：非终端的分支在上面已经保证 sessionId 存在。
-    if (!sessionId) return;
-    pendingResumeStartsRef.current[taskId] = async () => {
-      // fork 出来的任务：如果它自己的会话文件是空的（fork 完啥也没干，Claude 根本没写过
-      // 这份 transcript），--resume 会直接失败、记录回不来。这种情况用源会话重新 fork 一次。
-      if (task.forkedFromSessionId && task.claudeSessionPath) {
-        const size = await sessionFileSize(task.claudeSessionPath);
-        if (size === 0) {
-          invokeForkTask(task, project, task.forkedFromSessionId);
-          return;
-        }
+        return;
       }
-      await seedScreenBeforeRestore(task);
-      invokeResumeTask(task, project, sessionId);
-    };
+
+      // 类型收窄：非终端的分支在上面已经保证 sessionId 存在。
+      if (!sessionId) return;
+      pendingResumeStartsRef.current[taskId] = async () => {
+        // fork 出来的任务：如果它自己的会话文件是空的（fork 完啥也没干，Claude 根本没写过
+        // 这份 transcript），--resume 会直接失败、记录回不来。这种情况用源会话重新 fork 一次。
+        if (task.forkedFromSessionId && task.claudeSessionPath) {
+          const size = await sessionFileSize(task.claudeSessionPath);
+          if (size === 0) {
+            invokeForkTask(task, project, task.forkedFromSessionId);
+            return;
+          }
+        }
+        invokeResumeTask(task, project, sessionId);
+      };
+    })();
   }
 
   /** 选中一条本地会话：主舞台切到它的消息回放（只读）。 */
