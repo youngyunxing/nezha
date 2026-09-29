@@ -14,7 +14,6 @@ import type {
   TerminalFontSize,
   TerminalScrollback,
   TaskDisplayWindow,
-  SkillHubConfig,
 } from "./types";
 import {
   isActiveTaskStatus,
@@ -30,7 +29,6 @@ import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
 import { WelcomePage } from "./components/WelcomePage";
 import { ProjectPage } from "./components/ProjectPage";
-import { SKILL_HUB_CHANGED_EVENT } from "./components/app-settings/types";
 import { KanbanView, OPEN_KANBAN_VIEW_EVENT } from "./components/KanbanView";
 import { useToast } from "./components/Toast";
 import { isHideWindowShortcut, isToggleKanbanShortcut } from "./shortcuts";
@@ -321,8 +319,6 @@ function App() {
   const [projectViews, setProjectViews] = useState<Record<string, ProjectViewState>>({});
   const [mountedProjectIds, setMountedProjectIds] = useState<string[]>([]);
   const [taskRunCounts, setTaskRunCounts] = useState<Record<string, number>>({});
-  const [skillHubConfig, setSkillHubConfig] = useState<SkillHubConfig | null>(null);
-  const [hubMode, setHubMode] = useState(false);
   const [showKanban, setShowKanban] = useState(false);
 
   const tm = useTerminalManager();
@@ -594,35 +590,9 @@ function App() {
       });
     };
 
-    const loadFromBackend = () => {
-      Promise.all([
-        invoke<SkillHubConfig>("get_skill_hub_config"),
-        invoke<Project[]>("load_projects"),
-      ])
-        .then(([cfg, loadedProjects]) => {
-          setSkillHubConfig(cfg ?? null);
-          mergeProjects(loadedProjects);
-        })
-        .catch(console.error);
-    };
-
-    const handleSkillHubChanged = (e: Event) => {
-      const detail = (e as CustomEvent<{ projects?: Project[] }>).detail;
-      if (detail?.projects && Array.isArray(detail.projects)) {
-        // 同步路径：set_skill_hub_path 已返回完整列表，直接 merge，避免竞态
-        invoke<SkillHubConfig>("get_skill_hub_config")
-          .then((cfg) => setSkillHubConfig(cfg ?? null))
-          .catch(console.error);
-        mergeProjects(detail.projects);
-        return;
-      }
-      // clear_skill_hub 等场景没有 projects payload，退回到全量 reload
-      loadFromBackend();
-    };
-
-    loadFromBackend();
-    window.addEventListener(SKILL_HUB_CHANGED_EVENT, handleSkillHubChanged);
-    return () => window.removeEventListener(SKILL_HUB_CHANGED_EVENT, handleSkillHubChanged);
+    invoke<Project[]>("load_projects")
+      .then((loadedProjects) => mergeProjects(loadedProjects))
+      .catch(console.error);
   }, []);
 
   // Tauri event listeners (agent-output is handled inside useTerminalManager)
@@ -681,7 +651,6 @@ function App() {
       return next;
     });
     setActiveProject(updated);
-    setHubMode(false);
     mountProject(updated.id);
     invoke("init_project_config", { projectPath: project.path }).catch((e: unknown) => {
       showToast(t("toast.initProjectConfigFailed", { error: String(e) }), "warning");
@@ -690,7 +659,6 @@ function App() {
 
   function handleBack() {
     setActiveProject(null);
-    setHubMode(false);
   }
 
   function invokeRunTask(task: Task, projectPath: string, images: string[], texts: string[] = []) {
@@ -1349,10 +1317,7 @@ function App() {
     const current = projects.find((project) => project.id === projectId);
     if (current?.name === normalizedName) return { ok: true, name: current.name };
 
-    const renameableProjects = projects.filter(
-      (project) => project.id !== skillHubConfig?.hubProjectId,
-    );
-    const result = validateProjectName(rawName, renameableProjects, projectId);
+    const result = validateProjectName(rawName, projects, projectId);
     if (!result.ok) return result;
 
     const next = projects.map((project) =>
@@ -1470,34 +1435,7 @@ function App() {
         .filter((project): project is Project => !!project),
     [mountedProjectIds, projects],
   );
-  const hubProjectId = skillHubConfig?.hubProjectId;
-  const visibleProjectsForWelcome = useMemo(
-    () => sortedProjects.filter((p) => p.id !== hubProjectId),
-    [sortedProjects, hubProjectId],
-  );
-
-  const handleEnterSkillHub = useCallback(() => {
-    if (!hubProjectId) return;
-    const hub = projects.find((p) => p.id === hubProjectId);
-    if (!hub) return;
-    const updated = { ...hub, lastOpenedAt: Date.now() };
-    setProjects((prev) => {
-      const next = prev.map((p) => (p.id === hub.id ? updated : p));
-      persistProjects(next, showToast, formatSaveProjectsError);
-      return next;
-    });
-    setHubMode(true);
-    setActiveProject(updated);
-    mountProject(updated.id);
-    invoke("init_project_config", { projectPath: updated.path }).catch((e: unknown) => {
-      showToast(t("toast.initProjectConfigFailed", { error: String(e) }), "warning");
-    });
-  }, [hubProjectId, projects, mountProject, showToast, formatSaveProjectsError, t]);
-
-  const handleExitSkillHub = useCallback(() => {
-    setHubMode(false);
-    setActiveProject(null);
-  }, []);
+  const visibleProjectsForWelcome = sortedProjects;
 
   // 看板入口在 ProjectRail 底部触发,打开全屏浮层覆盖当前页面。
   // 不切换 activeProject,关闭浮层后用户回到原先所在的任务上下文。
@@ -1512,11 +1450,7 @@ function App() {
   // 错位的页面状态。
   function enterProjectFromKanban(project: Project, taskId?: string) {
     setShowKanban(false);
-    if (project.id === hubProjectId) {
-      handleEnterSkillHub();
-    } else {
-      handleProjectClick(project);
-    }
+    handleProjectClick(project);
     if (taskId) {
       updateProjectView(project.id, { selectedTaskId: taskId, isNewTask: false });
     }
@@ -1528,13 +1462,8 @@ function App() {
       <div style={s.appProjectLayer}>
         {mountedProjects.map((project) => {
           const view = getProjectView(project.id);
-          const isHubActive = hubMode && project.id === hubProjectId;
-          const railProjectsFiltered = isHubActive
-            ? [project]
-            : railProjects.filter((p) => p.id !== hubProjectId);
-          const otherProjectsFiltered = isHubActive
-            ? []
-            : sortedProjects.filter((p) => p.id !== project.id && p.id !== hubProjectId);
+          const railProjectsFiltered = railProjects;
+          const otherProjectsFiltered = sortedProjects.filter((p) => p.id !== project.id);
           return (
             <ProjectPage
               key={project.id}
@@ -1542,8 +1471,6 @@ function App() {
               visible={activeProject?.id === project.id}
               allProjects={railProjectsFiltered}
               otherProjects={otherProjectsFiltered}
-              hubMode={isHubActive}
-              onExitSkillHub={handleExitSkillHub}
               tasks={tasks}
               getTaskRestoreState={tm.getTaskRestoreState}
               taskRunCounts={taskRunCounts}
@@ -1628,8 +1555,6 @@ function App() {
             onToggleProjectHidden={handleToggleProjectHidden}
             onRenameProject={handleRenameProject}
             onUpdateProjectAvatar={handleUpdateProjectAvatar}
-            skillHubConfig={skillHubConfig}
-            onEnterSkillHub={handleEnterSkillHub}
             themeVariant={themeVariant}
             themeMode={themeMode}
             systemPrefersDark={systemPrefersDark}

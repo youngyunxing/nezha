@@ -3,12 +3,9 @@ import {
   X,
   Keyboard,
   Monitor,
-  Info,
   Settings as SettingsIcon,
   Type,
   Zap,
-  Blocks,
-  Heart,
   ExternalLink,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -24,18 +21,12 @@ import { useI18n } from "../i18n";
 import s from "../styles";
 import claudeLogo from "../assets/claude.svg";
 import chatgptLogo from "../assets/chatgpt.svg";
-import wechatLogo from "../assets/wechat.png";
-
-const WECHAT_GROUP_URL = "https://github.com/hanshuaikang/nezha/issues/66";
-import { AboutPanel } from "./app-settings/AboutPanel";
-import { ThanksPanel } from "./app-settings/ThanksPanel";
 import { AgentConfigPanel } from "./app-settings/AgentConfigPanel";
 import { GeneralPanel } from "./app-settings/GeneralPanel";
 import { ShortcutsPanel } from "./app-settings/ShortcutsPanel";
 import { ThemePanel } from "./app-settings/ThemePanel";
 import { FontPanel } from "./app-settings/FontPanel";
 import { HooksPanel } from "./app-settings/HooksPanel";
-import { SkillsPanel } from "./app-settings/SkillsPanel";
 import { getAgentSettingsFilePath } from "./app-settings/shared";
 import type { AgentKey, AppSettingsNavItem, NavKey, NavSection } from "./app-settings/types";
 
@@ -45,7 +36,6 @@ const NAV_ITEMS: AppSettingsNavItem[] = [
   { key: "fonts", labelKey: "appSettings.fonts", section: "application", icon: Type },
   { key: "shortcuts", labelKey: "appSettings.shortcuts", section: "application", icon: Keyboard },
   { key: "hooks", labelKey: "appSettings.hooks", section: "application", icon: Zap },
-  { key: "skills", labelKey: "skill.settings.navLabel", section: "application", icon: Blocks },
   {
     key: "claude",
     labelKey: "Claude Code",
@@ -62,31 +52,13 @@ const NAV_ITEMS: AppSettingsNavItem[] = [
     filePath: getAgentSettingsFilePath("codex"),
     lang: "toml",
   },
-  {
-    key: "community",
-    labelKey: "appSettings.community",
-    section: "community",
-    logo: wechatLogo,
-    url: WECHAT_GROUP_URL,
-  },
-  { key: "about", labelKey: "appSettings.about", section: "about", icon: Info },
-  {
-    key: "thanks",
-    labelKey: "appSettings.thanks",
-    section: "about",
-    icon: Heart,
-    iconColor: "#ef4444",
-    iconFill: "#ef4444",
-  },
 ];
 
-const SECTION_ORDER: NavSection[] = ["application", "agents", "community", "about"];
+const SECTION_ORDER: NavSection[] = ["application", "agents"];
 
 const SECTION_LABEL_KEY: Record<NavSection, string> = {
   application: "appSettings.section.application",
   agents: "appSettings.section.agents",
-  community: "appSettings.section.community",
-  about: "appSettings.section.about",
 };
 
 function NavItemIcon({ item, size }: { item: AppSettingsNavItem; size: number }) {
@@ -247,12 +219,6 @@ export function AppSettingsDialog({
             <ShortcutsPanel key="shortcuts" />
           ) : activeNav === "hooks" ? (
             <HooksPanel key="hooks" />
-          ) : activeNav === "skills" ? (
-            <SkillsPanel key="skills" />
-          ) : activeNav === "about" ? (
-            <AboutPanel key="about" />
-          ) : activeNav === "thanks" ? (
-            <ThanksPanel key="thanks" />
           ) : (
             <AgentConfigPanel
               key={activeNav}

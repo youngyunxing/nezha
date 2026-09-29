@@ -25,8 +25,6 @@ import { GitDiffViewer } from "./GitDiffViewer";
 import { ProjectRail } from "./ProjectRail";
 import { SettingsDialog } from "./SettingsDialog";
 import { RightToolbar } from "./RightToolbar";
-import { SkillStorePanel } from "./skill-hub/SkillStorePanel";
-import { dispatchOpenAppSettings } from "./app-settings/types";
 import { TodoTaskView } from "./TodoTaskView";
 import { ShellTerminalPanel, type ShellTerminalPanelHandle } from "./ShellTerminalPanel";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -91,8 +89,6 @@ export function ProjectPage({
   onUiFontFamilyChange,
   monoFontFamily,
   onMonoFontFamilyChange,
-  hubMode = false,
-  onExitSkillHub,
 }: {
   project: Project;
   visible?: boolean;
@@ -167,8 +163,6 @@ export function ProjectPage({
   onUiFontFamilyChange: (family: FontFamily) => void;
   monoFontFamily: FontFamily;
   onMonoFontFamilyChange: (family: FontFamily) => void;
-  hubMode?: boolean;
-  onExitSkillHub?: () => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -248,17 +242,6 @@ export function ProjectPage({
     },
     [handleFileSelect, openRightPanel],
   );
-
-  // App 设置对话框由任务栏底部的 SidebarFooterActions 托管，任务栏折叠时它并未挂载，
-  // 直接派发事件会静默丢失；先展开任务栏，等它挂载后再派发，并限定只有本项目的宿主响应。
-  const handleOpenAppSettingsFromPanel = useCallback(() => {
-    setTaskPanelCollapsed(false);
-    requestAnimationFrame(() => dispatchOpenAppSettings(project.id));
-  }, [project.id]);
-
-  // 技能库项目自身没有「安装到本项目」的语义：若某项目在打开技能商店后才被设为 hub，
-  // 面板内容会被 hubMode 抑制，这里把它视为未打开，避免只剩一个空壳外框。
-  const effectiveRightPanel = rightPanel === "skills" && hubMode ? null : rightPanel;
 
   // 只挂载当前选中的任务的 xterm 实例，其他任务通过 snapshot 序列化后卸载。
   // 这样同时只有 1 个 WebGL context 存活，避免长时间运行后 GPU 内存累积。
@@ -397,7 +380,6 @@ export function ProjectPage({
         onOpen={onOpen}
         onToggleProjectHidden={onToggleProjectHidden}
         onUpdateProjectAvatar={onUpdateProjectAvatar}
-        singleProjectMode={hubMode}
       />
       <TaskPanel
         project={project}
@@ -415,8 +397,7 @@ export function ProjectPage({
         onDeleteAllTasks={onDeleteAllTasks}
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
-        onBack={hubMode ? (onExitSkillHub ?? onBack) : onBack}
-        backTitle={hubMode ? t("skill.taskView.back") : undefined}
+        onBack={onBack}
         themeVariant={themeVariant}
         themeMode={themeMode}
         systemPrefersDark={systemPrefersDark}
@@ -594,7 +575,7 @@ export function ProjectPage({
         )}
       </div>
 
-      {effectiveRightPanel && (
+      {rightPanel && (
         <div style={s.rightPanelWrap}>
           <div onMouseDown={handleRightResizeStart} style={s.rightPanelResizeHandle} />
           {rightPanel === "files" && (
@@ -630,27 +611,16 @@ export function ProjectPage({
               />
             </ErrorBoundary>
           )}
-          {effectiveRightPanel === "skills" && (
-            <ErrorBoundary label="技能商店">
-              <SkillStorePanel
-                projectId={project.id}
-                active={visible}
-                width={rightPanelWidth}
-                onOpenAppSettings={handleOpenAppSettingsFromPanel}
-              />
-            </ErrorBoundary>
-          )}
         </div>
       )}
 
       <RightToolbar
-        activePanel={effectiveRightPanel}
+        activePanel={rightPanel}
         onToggle={handleTogglePanel}
         terminalActive={showShellTerminal}
         onToggleTerminal={handleToggleShellTerminal}
         onOpenSearch={() => setShowFileSearch(true)}
         onOpenSettings={() => setShowSettings(true)}
-        showSkillStore={!hubMode}
       />
 
       {showFileSearch && (

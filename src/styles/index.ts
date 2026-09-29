@@ -7,7 +7,6 @@ import { gitDiff } from "./git-diff";
 import { kanban } from "./kanban";
 import { layout } from "./layout";
 import { panels } from "./panels";
-import { skillHub } from "./skill-hub";
 import { task } from "./task";
 import { terminal } from "./terminal";
 import { timeline } from "./timeline";
@@ -23,7 +22,6 @@ const s = {
   ...font,
   ...timeline,
   ...kanban,
-  ...skillHub,
 } satisfies Record<string, React.CSSProperties>;
 
 export default s;
@@ -36,7 +34,6 @@ export {
   kanban,
   layout,
   panels,
-  skillHub,
   task,
   terminal,
   timeline,

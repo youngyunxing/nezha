@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, FolderOpen, Layers, Plus, Clock, Blocks } from "lucide-react";
+import { Search, FolderOpen, Layers, Plus, Clock } from "lucide-react";
 import type {
   Project,
   Task,
@@ -9,14 +9,11 @@ import type {
   TerminalScrollback,
   TaskDisplayWindow,
   FontFamily,
-  SkillHubConfig,
   ProjectAvatarStyle,
 } from "../types";
 import type { ProjectRenameResult } from "../projectName";
 import { SidebarFooterActions } from "./SidebarFooterActions";
-import { OPEN_APP_SETTINGS_EVENT } from "./app-settings/types";
 import { TimelineView } from "./TimelineView";
-import { SkillHubView } from "./skill-hub/SkillHubView";
 import { ProjectListItem } from "./welcome/ProjectListItem";
 import { useI18n, pluralKey } from "../i18n";
 import s from "../styles";
@@ -98,8 +95,6 @@ export function WelcomePage({
   onUiFontFamilyChange,
   monoFontFamily,
   onMonoFontFamilyChange,
-  skillHubConfig,
-  onEnterSkillHub,
 }: {
   projects: Project[];
   allProjects: Project[];
@@ -127,12 +122,10 @@ export function WelcomePage({
   onUiFontFamilyChange: (family: FontFamily) => void;
   monoFontFamily: FontFamily;
   onMonoFontFamilyChange: (family: FontFamily) => void;
-  skillHubConfig: SkillHubConfig | null;
-  onEnterSkillHub: () => void;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"projects" | "timeline" | "skills">("projects");
+  const [view, setView] = useState<"projects" | "timeline">("projects");
 
   const filtered = useMemo(() => {
     if (!query.trim()) return projects;
@@ -170,12 +163,6 @@ export function WelcomePage({
               active={view === "timeline"}
               onClick={() => setView("timeline")}
             />
-            <SidebarItem
-              icon={<Blocks size={15} />}
-              label={t("welcome.skillHub")}
-              active={view === "skills"}
-              onClick={() => setView("skills")}
-            />
           </nav>
 
           <div style={s.sidebarFooter}>
@@ -206,20 +193,9 @@ export function WelcomePage({
             projects={allProjects}
             tasks={tasks}
             onTaskClick={(task) => {
-              if (task.projectId === skillHubConfig?.hubProjectId) {
-                onEnterSkillHub();
-                return;
-              }
               const project = allProjects.find((p) => p.id === task.projectId);
               if (project) onProjectClick(project);
             }}
-          />
-        ) : view === "skills" ? (
-          <SkillHubView
-            config={skillHubConfig}
-            allProjects={projects}
-            onEnterSkillHub={onEnterSkillHub}
-            onOpenAppSettings={() => window.dispatchEvent(new CustomEvent(OPEN_APP_SETTINGS_EVENT))}
           />
         ) : (
           <div style={s.welcomePane}>

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconButton } from "./IconButton";
-import { Blocks, Folder, Search, GitBranch, History, Settings, Terminal } from "lucide-react";
+import { Folder, Search, GitBranch, History, Settings, Terminal } from "lucide-react";
 import { useI18n } from "../i18n";
 import type { RightPanel } from "../hooks/useProjectPanels";
 import s from "../styles";
@@ -12,7 +12,6 @@ export function RightToolbar({
   onToggleTerminal,
   onOpenSearch,
   onOpenSettings,
-  showSkillStore = true,
 }: {
   activePanel: RightPanel;
   onToggle: (panel: Exclude<RightPanel, null>) => void;
@@ -20,8 +19,6 @@ export function RightToolbar({
   onToggleTerminal: () => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
-  /** 技能库项目自身不需要「安装到本项目」入口，隐藏该按钮 */
-  showSkillStore?: boolean;
 }) {
   const { t } = useI18n();
   const buttons: Array<{
@@ -33,9 +30,6 @@ export function RightToolbar({
     { key: "git-changes", icon: <GitBranch size={17} />, title: t("toolbar.gitChanges") },
     { key: "git-history", icon: <History size={17} />, title: t("toolbar.gitHistory") },
   ];
-  if (showSkillStore) {
-    buttons.push({ key: "skills", icon: <Blocks size={17} />, title: t("toolbar.skillStore") });
-  }
 
   const footerItems = [
     { icon: <Settings size={17} />, title: t("settings.title"), disabled: false, onClick: onOpenSettings },
