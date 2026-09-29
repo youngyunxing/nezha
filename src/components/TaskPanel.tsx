@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Plus, Search, Terminal } from "lucide-react";
+import { Pencil, Plus, Search, Terminal } from "lucide-react";
 import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { BranchBar } from "./task-panel/BranchBar";
@@ -136,56 +136,77 @@ export function TaskPanel({
         <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
       </button>
 
-      {/* 快捷命令：单独划一块，上下各一条分割线，和下面的任务列表分开 */}
+      {/* 快捷命令：单独划一块，上下各一条分割线，和下面的任务列表分开。
+          每颗 chip 分两段：点名字直接建任务，点右边的铅笔改它（右键 / 长按也行）。 */}
       <div style={s.taskDivider} />
       <div style={s.presetSectionHeader}>{t("preset.sectionTitle")}</div>
       <div style={s.presetChipRow}>
-        {presets.map((preset) => (
-          <button
-            key={preset.id}
-            type="button"
-            style={{
-              ...s.presetChip,
-              ...(hoverPresetId === preset.id
-                ? { background: "var(--bg-hover)", color: "var(--text-primary)" }
-                : null),
-            }}
-            title={`${presetSummary(preset, {
-              claude: "Claude Code",
-              codex: "Codex",
-              shell: t("terminal.title"),
-              worktree: t("newTask.dialogIsolated"),
-            })}${t("preset.rightClickHint")}`}
-            onMouseEnter={() => setHoverPresetId(preset.id)}
-            onMouseLeave={() => {
-              setHoverPresetId((prev) => (prev === preset.id ? null : prev));
-              cancelLongPress();
-            }}
-            onPointerDown={() => startLongPress(preset.id)}
-            onPointerUp={cancelLongPress}
-            onPointerLeave={cancelLongPress}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              onManagePresets(preset.id);
-            }}
-            onClick={() => {
-              if (longPressed.current) {
-                longPressed.current = false;
-                return; // 长按已经打开编辑面板了，不再建任务
-              }
-              onRunPreset(preset);
-            }}
-          >
-            {preset.agent === "claude" ? (
-              <img src={claudeLogo} style={s.presetChipIcon} />
-            ) : preset.agent === "codex" ? (
-              <img src={chatgptLogo} style={s.presetChipIcon} />
-            ) : (
-              <Terminal size={11} strokeWidth={2.2} style={s.flexShrinkIcon} />
-            )}
-            <span style={s.presetChipLabel}>{preset.name}</span>
-          </button>
-        ))}
+        {presets.map((preset) => {
+          const hovering = hoverPresetId === preset.id;
+          return (
+            <div
+              key={preset.id}
+              style={{
+                ...s.presetChip,
+                ...(hovering ? { borderColor: "var(--border-medium)" } : null),
+              }}
+              onMouseEnter={() => setHoverPresetId(preset.id)}
+              onMouseLeave={() => {
+                setHoverPresetId((prev) => (prev === preset.id ? null : prev));
+                cancelLongPress();
+              }}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                onManagePresets(preset.id);
+              }}
+            >
+              <button
+                type="button"
+                style={{
+                  ...s.presetChipRun,
+                  ...(hovering ? { color: "var(--text-primary)" } : null),
+                }}
+                title={presetSummary(preset, {
+                  claude: "Claude Code",
+                  codex: "Codex",
+                  shell: t("terminal.title"),
+                  worktree: t("newTask.dialogIsolated"),
+                })}
+                onPointerDown={() => startLongPress(preset.id)}
+                onPointerUp={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onClick={() => {
+                  if (longPressed.current) {
+                    longPressed.current = false;
+                    return; // 长按已经打开编辑面板了，不再建任务
+                  }
+                  onRunPreset(preset);
+                }}
+              >
+                {preset.agent === "claude" ? (
+                  <img src={claudeLogo} style={s.presetChipIcon} />
+                ) : preset.agent === "codex" ? (
+                  <img src={chatgptLogo} style={s.presetChipIcon} />
+                ) : (
+                  <Terminal size={11} strokeWidth={2.2} style={s.flexShrinkIcon} />
+                )}
+                <span style={s.presetChipLabel}>{preset.name}</span>
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...s.presetChipEdit,
+                  ...(hovering ? { color: "var(--text-secondary)" } : null),
+                }}
+                title={t("preset.editThis")}
+                aria-label={t("preset.editThis")}
+                onClick={() => onManagePresets(preset.id)}
+              >
+                <Pencil size={11} strokeWidth={2.2} />
+              </button>
+            </div>
+          );
+        })}
         <button
           type="button"
           style={{
