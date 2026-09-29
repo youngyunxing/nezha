@@ -203,40 +203,19 @@ fn release_claimed_session_paths(task_manager: &TaskManager, task_id: &str) {
 // ── 共享 PTY 辅助函数 ────────────────────────────────────────────────────────
 
 /// 设置 CommandBuilder 的标准环境变量。
-/// Claude Code 给自己与它派生的子进程打的一批「会话级」环境变量。Nezha 是终端宿主，
-/// 起的是**顶层**会话：这些变量一旦从 app 自身的进程环境泄漏进 PTY（比如 app 恰好是在
-/// 某个 Claude Code 会话里被拉起来的），claude 就会以为自己是某个父会话的子进程——
-/// 最直接的后果是 `CLAUDE_CODE_CHILD_SESSION` 关掉 transcript 写入
-/// （「⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker」），
-/// 于是续跑的对话不再落盘。
-/// 逐条摘掉；但用户登录 shell 里显式导出的同名变量以登录 shell 为准，不摘。
-const CLAUDE_SESSION_SCOPED_ENV: &[&str] = &[
-    "CLAUDECODE",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_CODE_SSE_PORT",
-    "CLAUDE_CODE_SESSION_ATTENDED",
-    "CLAUDE_PID",
-];
-
-/// 摘掉从 app 进程环境泄漏进来的会话级变量；登录 shell 显式导出的同名变量不摘
-/// （随后由登录 shell 环境覆盖写入，见 setup_env）。
-fn strip_leaked_claude_session_env(cmd: &mut CommandBuilder, login_env: &[(String, String)]) {
-    for key in CLAUDE_SESSION_SCOPED_ENV {
-        if !login_env.iter().any(|(k, _)| k.as_str() == *key) {
-            cmd.env_remove(key);
-        }
+/// 摘掉「会话身份」变量。portable-pty 的子进程以 app 自身环境为基底，app 若是在某个
+/// Claude Code 会话里被拉起就会带上它们；登录 shell 环境快照里同样已被过滤掉一份
+/// （见 `platform::SESSION_SCOPED_AGENT_ENV` 的说明），这里再兜一层。
+fn strip_session_scoped_agent_env(cmd: &mut CommandBuilder) {
+    for key in crate::platform::SESSION_SCOPED_AGENT_ENV {
+        cmd.env_remove(key);
     }
 }
 
 fn setup_env(cmd: &mut CommandBuilder) {
     let login_env = crate::app_settings::get_login_shell_env();
 
-    // 摘变量必须在叠加登录 shell 环境之前：这样 ~/.zshrc 里显式导出的同名变量仍然生效。
-    strip_leaked_claude_session_env(cmd, login_env);
+    strip_session_scoped_agent_env(cmd);
 
     for (key, value) in login_env {
         cmd.env(key, value);
@@ -637,33 +616,73 @@ mod fork_command_tests {
     use std::ffi::OsStr;
 
     #[test]
-    fn strips_claude_session_env_leaked_from_the_app_process() {
+    fn strips_session_scoped_env_leaked_from_the_app_process() {
         // app 若是在某个 Claude Code 会话里被拉起，它自己的进程环境就带着这些变量，
         // 不摘的话 claude 会以为自己是子进程并关掉 transcript 写入。
         let mut command = CommandBuilder::new("claude");
         command.env("CLAUDE_CODE_CHILD_SESSION", "1");
         command.env("CLAUDE_CODE_SESSION_ID", "leaked");
         command.env("CLAUDE_PID", "1234");
+        command.env("ANTHROPIC_BASE_URL", "http://127.0.0.1:15721");
 
-        strip_leaked_claude_session_env(&mut command, &[]);
+        strip_session_scoped_agent_env(&mut command);
 
         assert_eq!(command.get_env("CLAUDE_CODE_CHILD_SESSION"), None);
         assert_eq!(command.get_env("CLAUDE_CODE_SESSION_ID"), None);
         assert_eq!(command.get_env("CLAUDE_PID"), None);
+        // 配置类变量不动。
+        assert_eq!(
+            command.get_env("ANTHROPIC_BASE_URL"),
+            Some(OsStr::new("http://127.0.0.1:15721"))
+        );
     }
 
     #[test]
-    fn keeps_session_env_names_the_login_shell_also_exports() {
-        let mut command = CommandBuilder::new("claude");
-        command.env("CLAUDECODE", "1");
+    fn pty_child_env_has_no_session_scoped_vars() {
+        // 真起一个 PTY 子进程（/usr/bin/env）看它拿到了什么环境。跑测试的进程若本身
+        // 带着泄漏变量（在 Claude Code 会话里跑 cargo test 就是），这就是最真实的复现。
+        let pty = native_pty_system();
+        let pair = pty
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("openpty");
 
-        // 用户自己导出过同名变量时不摘（setup_env 随后用登录 shell 的值覆盖）。
-        strip_leaked_claude_session_env(
-            &mut command,
-            &[("CLAUDECODE".to_string(), "0".to_string())],
-        );
+        let mut cmd = CommandBuilder::new("/usr/bin/env");
+        // 显式注入一次「泄漏」：CommandBuilder 以父进程环境为基底，这里模拟 app 自己
+        // 带着这些变量的情形，测试便不依赖跑测试时的环境。
+        cmd.env("CLAUDE_CODE_CHILD_SESSION", "1");
+        cmd.env("CLAUDECODE", "1");
+        cmd.env("CLAUDE_CODE_SESSION_ID", "leaked-session");
+        setup_env(&mut cmd);
 
-        assert_eq!(command.get_env("CLAUDECODE"), Some(OsStr::new("1")));
+        let mut reader = pair.master.try_clone_reader().expect("reader");
+        let mut child = pair.slave.spawn_command(cmd).expect("spawn");
+        drop(pair.slave);
+
+        let mut out = String::new();
+        reader.read_to_string(&mut out).expect("read");
+        let _ = child.wait();
+
+        let leaked: Vec<&str> = crate::platform::SESSION_SCOPED_AGENT_ENV
+            .iter()
+            .filter(|key| out.to_lowercase().contains(&format!("{}=", key.to_lowercase())))
+            .copied()
+            .collect();
+        assert!(leaked.is_empty(), "PTY 子进程仍带着会话身份变量: {leaked:?}");
+        // 证明确实是「在继承来的环境上裁剪」，而不是把环境整个清空。
+        assert!(out.contains("PATH="), "子进程应当仍有继承下来的环境");
+    }
+
+    #[test]
+    fn session_scoped_list_covers_the_child_session_marker() {
+        // 这两条一旦漏掉，claude 就会关掉 transcript 写入（Transcript saving is off）。
+        let list = crate::platform::SESSION_SCOPED_AGENT_ENV;
+        assert!(list.contains(&"CLAUDE_CODE_CHILD_SESSION"));
+        assert!(list.contains(&"CLAUDECODE"));
     }
 
     #[test]

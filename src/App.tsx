@@ -942,7 +942,7 @@ function App() {
 
   /**
    * 把本机 Claude Code 的一条会话接进 Nezha：建一条任务记录（带上它的 session id），
-   * 再用 --resume 续跑。和 handleResumeTask 一样，真正拉起放在终端挂载之后，
+   * 再用 --resume 恢复。和 handleResumeTask 一样，真正拉起放在终端挂载之后，
    * 否则首批输出进不来 buffer。
    */
   function handleResumeLocalSession(project: Project, session: LocalClaudeSession) {

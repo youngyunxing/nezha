@@ -16,7 +16,7 @@ function formatSessionTime(ms: number): string {
 }
 
 /**
- * 查看本机 Claude Code 留下的一条会话：上半是它的元信息与「续跑为任务」入口，
+ * 查看本机 Claude Code 留下的一条会话：上半是它的元信息与「恢复」入口，
  * 下半复用任务的会话回放组件（同一份 JSONL 解析）。
  */
 export function LocalSessionView({

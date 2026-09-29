@@ -166,7 +166,7 @@ const translations: Record<string, string> = {
   "task.noTasksYet": "还没有任务",
   "localSession.groupTitle": "本地 Claude Code 会话",
   "localSession.badge": "本机记录",
-  "localSession.resume": "续跑为任务",
+  "localSession.resume": "恢复",
   "localSession.fallbackName": "本地会话",
   "localSession.noPreview": "（无预览）",
   "task.deleteTask": "删除任务",

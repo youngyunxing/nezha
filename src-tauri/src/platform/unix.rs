@@ -12,7 +12,18 @@ pub(crate) fn home_dir() -> Option<std::path::PathBuf> {
 }
 
 pub(crate) fn login_shell_env() -> &'static [(String, String)] {
-    LOGIN_SHELL_ENV.get_or_init(resolve_login_shell_env).as_slice()
+    LOGIN_SHELL_ENV
+        .get_or_init(|| drop_session_scoped_agent_env(resolve_login_shell_env()))
+        .as_slice()
+}
+
+/// 采样结果里剔除「会话身份」变量（见 `SESSION_SCOPED_AGENT_ENV`）。
+/// 采样命令是 app 的子进程，会把 app 自身环境一并带出来，所以必须在出口处过滤，
+/// 否则这些变量会被当成用户配置注入每个 PTY。
+fn drop_session_scoped_agent_env(env: Vec<(String, String)>) -> Vec<(String, String)> {
+    env.into_iter()
+        .filter(|(key, _)| !super::SESSION_SCOPED_AGENT_ENV.contains(&key.as_str()))
+        .collect()
 }
 
 pub(crate) fn login_shell_path() -> &'static str {
@@ -158,4 +169,28 @@ fn build_fallback_env() -> Vec<(String, String)> {
     }
 
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drops_session_scoped_vars_but_keeps_user_config() {
+        let env = vec![
+            ("CLAUDE_CODE_CHILD_SESSION".to_string(), "1".to_string()),
+            ("CLAUDECODE".to_string(), "1".to_string()),
+            ("CLAUDE_PID".to_string(), "55174".to_string()),
+            ("ANTHROPIC_BASE_URL".to_string(), "http://127.0.0.1:15721".to_string()),
+            ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+        ];
+
+        assert_eq!(
+            drop_session_scoped_agent_env(env),
+            vec![
+                ("ANTHROPIC_BASE_URL".to_string(), "http://127.0.0.1:15721".to_string()),
+                ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+            ]
+        );
+    }
 }

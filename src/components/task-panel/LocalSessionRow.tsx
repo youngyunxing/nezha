@@ -17,7 +17,7 @@ function formatSessionTime(ms: number): string {
 /**
  * 任务列表里「本地 Claude Code 会话」分组的一行。刻意复用任务卡片的样式
  * （s.taskCard），高度与观感一致，但它不是 Nezha 任务：点开只是看记录，
- * 要接着聊得进详情再点「续跑为任务」。
+ * 要接着聊得进详情再点「恢复」。
  */
 export function LocalSessionRow({
   session,
