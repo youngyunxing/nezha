@@ -15,6 +15,7 @@
         "title": "Nezha",
         "width": 1100,
         "height": 720,
+        "maximized": true,
         "minWidth": 900,
         "minHeight": 580,
         "acceptFirstMouse": true
