@@ -85,6 +85,9 @@ export function useTerminalManager(options?: {
   resolveTaskContextRef.current = options?.resolveTaskContext;
   // 每任务已落盘到的缓冲长度（没增长就跳过写盘）
   const screenSavedRef = useRef<Record<string, number>>({});
+  // 恢复时读回来的旧屏幕内容。落盘时拼在「新输出」前面，否则新起的那一小段输出会把
+  // 更完整的旧记录覆盖掉（实测：恢复后 15 秒，几 KB 的新 shell 输出冲掉了整份旧记录）。
+  const restoredPrefixRef = useRef<Record<string, string>>({});
   const taskBufferRef = useRef<Record<string, TaskBuffer>>({});
   const terminalSnapshotRef = useRef<Record<string, { snapshot: string; bufferLength: number }>>(
     {},
@@ -195,6 +198,9 @@ export function useTerminalManager(options?: {
   const resetTaskTerminal = useCallback((taskId: string) => {
     taskBufferRef.current[taskId] = createTaskBuffer();
     delete terminalSnapshotRef.current[taskId];
+    delete screenSavedRef.current[taskId];
+    // 旧记录缓存也清掉：下一次落盘/回放会重新从磁盘读（此时读到的才是最新的那份）
+    delete restoredPrefixRef.current[taskId];
   }, []);
 
   const removeTaskBuffers = useCallback((taskIds: string[]) => {
@@ -225,6 +231,22 @@ export function useTerminalManager(options?: {
     invoke("resize_pty", { taskId, cols, rows }).catch(console.error);
   }, []);
 
+  /** 取某任务的旧屏幕记录：只读一次，之后走内存里的那份。 */
+  const loadScreenRecord = useCallback(
+    async (taskId: string, context: TaskScreenContext): Promise<string> => {
+      const cached = restoredPrefixRef.current[taskId];
+      if (cached !== undefined) return cached;
+      const existing = await invoke<string | null>("load_task_screen", {
+        projectId: context.projectId,
+        taskId,
+      }).catch(() => null);
+      const prefix = existing ?? "";
+      restoredPrefixRef.current[taskId] = prefix;
+      return prefix;
+    },
+    [],
+  );
+
   const handleRegisterTerminal = useCallback(
     (taskId: string, fn: TerminalWriteFn | null): number => {
       const state = resetTerminalWriteState(taskId);
@@ -236,10 +258,7 @@ export function useTerminalManager(options?: {
         const buffered = taskBufferRef.current[taskId];
         const hasBufferedOutput = !!buffered && buffered.chunks.length > 0;
         if (context && !hasBufferedOutput) {
-          invoke<string | null>("load_task_screen", {
-            projectId: context.projectId,
-            taskId,
-          })
+          loadScreenRecord(taskId, context)
             .then((screen) => {
               if (screen && terminalWriteRefs.current[taskId] === fn) fn(screen);
             })
@@ -281,22 +300,27 @@ export function useTerminalManager(options?: {
   // 任务也一样被保存；应用退出时来不及做任何事，靠这个兜住「重启后还能看到上次屏幕」。
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const buffers = taskBufferRef.current;
-      for (const [taskId, buf] of Object.entries(buffers)) {
-        if (!buf || buf.chunks.length === 0) continue;
-        const absLen = getBufferAbsLen(buf);
-        if (screenSavedRef.current[taskId] === absLen) continue; // 没有新输出
-        const context = resolveTaskContextRef.current?.(taskId);
-        if (!context) continue;
-        screenSavedRef.current[taskId] = absLen;
-        const tail = joinBufferFrom(buf, Math.max(0, absLen - SCREEN_TAIL_BYTES));
-        if (!tail) continue;
-        invoke("save_task_screen", {
-          projectId: context.projectId,
-          taskId,
-          content: tail,
-        }).catch(() => {});
-      }
+      void (async () => {
+        const buffers = taskBufferRef.current;
+        for (const [taskId, buf] of Object.entries(buffers)) {
+          if (!buf || buf.chunks.length === 0) continue;
+          const absLen = getBufferAbsLen(buf);
+          if (screenSavedRef.current[taskId] === absLen) continue; // 没有新输出
+          const context = resolveTaskContextRef.current?.(taskId);
+          if (!context) continue;
+          screenSavedRef.current[taskId] = absLen;
+          const tail = joinBufferFrom(buf, Math.max(0, absLen - SCREEN_TAIL_BYTES));
+          if (!tail) continue;
+          // 旧记录拼在前面：恢复出来的终端上看到的就是「旧屏幕 + 新输出」，落盘保持一致
+          const prefix = await loadScreenRecord(taskId, context);
+          const content = (prefix + tail).slice(-SCREEN_TAIL_BYTES);
+          invoke("save_task_screen", {
+            projectId: context.projectId,
+            taskId,
+            content,
+          }).catch(() => {});
+        }
+      })();
     }, SCREEN_SAVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, []);

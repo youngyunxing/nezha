@@ -33,11 +33,16 @@ interface SessionMetrics {
   total_tokens: number;
   context_tokens: number;
   context_window: number;
-  /** 当前速度（token/秒）：会话里最近 60 秒的输出速率 */
+  /** 当前速度（token/秒）：最近 60 秒的输出速率 */
   tps_current: number;
-  /** 过去 5 小时的平均速度（会话不足 5 小时按会话跨度算） */
+  /** 过去 5 小时「生成时」的平均速度（排除发呆/跑工具的时间） */
   tps_5h: number;
+  /** 会话最后一次活动的时间（epoch 秒） */
+  last_activity_ts: number;
 }
+
+/** 超过这么久没有新输出，「当前速度」按 0 显示（指标缓存不会自己衰减，这里补上）。 */
+const TPS_IDLE_SECS = 90;
 
 function formatDuration(secs: number): string {
   const totalSeconds = Math.max(0, Math.round(secs));
@@ -583,7 +588,11 @@ export function RunningView({
                   <>
                     <MetricPill
                       label={t("running.tps")}
-                      value={formatTps(metrics.tps_current)}
+                      value={formatTps(
+                        Date.now() / 1000 - metrics.last_activity_ts > TPS_IDLE_SECS
+                          ? 0
+                          : metrics.tps_current,
+                      )}
                     />
                     <MetricPill
                       label={t("running.tps5h")}

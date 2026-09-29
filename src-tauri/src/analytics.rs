@@ -17,36 +17,54 @@ pub(crate) struct SessionMetrics {
     pub(crate) context_tokens: u64,
     /// 模型上下文窗口大小。仅 Codex 自带；Claude session 不暴露此值，留 0 让前端隐藏。
     pub(crate) context_window: u64,
-    /// 当前速度：会话里最近 60 秒生成的输出 token / 该窗口实际跨度（token/秒）。
-    /// 只算输出 token —— 输入里绝大多数是缓存命中，算进去就不是「生成速度」了。
+    /// 当前速度：最近 60 秒生成的输出 token / 60（token/秒）。只算输出 token ——
+    /// 输入里绝大多数是缓存命中，算进去就不是「生成速度」了。
     pub(crate) tps_current: f64,
-    /// 过去 5 小时的平均速度（会话不足 5 小时则按会话跨度算）。
+    /// 过去 5 小时「生成时」的平均速度：窗口内输出 token / 有效生成时长。
+    /// 有效生成 = 相邻记录间隔 ≤20 秒的部分（把发呆、跑工具的时间排除掉）。
     pub(crate) tps_5h: f64,
+    /// 会话最后一次活动的时间（epoch 秒）。前端用它判断「最近没动静」→ 当前速度显示 0。
+    pub(crate) last_activity_ts: f64,
 }
 
-/// 给定窗口末尾与窗口长度，算窗口内的输出 token 速率。
-/// 分母用「窗口内第一条记录到末尾」的实际跨度，避免只有几条记录时被整段窗口稀释；
-/// 跨度不足 1 秒视为无有效样本（返回 0）。
-fn window_tps(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
+/// 相邻记录间隔超过这个秒数就不算在「生成中」（跑工具、发呆都排掉）。
+const ACTIVE_GAP_MAX_SECS: f64 = 20.0;
+
+/// 当前速度：窗口内输出 token / 窗口长度。窗口按「最后一次活动」对齐，这样同一次生成
+/// 反复读出来的值稳定；空闲时由前端（看 last_activity_ts）显示 0。
+fn window_rate(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
     if end <= 0.0 {
         return 0.0;
     }
     let start = end - window_secs;
-    let mut tokens: u64 = 0;
-    let mut first: Option<f64> = None;
-    for (ts, out) in samples {
-        if *ts < start || *ts > end {
-            continue;
-        }
-        tokens += out;
-        if first.is_none_or(|f| *ts < f) {
-            first = Some(*ts);
-        }
+    let tokens: u64 = samples
+        .iter()
+        .filter(|(ts, _)| *ts >= start && *ts <= end)
+        .map(|(_, out)| *out)
+        .sum();
+    tokens as f64 / window_secs
+}
+
+/// 生成时的平均速度：窗口内输出 token / 有效生成时长（相邻记录间隔 ≤20 秒的部分）。
+/// 这样既不被发呆时间稀释，也不会因为几条写入挤在一起而爆炸。
+fn active_rate(samples: &[(f64, u64)], end: f64, window_secs: f64) -> f64 {
+    let start = end - window_secs;
+    let in_window: Vec<&(f64, u64)> = samples
+        .iter()
+        .filter(|(ts, _)| *ts >= start && *ts <= end)
+        .collect();
+    if in_window.len() < 2 {
+        return 0.0;
     }
-    match first {
-        Some(f) if end - f >= 1.0 => tokens as f64 / (end - f),
-        _ => 0.0,
+    let tokens: u64 = in_window.iter().map(|(_, out)| *out).sum();
+    let active: f64 = in_window
+        .windows(2)
+        .map(|pair| (pair[1].0 - pair[0].0).min(ACTIVE_GAP_MAX_SECS))
+        .sum();
+    if active < 1.0 {
+        return 0.0;
     }
+    tokens as f64 / active
 }
 
 /// 缓存：session_path → (file_modified_time, SessionMetrics)
@@ -94,46 +112,36 @@ fn is_codex_session(content: &str) -> bool {
 }
 
 fn parse_claude_metrics(content: &str) -> SessionMetrics {
-    let mut input_tokens: u64 = 0;
-    let mut output_tokens: u64 = 0;
-    let mut cache_creation: u64 = 0;
-    let mut cache_read: u64 = 0;
+    /// 一条 assistant message 的累计用量。同一条 message 会被写成多行 JSONL，且每行都带
+    /// 同一份 usage —— 必须按 message.id 去重，否则 token 总量与 TPS 会成倍虚高
+    /// （实测某会话逐行相加比真实值高 2.1 倍）。
+    struct MessageUsage {
+        ts: f64,
+        input: u64,
+        output: u64,
+        cache_creation: u64,
+        cache_read: u64,
+    }
+
     let mut tool_calls: u64 = 0;
-    let mut last_context: u64 = 0;
     let mut first_ts: Option<f64> = None;
     let mut last_ts: Option<f64> = None;
-    // 每条 assistant 记录的 (时间戳, 输出 token)，用于算 TPS
-    let mut samples: Vec<(f64, u64)> = Vec::new();
+    let mut by_message: HashMap<String, MessageUsage> = HashMap::new();
 
     for line in content.lines() {
-        let Ok(val) = serde_json::from_str::<Value>(line) else { continue };
+        let Ok(val) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
         track_timestamp(&val, &mut first_ts, &mut last_ts);
 
         if val.get("type").and_then(|v| v.as_str()) != Some("assistant") {
             continue;
         }
-        let Some(message) = val.get("message") else { continue };
+        let Some(message) = val.get("message") else {
+            continue;
+        };
 
-        if let Some(usage) = message.get("usage") {
-            let inp = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let out = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cc = usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cr = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            input_tokens += inp;
-            output_tokens += out;
-            cache_creation += cc;
-            cache_read += cr;
-            if let Some(ts) = val
-                .get("timestamp")
-                .and_then(|v| v.as_str())
-                .and_then(parse_rfc3339_secs)
-            {
-                samples.push((ts, out));
-            }
-            // 最后一条 assistant 的 prompt 总大小 ≈ 当前上下文占用
-            last_context = inp + cc + cr;
-        }
-
+        // tool_use 块每条只出现在一行里，不需要去重
         if let Some(arr) = message.get("content").and_then(|v| v.as_array()) {
             for item in arr {
                 if item.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
@@ -141,8 +149,66 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
                 }
             }
         }
+
+        let Some(usage) = message.get("usage") else {
+            continue;
+        };
+        let Some(ts) = val
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .and_then(parse_rfc3339_secs)
+        else {
+            continue;
+        };
+        // 极少数没有 message.id 的记录，用时间戳当键（各自独立、不会被误合并）
+        let key = message
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("ts:{ts}"));
+
+        let entry = by_message.entry(key).or_insert(MessageUsage {
+            ts,
+            input: 0,
+            output: 0,
+            cache_creation: 0,
+            cache_read: 0,
+        });
+        entry.ts = ts;
+        entry.input = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        entry.output = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+        entry.cache_creation = usage
+            .get("cache_creation_input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        entry.cache_read = usage
+            .get("cache_read_input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
     }
 
+    let mut input_tokens: u64 = 0;
+    let mut output_tokens: u64 = 0;
+    let mut cache_creation: u64 = 0;
+    let mut cache_read: u64 = 0;
+    let mut last_context: u64 = 0;
+    let mut last_context_ts = f64::NEG_INFINITY;
+    let mut samples: Vec<(f64, u64)> = Vec::with_capacity(by_message.len());
+    for usage in by_message.values() {
+        input_tokens += usage.input;
+        output_tokens += usage.output;
+        cache_creation += usage.cache_creation;
+        cache_read += usage.cache_read;
+        samples.push((usage.ts, usage.output));
+        // 最后一条 assistant 的 prompt 总大小 ≈ 当前上下文占用
+        if usage.ts >= last_context_ts {
+            last_context_ts = usage.ts;
+            last_context = usage.input + usage.cache_creation + usage.cache_read;
+        }
+    }
+    samples.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let end = last_ts.unwrap_or(0.0);
     SessionMetrics {
         tool_calls,
         duration_secs: duration_from(first_ts, last_ts),
@@ -150,8 +216,9 @@ fn parse_claude_metrics(content: &str) -> SessionMetrics {
         total_tokens: input_tokens + output_tokens + cache_creation + cache_read,
         context_tokens: last_context,
         context_window: 0, // Claude session 不带窗口大小
-        tps_current: window_tps(&samples, last_ts.unwrap_or(0.0), 60.0),
-        tps_5h: window_tps(&samples, last_ts.unwrap_or(0.0), 5.0 * 3600.0),
+        tps_current: window_rate(&samples, end, 60.0),
+        tps_5h: active_rate(&samples, end, 5.0 * 3600.0),
+        last_activity_ts: end,
     }
 }
 
@@ -218,6 +285,7 @@ fn parse_codex_metrics(content: &str) -> SessionMetrics {
         // Codex 的事件流里没有逐条 output token，先不给 TPS（前端两值都为 0 时不显示）
         tps_current: 0.0,
         tps_5h: 0.0,
+        last_activity_ts: last_ts.unwrap_or(0.0),
     }
 }
 
