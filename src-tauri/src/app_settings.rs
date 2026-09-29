@@ -230,22 +230,6 @@ pub async fn load_app_settings() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub fn save_app_settings(settings: AppSettings) -> Result<(), String> {
-    {
-        let _guard = settings_lock().lock();
-        let dir = nezha_dir()?;
-        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let path = settings_path()?;
-        let normalized = normalize_settings(settings);
-        let raw = serde_json::to_string_pretty(&normalized).map_err(|e| e.to_string())?;
-        atomic_write(&path, &raw)?;
-    }
-    clear_cached_versions();
-    crate::hooks::regenerate_claude_settings()?;
-    Ok(())
-}
-
-#[tauri::command]
 pub async fn save_agent_paths(claude_path: String, codex_path: String) -> Result<AppSettings, String> {
     tokio::task::spawn_blocking(move || {
         let normalized = {
