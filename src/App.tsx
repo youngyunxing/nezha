@@ -42,7 +42,12 @@ import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
 import { buildProjectActivityMap } from "./components/project-rail/activity";
-import { loadTaskPresets, saveTaskPresets, type TaskPreset } from "./taskPresets";
+import {
+  DEFAULT_TASK_PRESETS,
+  loadTaskPresets,
+  saveTaskPresets,
+  type TaskPreset,
+} from "./taskPresets";
 import { TaskPresetDialog } from "./components/new-task/TaskPresetDialog";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import {
@@ -513,6 +518,17 @@ function App() {
       return exists ? prev.map((p) => (p.id === preset.id ? preset : p)) : [...prev, preset];
     });
     showToast(t("preset.saved", { name: preset.name }), "success");
+  }
+
+  /** 把两个预置按钮加回来（已经有的不重复加）。 */
+  function handleRestoreDefaultPresets() {
+    setPresets((prev) => [
+      ...prev,
+      ...DEFAULT_TASK_PRESETS.filter((d) => !prev.some((p) => p.id === d.id)).map((d) => ({
+        ...d,
+      })),
+    ]);
+    showToast(t("preset.restored"), "success");
   }
 
   function handleDeletePreset(id: string) {
@@ -1810,6 +1826,7 @@ function App() {
         }
         onSave={handleSavePreset}
         onDelete={handleDeletePreset}
+        onRestoreDefaults={handleRestoreDefaultPresets}
       />
 
       {!activeProject && projects.length === 0 && (

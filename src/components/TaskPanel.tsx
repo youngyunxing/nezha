@@ -136,7 +136,9 @@ export function TaskPanel({
         <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
       </button>
 
-      {/* 快捷创建按钮：点一下直接建任务；末尾的「+」打开编辑器（增删改） */}
+      {/* 快捷命令：单独划一块，上下各一条分割线，和下面的任务列表分开 */}
+      <div style={s.taskDivider} />
+      <div style={s.presetSectionHeader}>{t("preset.sectionTitle")}</div>
       <div style={s.presetChipRow}>
         {presets.map((preset) => (
           <button
@@ -201,6 +203,7 @@ export function TaskPanel({
           <Plus size={12} strokeWidth={2.4} />
         </button>
       </div>
+      <div style={s.taskDivider} />
 
       <div style={s.taskDivider} />
 

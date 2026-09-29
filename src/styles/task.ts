@@ -108,6 +108,14 @@ export const task = {
   },
   newTaskRowLabel: { fontSize: 13, fontWeight: 500 },
   // 快捷创建按钮：一排胶囊 chip，末尾的「+」是新增/管理
+  // 「快捷命令」区块的小标题（和任务列表的分组标签同一套字号/字距）
+  presetSectionHeader: {
+    padding: "2px 12px 4px",
+    fontSize: 10.5,
+    fontWeight: 600,
+    letterSpacing: 0.4,
+    color: "var(--text-hint)",
+  },
   presetChipRow: {
     display: "flex",
     flexWrap: "wrap" as const,
@@ -145,6 +153,17 @@ export const task = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
+  },
+  presetRestoreBtn: {
+    alignSelf: "flex-start" as const,
+    marginBottom: 10,
+    padding: 0,
+    border: "none",
+    background: "none",
+    color: "var(--text-hint)",
+    fontSize: 11.5,
+    textDecoration: "underline",
+    cursor: "pointer",
   },
   presetDialogList: { display: "flex", flexDirection: "column" as const, gap: 4, marginBottom: 12 },
   presetDialogRow: {
