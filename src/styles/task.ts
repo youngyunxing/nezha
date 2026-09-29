@@ -97,12 +97,11 @@ export const task = {
     color: "var(--text-primary)",
     fontSize: 12.5,
   },
-  // 新建任务 = 主操作，但别用实心重色（太跳）：主题色的浅底 + 主题色文字 + 更大的圆角，
-  // 看着是按钮，又和下面浅色 chip 的快捷命令在同一层次里。
+  // 新建任务：浅灰底 + 主题色文字 + 大圆角。不用主题色底（太跳），灰底也能一眼看出是按钮。
   newTaskRowPrimary: {
     ...newTaskRowBase,
     borderRadius: 8,
-    background: "var(--accent-subtle)",
+    background: "var(--bg-hover)",
     color: "var(--accent)",
     fontWeight: 600,
     transition: "background 0.1s, filter 0.1s",
@@ -179,14 +178,34 @@ export const task = {
   presetChip: {
     display: "inline-flex",
     alignItems: "center",
+    gap: 5,
     maxWidth: "100%",
+    padding: "5px 11px",
     borderRadius: 999,
     border: "1px solid var(--border-dim)",
     background: "var(--bg-card)",
-    overflow: "hidden",
-    transition: "background 0.1s, border-color 0.1s",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    cursor: "pointer",
+    transition: "background 0.1s, color 0.1s, border-color 0.1s",
   },
   presetChipIcon: { width: 11, height: 11, flexShrink: 0 },
+  // 编辑面板里的删除：红底红字（和 hooks 面板的破坏性按钮同一套变量）
+  presetDeleteBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    minWidth: 72,
+    padding: "6px 13px",
+    borderRadius: 7,
+    background: "var(--danger-surface)",
+    border: "1px solid var(--danger-border)",
+    color: "var(--danger)",
+    fontSize: 12.5,
+    fontFamily: "var(--font-ui)",
+    fontWeight: 500,
+    cursor: "pointer",
+  },
   // 末尾的「+」：虚线胶囊，和实心 chip 区分开
   presetChipLabel: {
     overflow: "hidden",

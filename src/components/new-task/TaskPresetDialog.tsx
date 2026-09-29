@@ -282,7 +282,7 @@ export function TaskPresetEditDialog({
                   <div style={s.forkDialogActions}>
                     <button
                       type="button"
-                      style={s.forkDialogCancelBtn}
+                      style={s.presetDeleteBtn}
                       onClick={() => {
                         onDelete(selected.id);
                         setSelectedId(null);
