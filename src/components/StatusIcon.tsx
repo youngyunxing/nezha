@@ -4,7 +4,6 @@ import {
   XCircle,
   MinusCircle,
   Circle,
-  Loader2,
   AlertCircle,
   AlertTriangle,
 } from "lucide-react";
@@ -13,12 +12,8 @@ import type { TaskStatus } from "../types";
 export function StatusIcon({ status }: { status: TaskStatus }) {
   switch (status) {
     case "running":
-      return (
-        <Loader2
-          size={14}
-          style={{ animation: "spin 1s linear infinite", color: "var(--text-muted)" }}
-        />
-      );
+      // 绿勾：进行中=健康，且不再转圈（转圈在恢复出来的空闲会话上会一直转，语义也不对）。
+      return <CheckCircle2 size={14} style={{ color: "var(--success)" }} />;
     case "input_required":
       return <AlertCircle size={14} style={{ color: "var(--warning)" }} />;
     case "awaiting_review":
@@ -28,7 +23,8 @@ export function StatusIcon({ status }: { status: TaskStatus }) {
     case "interrupted":
       return <AlertTriangle size={14} style={{ color: "var(--warning)" }} />;
     case "done":
-      return <CheckCircle2 size={14} style={{ color: "var(--success)" }} />;
+      // 灰勾：已完成是"落定"状态，绿色留给进行中。
+      return <CheckCircle2 size={14} style={{ color: "var(--text-hint)" }} />;
     case "failed":
       return <XCircle size={14} style={{ color: "var(--danger)" }} />;
     case "cancelled":
