@@ -264,19 +264,6 @@ export function NewTaskView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  const [hasMdFile, setHasMdFile] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setHasMdFile(null);
-    const filename = agent === "claude" ? "CLAUDE.md" : "AGENTS.md";
-    invoke<string>("read_file_content", {
-      path: `${project.path}/${filename}`,
-      projectPath: project.path,
-    })
-      .then(() => setHasMdFile(true))
-      .catch(() => setHasMdFile(false));
-  }, [project.path, agent]);
-
   // Hook 就绪状态：版本过低 / 无 node 时软提示用户(任务仍可启动,已回退轮询)。
   const [hookReadiness, setHookReadiness] = useState<HookAgentReadiness[] | null>(null);
 
@@ -484,24 +471,9 @@ export function NewTaskView({
         <span style={s.newTaskTitle}>{t("newTask.title")}</span>
       </div>
 
-      {/* Missing context file warning */}
-      {hasMdFile === false && (
-        <div style={s.agentMissingMdBanner}>
-          <TriangleAlert size={15} style={s.agentMissingMdIcon} />
-          <div style={s.agentMissingMdBody}>
-            <div style={s.agentMissingMdText}>
-              {t("newTask.addInstructions", {
-                file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
-                agent: agent === "claude" ? "Claude Code" : "Codex",
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hook fallback / upgrade hint (soft — does not block task start) */}
       {hookBanner && (
-        <div style={s.agentMissingMdBanner}>
+        <div style={s.hookFallbackBanner}>
           <TriangleAlert size={15} style={s.hookFallbackIcon} />
           <div style={s.hookFallbackText}>{hookBanner}</div>
         </div>

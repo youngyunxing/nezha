@@ -131,7 +131,7 @@ export const panels = {
     overflow: "visible",
     position: "relative" as const,
   },
-  agentMissingMdBanner: {
+  hookFallbackBanner: {
     display: "flex",
     alignItems: "flex-start",
     gap: 10,
@@ -143,23 +143,6 @@ export const panels = {
     border: "1px solid var(--warning-border)",
     borderRadius: 8,
     boxSizing: "border-box" as const,
-  },
-  agentMissingMdBody: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 8,
-    minWidth: 0,
-    flex: 1,
-  },
-  agentMissingMdIcon: {
-    color: "var(--warning)",
-    flexShrink: 0,
-    marginTop: 1,
-  },
-  agentMissingMdText: {
-    fontSize: 13,
-    lineHeight: 1.55,
-    color: "var(--text-secondary)",
   },
   hookFallbackIcon: {
     color: "var(--warning)",
