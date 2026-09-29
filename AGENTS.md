@@ -50,7 +50,7 @@ ErrorBoundary  (全局兜底)
         │   ├── PromptEditor
         │   ├── MentionPopover
         │   ├── ImageAttachments / TextAttachments
-        │   └── ComposeToolbar   — 智能体选择、模型选择、图片、发送
+        │   └── ComposeToolbar   — 智能体选择、图片、发送
         ├── TodoTaskView         — Todo 任务编辑 / 启动视图
         ├── RunningView          — 运行中任务头部（恢复、取消、worktree 信息）
         │   └── TerminalView     — xterm.js 封装组件
@@ -68,7 +68,7 @@ ErrorBoundary  (全局兜底)
 >
 > **复用小组件**（被多处引用）：`StatusIcon` / `IconButton` / `ProjectAvatar`。
 >
-> **已拆出的子目录**（`src/components/<dir>/`）：`app-settings/` · `task-panel/` · `new-task/` · `file-explorer/` · `file-viewer/` · `git-diff/` · `git-view/` · `skill-hub/` · `project-rail/`——这些目录里是已经从主组件拆出来的子部件，新增功能优先继续往这些子目录加，不要回灌到根目录大文件里。
+> **已拆出的子目录**（`src/components/<dir>/`）：`app-settings/` · `task-panel/` · `new-task/` · `file-explorer/` · `file-viewer/` · `git-diff/` · `git-view/` · `project-rail/`——这些目录里是已经从主组件拆出来的子部件，新增功能优先继续往这些子目录加，不要回灌到根目录大文件里。
 
 状态从 `App.tsx` 通过 props 向下传递；异步更新通过 Tauri 通道/事件向上传递：
 - **agent 任务输出** — 通过 `tauri::ipc::Channel<String>`（前端 `new Channel<string>()`）由 `run_task` / `resume_task` 的 `onOutput` 参数传入，绕过事件总线的全局广播，直投 `useTerminalManager` 的批量写入流程

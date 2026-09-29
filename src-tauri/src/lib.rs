@@ -3,7 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::Arc;
 
-use codex_rpc::CodexRpcClient;
 
 mod agent_assist;
 mod analytics;
@@ -18,7 +17,6 @@ mod platform;
 mod pty;
 mod session;
 mod storage;
-mod codex_rpc;
 
 use session::{ClaudeSessionInfo, CodexSessionInfo};
 
@@ -32,8 +30,6 @@ pub struct TaskManager {
     pub(crate) codex_sessions: Mutex<HashMap<String, CodexSessionInfo>>,
     pub(crate) claude_sessions: Mutex<HashMap<String, ClaudeSessionInfo>>,
     pub(crate) claimed_session_paths: Mutex<HashSet<String>>,
-    /// Persistent `codex app-server` process reused across `read_usage_snapshot` calls.
-    pub(crate) codex_rpc: Arc<Mutex<Option<CodexRpcClient>>>,
 }
 
 impl TaskManager {
@@ -154,7 +150,6 @@ pub fn run() {
             codex_sessions: Mutex::new(HashMap::new()),
             claude_sessions: Mutex::new(HashMap::new()),
             claimed_session_paths: Mutex::new(HashSet::new()),
-            codex_rpc: Arc::new(Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             // macOS: 点关闭按钮(红灯)时隐藏窗口而非退出,与 Cmd+W 行为一致;
@@ -230,8 +225,6 @@ pub fn run() {
             app_settings::load_app_settings,
             app_settings::save_app_settings,
             app_settings::save_agent_paths,
-            app_settings::save_agent_model_catalog,
-            app_settings::initialize_agent_model_catalog,
             app_settings::save_send_shortcut,
             app_settings::save_shift_enter_newline,
             app_settings::save_claude_force_default_tui,

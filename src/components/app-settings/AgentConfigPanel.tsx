@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { Check, Pencil } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
-import { AgentModelCatalogSection } from "./AgentModelCatalogSection";
 import { AgentPathSection } from "./AgentPathSection";
 import type { AgentKey } from "./types";
 import type { ThemeVariant } from "../../types";
@@ -149,7 +148,6 @@ export function AgentConfigPanel({
         {!editing && (
           <>
             <AgentPathSection agentKey={agentKey} />
-            <AgentModelCatalogSection agentKey={agentKey} />
 
             <div style={s.agentConfigDivider} />
 

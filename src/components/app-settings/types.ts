@@ -33,25 +33,6 @@ export interface HookAgentReadiness {
   minVersion: string;
 }
 
-export interface AgentModelOption {
-  model: string;
-  label?: string;
-  reasoningEfforts: string[];
-  defaultReasoningEffort?: string;
-}
-
-export interface AgentModelCatalog {
-  models: AgentModelOption[];
-  initialized: boolean;
-  initializedAt?: number;
-  sourceVersion?: string;
-}
-
-export const EMPTY_AGENT_MODEL_CATALOG: AgentModelCatalog = {
-  models: [],
-  initialized: false,
-};
-
 export interface AppSettings {
   claude_path: string;
   codex_path: string;
@@ -61,8 +42,6 @@ export interface AppSettings {
   terminal_scrollback: number;
   /** 终端框选松手后自动把选区复制到剪贴板（copy-on-select） */
   terminal_copy_on_select: boolean;
-  claude_model_catalog: AgentModelCatalog;
-  codex_model_catalog: AgentModelCatalog;
 }
 
 /**
@@ -77,8 +56,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   claude_force_default_tui: true,
   terminal_scrollback: DEFAULT_TERMINAL_SCROLLBACK,
   terminal_copy_on_select: false,
-  claude_model_catalog: EMPTY_AGENT_MODEL_CATALOG,
-  codex_model_catalog: EMPTY_AGENT_MODEL_CATALOG,
 };
 
 export interface AgentVersions {

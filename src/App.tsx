@@ -621,8 +621,6 @@ function App() {
       prompt: task.prompt,
       agent: task.agent,
       permissionMode: task.permissionMode,
-      model: task.model,
-      reasoningEffort: task.reasoningEffort,
       images,
       texts,
       cols: tm.terminalSizeRef.current.cols,
@@ -641,8 +639,6 @@ function App() {
       prompt,
       agent,
       permissionMode,
-      model,
-      reasoningEffort,
       images,
       texts,
       immediate,
@@ -653,8 +649,6 @@ function App() {
       prompt: string;
       agent: AgentType;
       permissionMode: PermissionMode;
-      model?: string;
-      reasoningEffort?: string;
       images: string[];
       texts: string[];
       immediate: boolean;
@@ -683,8 +677,6 @@ function App() {
       name: prompt ? undefined : `task-${taskId}`,
       agent,
       permissionMode,
-      model,
-      reasoningEffort,
       status: immediate ? "pending" : "todo",
       createdAt: now,
       updatedAt: now,
@@ -869,8 +861,6 @@ function App() {
       sessionId,
       prompt: task.prompt,
       permissionMode: task.permissionMode,
-      model: task.model,
-      reasoningEffort: task.reasoningEffort,
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
@@ -922,8 +912,6 @@ function App() {
       agent: task.agent,
       sourceSessionId,
       permissionMode: task.permissionMode,
-      model: task.model,
-      reasoningEffort: task.reasoningEffort,
       cols: tm.terminalSizeRef.current.cols,
       rows: tm.terminalSizeRef.current.rows,
       onOutput: tm.createOutputChannel(task.id),
@@ -961,8 +949,6 @@ function App() {
       prompt: "",
       agent: sourceTask.agent,
       permissionMode: sourceTask.permissionMode,
-      model: sourceTask.model,
-      reasoningEffort: sourceTask.reasoningEffort,
       status: "pending",
       createdAt: now,
       updatedAt: now,
@@ -1184,8 +1170,6 @@ function App() {
           ? {
               ...t,
               ...updates,
-              model: updates.agent === t.agent ? t.model : undefined,
-              reasoningEffort: updates.agent === t.agent ? t.reasoningEffort : undefined,
             }
           : t,
       );

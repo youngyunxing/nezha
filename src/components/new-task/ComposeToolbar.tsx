@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef } from "react";
 import {
   ChevronDown,
   Command,
@@ -62,7 +62,6 @@ export function ComposeToolbar({
   isEmpty,
   hasImages,
   sendShortcutKeys,
-  modelSelector,
   onSetAgent,
   onAddImages,
   onSubmit,
@@ -71,7 +70,6 @@ export function ComposeToolbar({
   isEmpty: boolean;
   hasImages: boolean;
   sendShortcutKeys: string[];
-  modelSelector?: ReactNode;
   onSetAgent: (agent: AgentType) => void;
   onAddImages: (dataUrls: string[]) => void;
   onSubmit: (immediate: boolean) => void;
@@ -176,8 +174,6 @@ export function ComposeToolbar({
       </div>
 
       <div style={s.toolbarSpacer} />
-
-      {modelSelector && <div style={s.toolbarModelSlot}>{modelSelector}</div>}
 
       <button
         style={s.sendBtn}

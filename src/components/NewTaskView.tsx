@@ -4,7 +4,6 @@ import { TriangleAlert } from "lucide-react";
 import type { Project, AgentType, PermissionMode, GitRoot } from "../types";
 import {
   APP_SETTINGS_CHANGED_EVENT,
-  DEFAULT_APP_SETTINGS,
   type AppSettings,
   type HookAgentReadiness,
 } from "./app-settings/types";
@@ -20,7 +19,6 @@ import { ImageAttachments } from "./new-task/ImageAttachments";
 import { TextAttachments, type PastedText } from "./new-task/TextAttachments";
 import { ComposeToolbar } from "./new-task/ComposeToolbar";
 import { LaunchModeSelector, type LaunchMode } from "./new-task/LaunchModeSelector";
-import { TaskModelSelector } from "./new-task/TaskModelSelector";
 import { useI18n } from "../i18n";
 import { findProjectByName } from "../projectName";
 import {
@@ -41,8 +39,6 @@ interface PastedImage {
 export interface NewTaskDraft {
   promptHtml: string;
   agent: AgentType;
-  model?: string;
-  reasoningEffort?: string;
   pastedImages: PastedImage[];
   pastedTexts?: PastedText[];
   launchMode?: LaunchMode;
@@ -89,8 +85,6 @@ export function NewTaskView({
     prompt: string;
     agent: AgentType;
     permissionMode: PermissionMode;
-    model?: string;
-    reasoningEffort?: string;
     images: string[];
     texts: string[];
     immediate: boolean;
@@ -103,10 +97,6 @@ export function NewTaskView({
   const { t } = useI18n();
   const { showToast } = useToast();
   const [agent, setAgent] = useState<AgentType>(initialDraft?.agent ?? "claude");
-  const [model, setModel] = useState<string | undefined>(initialDraft?.model);
-  const [reasoningEffort, setReasoningEffort] = useState<string | undefined>(
-    initialDraft?.reasoningEffort,
-  );
   const [launchMode, setLaunchMode] = useState<LaunchMode>(initialDraft?.launchMode ?? "local");
   const [baseBranch, setBaseBranch] = useState<string>(initialDraft?.baseBranch ?? "");
 
@@ -126,7 +116,6 @@ export function NewTaskView({
       (initialDraft?.pastedTexts?.length ?? 0) === 0,
   );
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>(DEFAULT_SEND_SHORTCUT);
-  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
 
   const { editorRef, isComposingRef, handle: editorHandle } = usePromptEditor();
   const editorContentRef = useRef<PromptEditorContent>({
@@ -153,8 +142,6 @@ export function NewTaskView({
   const submittedRef = useRef(false);
   const draftDataRef = useRef({
     agent,
-    model,
-    reasoningEffort,
     pastedImages,
     pastedTexts,
     launchMode,
@@ -163,8 +150,6 @@ export function NewTaskView({
   useEffect(() => {
     draftDataRef.current = {
       agent,
-      model,
-      reasoningEffort,
       pastedImages,
       pastedTexts,
       launchMode,
@@ -172,8 +157,6 @@ export function NewTaskView({
     };
   }, [
     agent,
-    model,
-    reasoningEffort,
     pastedImages,
     pastedTexts,
     launchMode,
@@ -192,9 +175,7 @@ export function NewTaskView({
         !editorContent.text.trim() &&
         !editorContent.hasChips &&
         data.pastedImages.length === 0 &&
-        data.pastedTexts.length === 0 &&
-        !data.model &&
-        !data.reasoningEffort
+        data.pastedTexts.length === 0
       ) {
         onCacheDraft(null);
         return;
@@ -202,8 +183,6 @@ export function NewTaskView({
       onCacheDraft({
         promptHtml: editorContent.html,
         agent: data.agent,
-        model: data.model,
-        reasoningEffort: data.reasoningEffort,
         pastedImages: data.pastedImages,
         pastedTexts: data.pastedTexts,
         launchMode: data.launchMode,
@@ -217,11 +196,9 @@ export function NewTaskView({
     function loadTaskSettings() {
       invoke<AppSettings>("load_app_settings")
         .then((settings) => {
-          setAppSettings(settings);
           setSendShortcut(normalizeSendShortcut(settings.send_shortcut));
         })
         .catch(() => {
-          setAppSettings(DEFAULT_APP_SETTINGS);
           setSendShortcut(DEFAULT_SEND_SHORTCUT);
         });
     }
@@ -393,8 +370,6 @@ export function NewTaskView({
       prompt: text,
       agent,
       permissionMode: "full_access",
-      model,
-      reasoningEffort,
       images: pastedImages.map((img) => img.dataUrl),
       texts: pastedTexts.map((t) => t.text),
       immediate,
@@ -532,26 +507,7 @@ export function NewTaskView({
           isEmpty={isEmpty}
           hasImages={pastedImages.length > 0 || pastedTexts.length > 0}
           sendShortcutKeys={getSendShortcutKeys(sendShortcut)}
-          modelSelector={
-            <TaskModelSelector
-              catalog={
-                agent === "claude"
-                  ? appSettings.claude_model_catalog
-                  : appSettings.codex_model_catalog
-              }
-              model={model}
-              reasoningEffort={reasoningEffort}
-              onSetModel={setModel}
-              onSetReasoningEffort={setReasoningEffort}
-            />
-          }
-          onSetAgent={(nextAgent) => {
-            if (nextAgent !== agent) {
-              setModel(undefined);
-              setReasoningEffort(undefined);
-            }
-            setAgent(nextAgent);
-          }}
+          onSetAgent={setAgent}
           onAddImages={(dataUrls) => {
             setPastedImages((prev) => [
               ...prev,
