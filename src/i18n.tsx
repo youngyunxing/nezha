@@ -231,7 +231,6 @@ const translations: Record<string, string> = {
   "task.deleteProjectTitle": "删除项目",
   "task.deleteProjectPrompt": "删除项目“{project}”及其所有任务记录？",
   "newTask.title": "今天想构建什么？",
-  "newTask.instructionsMissing": "此项目中未找到 {file}。",
   "newTask.addInstructions":
     "在项目根目录添加 {file}，为 {agent} 提供代码库、约定和偏好上下文；它会在每个任务中遵循这些内容。",
   "newTask.hookVersionLow":

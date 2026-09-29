@@ -509,21 +509,6 @@ export function NewTaskView({
           <TriangleAlert size={15} style={s.agentMissingMdIcon} />
           <div style={s.agentMissingMdBody}>
             <div style={s.agentMissingMdText}>
-              <span style={s.agentMissingMdTitle}>
-                {
-                  t("newTask.instructionsMissing", {
-                    file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
-                  }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[0]
-                }
-                <code style={s.agentMissingMdCode}>
-                  {agent === "claude" ? "CLAUDE.md" : "AGENTS.md"}
-                </code>{" "}
-                {
-                  t("newTask.instructionsMissing", {
-                    file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
-                  }).split(agent === "claude" ? "CLAUDE.md" : "AGENTS.md")[1]
-                }
-              </span>{" "}
               {t("newTask.addInstructions", {
                 file: agent === "claude" ? "CLAUDE.md" : "AGENTS.md",
                 agent: agent === "claude" ? "Claude Code" : "Codex",
