@@ -3,7 +3,6 @@ import { Search, Plus, Trash2, PanelLeftClose, PanelLeftOpen, Moon, Sun } from "
 import type {
   Project,
   Task,
-  ThemeMode,
   ThemeVariant,
   TerminalFontSize,
   TerminalScrollback,
@@ -36,9 +35,6 @@ export function TaskPanel({
   onToggleTaskStar,
   onRunTodo,
   themeVariant,
-  themeMode,
-  systemPrefersDark,
-  onThemeModeChange,
   onToggleTheme,
   terminalFontSize,
   onTerminalFontSizeChange,
@@ -76,9 +72,6 @@ export function TaskPanel({
   onToggleTaskStar: (id: string) => void;
   onRunTodo: (task: Task) => void;
   themeVariant: ThemeVariant;
-  themeMode: ThemeMode;
-  systemPrefersDark: boolean;
-  onThemeModeChange: (mode: ThemeMode) => void;
   onToggleTheme: () => void;
   terminalFontSize: TerminalFontSize;
   onTerminalFontSizeChange: (size: TerminalFontSize) => void;
@@ -228,9 +221,6 @@ export function TaskPanel({
         <SidebarFooterActions
           projectId={project.id}
           themeVariant={themeVariant}
-          themeMode={themeMode}
-          systemPrefersDark={systemPrefersDark}
-          onThemeModeChange={onThemeModeChange}
           onToggleTheme={onToggleTheme}
           terminalFontSize={terminalFontSize}
           onTerminalFontSizeChange={onTerminalFontSizeChange}

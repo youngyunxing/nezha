@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Settings, Moon, Sun } from "lucide-react";
 import type {
-  ThemeMode,
   ThemeVariant,
   TerminalFontSize,
   TerminalScrollback,
@@ -18,9 +17,6 @@ import s from "../styles";
 export function SidebarFooterActions({
   projectId,
   themeVariant,
-  themeMode,
-  systemPrefersDark,
-  onThemeModeChange,
   onToggleTheme,
   terminalFontSize,
   onTerminalFontSizeChange,
@@ -41,9 +37,6 @@ export function SidebarFooterActions({
    */
   projectId?: string;
   themeVariant: ThemeVariant;
-  themeMode: ThemeMode;
-  systemPrefersDark: boolean;
-  onThemeModeChange: (mode: ThemeMode) => void;
   onToggleTheme: () => void;
   terminalFontSize: TerminalFontSize;
   onTerminalFontSizeChange: (size: TerminalFontSize) => void;
@@ -100,9 +93,6 @@ export function SidebarFooterActions({
       {showAppSettings && (
         <AppSettingsDialog
           themeVariant={themeVariant}
-          themeMode={themeMode}
-          systemPrefersDark={systemPrefersDark}
-          onThemeModeChange={onThemeModeChange}
           terminalFontSize={terminalFontSize}
           onTerminalFontSizeChange={onTerminalFontSizeChange}
           taskDisplayWindow={taskDisplayWindow}

@@ -6,7 +6,6 @@ import type {
   AgentType,
   PermissionMode,
   TaskStatus,
-  ThemeMode,
   ThemeVariant,
   TerminalFontSize,
   TerminalScrollback,
@@ -75,9 +74,6 @@ export function ProjectPage({
   onDeleteProject,
   onRenameProject,
   themeVariant,
-  themeMode,
-  systemPrefersDark,
-  onThemeModeChange,
   onToggleTheme,
   terminalFontSize,
   onTerminalFontSizeChange,
@@ -150,9 +146,6 @@ export function ProjectPage({
   onDeleteProject: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
   themeVariant: ThemeVariant;
-  themeMode: ThemeMode;
-  systemPrefersDark: boolean;
-  onThemeModeChange: (mode: ThemeMode) => void;
   onToggleTheme: () => void;
   terminalFontSize: TerminalFontSize;
   onTerminalFontSizeChange: (size: TerminalFontSize) => void;
@@ -403,9 +396,6 @@ export function ProjectPage({
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
         themeVariant={themeVariant}
-        themeMode={themeMode}
-        systemPrefersDark={systemPrefersDark}
-        onThemeModeChange={onThemeModeChange}
         onToggleTheme={onToggleTheme}
         terminalFontSize={terminalFontSize}
         onTerminalFontSizeChange={onTerminalFontSizeChange}

@@ -41,18 +41,12 @@ import {
 } from "./projectName";
 import { useI18n } from "./i18n";
 import {
-  DARK_THEME_STORAGE_KEY,
+  DARK_THEME_MODE,
   getNextThemeMode,
-  getPreferredDarkTheme,
-  getPreferredLightTheme,
-  isDarkThemeMode,
-  isLightThemeMode,
   isThemeMode,
-  LIGHT_THEME_STORAGE_KEY,
+  LIGHT_THEME_MODE,
   resolveThemeVariant,
   THEME_STORAGE_KEY,
-  type DarkThemeMode,
-  type LightThemeMode,
 } from "./theme";
 import s from "./styles";
 import "./App.css";
@@ -239,17 +233,6 @@ function getInitialThemeMode(): ThemeMode {
   return isThemeMode(stored) ? stored : "system";
 }
 
-function getInitialLightThemeMode(): LightThemeMode {
-  return getPreferredLightTheme(
-    getInitialThemeMode(),
-    localStorage.getItem(LIGHT_THEME_STORAGE_KEY),
-  );
-}
-
-function getInitialDarkThemeMode(): DarkThemeMode {
-  return getPreferredDarkTheme(getInitialThemeMode(), localStorage.getItem(DARK_THEME_STORAGE_KEY));
-}
-
 function getInitialTerminalFontSize(): TerminalFontSize {
   const stored = localStorage.getItem("nezha:terminalFontSize");
   if (stored == null) return DEFAULT_TERMINAL_FONT_SIZE;
@@ -286,8 +269,6 @@ function App() {
   const { t } = useI18n();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialThemeMode);
-  const [lightThemeMode, setLightThemeMode] = useState<LightThemeMode>(getInitialLightThemeMode);
-  const [darkThemeMode, setDarkThemeMode] = useState<DarkThemeMode>(getInitialDarkThemeMode);
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
   const themeVariant: ThemeVariant = resolveThemeVariant(themeMode, systemPrefersDark);
   const [terminalFontSize, setTerminalFontSize] = useState<TerminalFontSize>(
@@ -394,14 +375,6 @@ function App() {
   }, [themeVariant, themeMode]);
 
   useEffect(() => {
-    localStorage.setItem(LIGHT_THEME_STORAGE_KEY, lightThemeMode);
-  }, [lightThemeMode]);
-
-  useEffect(() => {
-    localStorage.setItem(DARK_THEME_STORAGE_KEY, darkThemeMode);
-  }, [darkThemeMode]);
-
-  useEffect(() => {
     // Tauri window theme only understands light/dark/null; map eyecare to light
     // so the native chrome (titlebar, scrollbars) stays in the light family.
     const nativeTheme =
@@ -472,17 +445,11 @@ function App() {
     document.documentElement.style.setProperty("--font-mono", effective);
   }, [monoFontFamily]);
 
-  const handleThemeModeChange = useCallback((mode: ThemeMode) => {
-    if (isLightThemeMode(mode)) setLightThemeMode(mode);
-    if (isDarkThemeMode(mode)) setDarkThemeMode(mode);
-    setThemeMode(mode);
-  }, []);
-
   const handleToggleTheme = useCallback(() => {
     setThemeMode((currentMode) => {
-      return getNextThemeMode(currentMode, systemPrefersDark, lightThemeMode, darkThemeMode);
+      return getNextThemeMode(currentMode, systemPrefersDark, LIGHT_THEME_MODE, DARK_THEME_MODE);
     });
-  }, [darkThemeMode, lightThemeMode, systemPrefersDark]);
+  }, [systemPrefersDark]);
 
   useEffect(() => {
     async function init() {
@@ -1482,9 +1449,6 @@ function App() {
               onDeleteProject={handleDeleteProject}
               onRenameProject={handleRenameProject}
               themeVariant={themeVariant}
-              themeMode={themeMode}
-              systemPrefersDark={systemPrefersDark}
-              onThemeModeChange={handleThemeModeChange}
               onToggleTheme={handleToggleTheme}
               terminalFontSize={terminalFontSize}
               onTerminalFontSizeChange={setTerminalFontSize}

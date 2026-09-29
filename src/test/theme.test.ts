@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  DARK_THEME_MODE,
   getNextThemeMode,
-  getPreferredDarkTheme,
-  getPreferredLightTheme,
   isThemeMode,
+  LIGHT_THEME_MODE,
   resolveThemeVariant,
 } from "../theme";
 
@@ -24,56 +24,18 @@ describe("theme helpers", () => {
     expect(isThemeMode("white")).toBe(false);
   });
 
-  test("keeps eyecare as the preferred light theme after midnight mode", () => {
-    const preferredLightTheme = getPreferredLightTheme("eyecare", null);
-    const preferredDarkTheme = getPreferredDarkTheme("eyecare", null);
-
-    expect(getNextThemeMode("eyecare", false, preferredLightTheme, preferredDarkTheme)).toBe(
-      "midnight",
-    );
-    expect(getNextThemeMode("midnight", false, preferredLightTheme, preferredDarkTheme)).toBe(
-      "eyecare",
-    );
+  test("pins the light and dark families now that the picker is gone", () => {
+    expect(LIGHT_THEME_MODE).toBe("light");
+    expect(DARK_THEME_MODE).toBe("midnight");
   });
 
-  test("restores persisted light and dark preferences", () => {
-    const preferredLightTheme = getPreferredLightTheme("dark", "eyecare");
-    const preferredDarkTheme = getPreferredDarkTheme("light", "dark");
-
-    expect(preferredLightTheme).toBe("eyecare");
-    expect(preferredDarkTheme).toBe("dark");
-    expect(getNextThemeMode("dark", false, preferredLightTheme, preferredDarkTheme)).toBe(
-      "eyecare",
-    );
-    expect(getNextThemeMode("light", false, preferredLightTheme, preferredDarkTheme)).toBe("dark");
+  test("toggles between the two pinned families", () => {
+    expect(getNextThemeMode("light", false, LIGHT_THEME_MODE, DARK_THEME_MODE)).toBe("midnight");
+    expect(getNextThemeMode("midnight", false, LIGHT_THEME_MODE, DARK_THEME_MODE)).toBe("light");
   });
 
-  test("uses current manual theme as the matching preference", () => {
-    expect(getPreferredLightTheme("eyecare", "light")).toBe("eyecare");
-    expect(getPreferredDarkTheme("dark", "midnight")).toBe("dark");
-  });
-
-  test("falls back when no valid preference exists", () => {
-    const preferredLightTheme = getPreferredLightTheme("midnight", "white");
-    const preferredDarkTheme = getPreferredDarkTheme("light", "black");
-
-    expect(preferredLightTheme).toBe("light");
-    expect(preferredDarkTheme).toBe("midnight");
-    expect(getNextThemeMode("midnight", false, preferredLightTheme, preferredDarkTheme)).toBe(
-      "light",
-    );
-    expect(getNextThemeMode("light", false, preferredLightTheme, preferredDarkTheme)).toBe(
-      "midnight",
-    );
-  });
-
-  test("switches from system mode to the opposite preferred theme family", () => {
-    const preferredLightTheme = getPreferredLightTheme("system", "eyecare");
-    const preferredDarkTheme = getPreferredDarkTheme("system", "dark");
-
-    expect(getNextThemeMode("system", true, preferredLightTheme, preferredDarkTheme)).toBe(
-      "eyecare",
-    );
-    expect(getNextThemeMode("system", false, preferredLightTheme, preferredDarkTheme)).toBe("dark");
+  test("toggling from system lands on the opposite family", () => {
+    expect(getNextThemeMode("system", true, LIGHT_THEME_MODE, DARK_THEME_MODE)).toBe("light");
+    expect(getNextThemeMode("system", false, LIGHT_THEME_MODE, DARK_THEME_MODE)).toBe("midnight");
   });
 });

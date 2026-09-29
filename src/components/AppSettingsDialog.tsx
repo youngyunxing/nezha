@@ -1,16 +1,7 @@
 import { Fragment, useState } from "react";
-import {
-  X,
-  Keyboard,
-  Monitor,
-  Settings as SettingsIcon,
-  Type,
-  Zap,
-  ExternalLink,
-} from "lucide-react";
+import { X, Keyboard, Settings as SettingsIcon, Type, Zap, ExternalLink } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type {
-  ThemeMode,
   ThemeVariant,
   TerminalFontSize,
   TerminalScrollback,
@@ -24,7 +15,6 @@ import chatgptLogo from "../assets/chatgpt.svg";
 import { AgentConfigPanel } from "./app-settings/AgentConfigPanel";
 import { GeneralPanel } from "./app-settings/GeneralPanel";
 import { ShortcutsPanel } from "./app-settings/ShortcutsPanel";
-import { ThemePanel } from "./app-settings/ThemePanel";
 import { FontPanel } from "./app-settings/FontPanel";
 import { HooksPanel } from "./app-settings/HooksPanel";
 import { getAgentSettingsFilePath } from "./app-settings/shared";
@@ -32,7 +22,6 @@ import type { AgentKey, AppSettingsNavItem, NavKey, NavSection } from "./app-set
 
 const NAV_ITEMS: AppSettingsNavItem[] = [
   { key: "general", labelKey: "appSettings.general", section: "application", icon: SettingsIcon },
-  { key: "theme", labelKey: "appSettings.theme", section: "application", icon: Monitor },
   { key: "fonts", labelKey: "appSettings.fonts", section: "application", icon: Type },
   { key: "shortcuts", labelKey: "appSettings.shortcuts", section: "application", icon: Keyboard },
   { key: "hooks", labelKey: "appSettings.hooks", section: "application", icon: Zap },
@@ -87,9 +76,6 @@ function NavItemIcon({ item, size }: { item: AppSettingsNavItem; size: number })
 export function AppSettingsDialog({
   onClose,
   themeVariant,
-  themeMode,
-  systemPrefersDark,
-  onThemeModeChange,
   terminalFontSize,
   onTerminalFontSizeChange,
   taskDisplayWindow,
@@ -105,9 +91,6 @@ export function AppSettingsDialog({
 }: {
   onClose: () => void;
   themeVariant: ThemeVariant;
-  themeMode: ThemeMode;
-  systemPrefersDark: boolean;
-  onThemeModeChange: (mode: ThemeMode) => void;
   terminalFontSize: TerminalFontSize;
   onTerminalFontSizeChange: (size: TerminalFontSize) => void;
   taskDisplayWindow: TaskDisplayWindow;
@@ -197,13 +180,6 @@ export function AppSettingsDialog({
               onAttentionBadgeChange={onAttentionBadgeChange}
               terminalScrollback={terminalScrollback}
               onTerminalScrollbackChange={onTerminalScrollbackChange}
-            />
-          ) : activeNav === "theme" ? (
-            <ThemePanel
-              key="theme"
-              themeMode={themeMode}
-              systemPrefersDark={systemPrefersDark}
-              onThemeModeChange={onThemeModeChange}
             />
           ) : activeNav === "fonts" ? (
             <FontPanel
