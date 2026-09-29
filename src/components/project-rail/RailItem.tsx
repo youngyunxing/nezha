@@ -1,19 +1,13 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import type React from "react";
-import { createPortal } from "react-dom";
 import * as Popover from "@radix-ui/react-popover";
-import { Palette, Pin, PinOff } from "lucide-react";
+import { Palette, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Project, ProjectAvatarStyle } from "../../types";
 import { ProjectAvatar } from "../ProjectAvatar";
 import { ProjectAppearanceEditor } from "./ProjectAppearanceEditor";
-import { shortenPath } from "../../utils";
 import { useI18n } from "../../i18n";
 import claudeWaveGif from "../../assets/gif/claude-wave.gif";
 import type { ProjectStatus } from "./activity";
-
-// hover 到显示提示的延迟:略高于 0 是为了让指针沿 rail 快速划过时不逐项闪一遍。
-const TOOLTIP_DELAY_MS = 70;
-const TOOLTIP_GAP_PX = 10;
 
 /** rail 项上挂着的弹层:右键菜单,或从菜单进入的外观编辑器。同一时刻只有一个项打开。 */
 export type RailItemPanel = "menu" | "appearance";
@@ -36,19 +30,6 @@ export function AttentionIndicator({
   return <span className="rail-status-dot" data-status={isAttention ? "attention" : "running"} />;
 }
 
-// 即时 tooltip:项目名 + 路径。rail 上除缩写外没有任何文字,原生 title 又有 ~1s 延迟,
-// 项目多了只能靠背缩写,这里改成 hover 即出。portal 到 body 避免被右侧面板盖住。
-function RailTooltip({ project, x, y }: { project: Project; x: number; y: number }) {
-  const vars = { "--rail-tip-x": `${x}px`, "--rail-tip-y": `${y}px` } as React.CSSProperties;
-  return createPortal(
-    <div className="rail-tooltip" role="tooltip" style={vars}>
-      <div className="rail-tooltip-name">{project.name}</div>
-      <div className="rail-tooltip-path">{shortenPath(project.path)}</div>
-    </div>,
-    document.body,
-  );
-}
-
 export const RailItem = memo(function RailItem({
   project,
   isActive,
@@ -65,6 +46,7 @@ export const RailItem = memo(function RailItem({
   onPanelChange,
   onToggleHidden,
   onUpdateAvatar,
+  onDelete,
 }: {
   project: Project;
   isActive: boolean;
@@ -80,13 +62,11 @@ export const RailItem = memo(function RailItem({
   onClick: (project: Project) => void;
   onPanelChange: (projectId: string, panel: RailItemPanel | null) => void;
   onToggleHidden: (projectId: string) => void;
+  onDelete: (projectId: string) => void;
   onUpdateAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
 }) {
   const { t } = useI18n();
   const [waving, setWaving] = useState(false);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null);
-  const tooltipTimerRef = useRef<number | null>(null);
-
   // waveNonce 每次递增(出现新的待确认任务)就触发一次性招手,3.6s 后卸载。
   // 卸载+重新挂载可让 gif 从首帧重播,同时重启 CSS 探头/缩回动画。
   useEffect(() => {
@@ -95,29 +75,6 @@ export const RailItem = memo(function RailItem({
     const id = setTimeout(() => setWaving(false), 3600);
     return () => clearTimeout(id);
   }, [waveNonce]);
-
-  const hideTooltip = useCallback(() => {
-    if (tooltipTimerRef.current !== null) {
-      window.clearTimeout(tooltipTimerRef.current);
-      tooltipTimerRef.current = null;
-    }
-    setTooltip(null);
-  }, []);
-
-  const scheduleTooltip = useCallback((node: HTMLElement) => {
-    if (tooltipTimerRef.current !== null) window.clearTimeout(tooltipTimerRef.current);
-    tooltipTimerRef.current = window.setTimeout(() => {
-      tooltipTimerRef.current = null;
-      const rect = node.getBoundingClientRect();
-      setTooltip({ x: rect.right + TOOLTIP_GAP_PX, y: rect.top + rect.height / 2 });
-    }, TOOLTIP_DELAY_MS);
-  }, []);
-
-  useEffect(() => hideTooltip, [hideTooltip]);
-  // 拖起来之后 / 弹层打开时不再显示提示(位置不可靠,或会压在弹层上)。
-  useEffect(() => {
-    if (isDragging || translateY !== 0 || panel) hideTooltip();
-  }, [isDragging, translateY, panel, hideTooltip]);
 
   // 让位位移是拖拽期间的高频动态值,通过 CSS 变量注入,其余样式见 project-rail.css。
   const dynamicVars = { "--rail-item-dy": `${translateY}px` } as React.CSSProperties;
@@ -135,35 +92,32 @@ export const RailItem = memo(function RailItem({
         <button
           data-rail-id={project.id}
           aria-label={project.name}
-          className="rail-item rail-indicator-host"
-          data-surface="sidebar"
+          className="rail-item rail-drawer-item rail-indicator-host"
+          data-surface="panel"
           data-active={isActive}
           data-dragging={isDragging}
           data-moving={translateY !== 0}
           data-panel-open={panel !== null}
           style={dynamicVars}
           onClick={() => onClick(project)}
-          onPointerDown={(event) => {
-            hideTooltip();
-            onPointerDown(project, event);
-          }}
+          onPointerDown={(event) => onPointerDown(project, event)}
           onContextMenu={(event) => {
             if (!menuEnabled) return;
             event.preventDefault();
-            hideTooltip();
             onPanelChange(project.id, "menu");
           }}
-          onMouseEnter={(event) => {
-            if (!panel) scheduleTooltip(event.currentTarget);
-          }}
-          onMouseLeave={hideTooltip}
         >
-          {waving && (
-            <img key={waveNonce} src={claudeWaveGif} alt="" className="rail-item-mascot" />
+          <div className="rail-drawer-item-avatar rail-indicator-host" data-surface="panel">
+            {waving && (
+              <img key={waveNonce} src={claudeWaveGif} alt="" className="rail-item-mascot" />
+            )}
+            <ProjectAvatar project={project} size={28} />
+            <AttentionIndicator status={status} count={attentionCount} showBadge={showBadge} />
+          </div>
+          <span className="rail-drawer-item-name">{project.name}</span>
+          {project.hiddenFromRail && (
+            <PinOff size={12} strokeWidth={2} className="rail-drawer-item-hidden" />
           )}
-          <ProjectAvatar project={project} size={28} className="rail-item-avatar" />
-          <AttentionIndicator status={status} count={attentionCount} showBadge={showBadge} />
-          {tooltip && <RailTooltip project={project} x={tooltip.x} y={tooltip.y} />}
         </button>
       </Popover.Anchor>
 
@@ -205,6 +159,18 @@ export const RailItem = memo(function RailItem({
                     <PinOff size={13} strokeWidth={2} />
                   )}
                   <span>{hiddenLabel}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="rail-menu-item"
+                  onClick={() => {
+                    onPanelChange(project.id, null);
+                    onDelete(project.id);
+                  }}
+                >
+                  <Trash2 size={13} strokeWidth={2} />
+                  <span>{t("welcome.deleteProject")}</span>
                 </button>
               </>
             ) : (

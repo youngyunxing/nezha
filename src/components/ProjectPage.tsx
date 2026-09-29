@@ -22,7 +22,7 @@ import { FileViewer } from "./FileViewer";
 import { GitChanges } from "./GitChanges";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
-import { ProjectRail } from "./ProjectRail";
+import { ProjectDrawer } from "./ProjectDrawer";
 import { SettingsDialog } from "./SettingsDialog";
 import { RightToolbar } from "./RightToolbar";
 import { TodoTaskView } from "./TodoTaskView";
@@ -66,12 +66,12 @@ export function ProjectPage({
   onRegisterTerminal,
   onTerminalReady,
   onSnapshot,
-  onBack,
   onSwitchProject,
   onCommitProjectOrder,
   onOpen,
   onToggleProjectHidden,
   onUpdateProjectAvatar,
+  onDeleteProject,
   themeVariant,
   themeMode,
   systemPrefersDark,
@@ -140,12 +140,12 @@ export function ProjectPage({
   ) => number;
   onTerminalReady: (taskId: string, generation: number) => void;
   onSnapshot: (taskId: string, snapshot: string) => void;
-  onBack: () => void;
   onSwitchProject: (project: Project) => void;
   onCommitProjectOrder: (draggedId: string, beforeId: string | null, visibleIds: string[]) => void;
   onOpen: () => void;
   onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
+  onDeleteProject: (projectId: string) => void;
   themeVariant: ThemeVariant;
   themeMode: ThemeMode;
   systemPrefersDark: boolean;
@@ -196,6 +196,7 @@ export function ProjectPage({
   const [showSettings, setShowSettings] = useState(false);
   const [showFileSearch, setShowFileSearch] = useState(false);
   const [taskPanelCollapsed, setTaskPanelCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
@@ -370,17 +371,21 @@ export function ProjectPage({
 
   return (
     <div style={visible ? s.projectBodyVisible : s.projectBodyHidden}>
-      <ProjectRail
-        projects={allProjects}
-        allTasks={tasks}
-        activeProjectId={project.id}
-        attentionBadge={attentionBadge}
-        onSwitch={onSwitchProject}
-        onCommitProjectOrder={onCommitProjectOrder}
-        onOpen={onOpen}
-        onToggleProjectHidden={onToggleProjectHidden}
-        onUpdateProjectAvatar={onUpdateProjectAvatar}
-      />
+      {drawerOpen && (
+        <ProjectDrawer
+          projects={allProjects}
+          allTasks={tasks}
+          activeProjectId={project.id}
+          attentionBadge={attentionBadge}
+          onSwitch={onSwitchProject}
+          onCommitProjectOrder={onCommitProjectOrder}
+          onOpen={onOpen}
+          onToggleProjectHidden={onToggleProjectHidden}
+          onUpdateProjectAvatar={onUpdateProjectAvatar}
+          onDelete={onDeleteProject}
+          onClose={() => setDrawerOpen(false)}
+        />
+      )}
       <TaskPanel
         project={project}
         repoPath={displayedRepoPath}
@@ -397,7 +402,7 @@ export function ProjectPage({
         onDeleteAllTasks={onDeleteAllTasks}
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
-        onBack={onBack}
+        onBack={() => setDrawerOpen((v) => !v)}
         themeVariant={themeVariant}
         themeMode={themeMode}
         systemPrefersDark={systemPrefersDark}

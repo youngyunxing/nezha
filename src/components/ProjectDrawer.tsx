@@ -2,14 +2,15 @@ import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import type React from "react";
 import type { Project, ProjectAvatarStyle, Task } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
-import { RAIL_ITEM_GAP, RAIL_ITEM_SIZE } from "../styles/rail-drag";
+import { useI18n } from "../i18n";
+import { DRAWER_ROW_STRIDE } from "../styles/rail-drag";
+import { Search, Plus } from "lucide-react";
+import { projectMatchesRailSearch } from "./project-rail/search";
 import {
   EMPTY_PROJECT_ACTIVITY,
   buildProjectActivityMap,
   getProjectActivity,
 } from "./project-rail/activity";
-import { ProjectDrawer } from "./project-rail/ProjectDrawer";
-import { ProjectRailActions } from "./project-rail/ProjectRailActions";
 import { AttentionIndicator, RailItem, type RailItemPanel } from "./project-rail/RailItem";
 import {
   RAIL_DRAG_THRESHOLD_PX,
@@ -23,7 +24,7 @@ import {
 
 export { projectMatchesRailSearch } from "./project-rail/search";
 
-export function ProjectRail({
+export function ProjectDrawer({
   projects,
   allTasks,
   activeProjectId,
@@ -33,24 +34,22 @@ export function ProjectRail({
   onOpen,
   onToggleProjectHidden,
   onUpdateProjectAvatar,
-  singleProjectMode = false,
+  onDelete,
+  onClose,
 }: {
   projects: Project[];
   allTasks: Task[];
   activeProjectId: string;
   attentionBadge?: boolean;
   onSwitch: (project: Project) => void;
-  onCommitProjectOrder: (
-    draggedId: string,
-    beforeId: string | null,
-    visibleIds: string[],
-  ) => void;
+  onCommitProjectOrder: (draggedId: string, beforeId: string | null, visibleIds: string[]) => void;
   onOpen: () => void;
   onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
-  singleProjectMode?: boolean;
+  onDelete: (projectId: string) => void;
+  onClose: () => void;
 }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [query, setQuery] = useState("");
   // 右键菜单 / 外观编辑器:同一时刻只允许一个 rail 项打开,由这里统一持有。
   const [openPanel, setOpenPanel] = useState<{ projectId: string; panel: RailItemPanel } | null>(
     null,
@@ -69,10 +68,10 @@ export function ProjectRail({
     [onToggleProjectHidden],
   );
 
-  // 竖条只显示常驻项目；当前激活项目即使被设为非常驻也始终保留，避免失去当前上下文。
+  // 抽屉列出全部项目（含被设为非常驻的，用图钉标记区分），再按搜索词过滤。
   const railProjects = useMemo(
-    () => projects.filter((p) => !p.hiddenFromRail || p.id === activeProjectId),
-    [projects, activeProjectId],
+    () => projects.filter((p) => projectMatchesRailSearch(p, query)),
+    [projects, query],
   );
   const projectActivityById = useMemo(() => buildProjectActivityMap(allTasks), [allTasks]);
 
@@ -143,6 +142,7 @@ export function ProjectRail({
         rect,
         visible.length,
         draggedVisibleIdx,
+        DRAWER_ROW_STRIDE,
       );
 
       const nextViz: DragViz = {
@@ -234,48 +234,51 @@ export function ProjectRail({
     };
   }, [dragOrigin, onCommitProjectOrder]);
 
-  const handleRailItemPointerDown = useCallback((
-    project: Project,
-    event: React.PointerEvent<HTMLButtonElement>,
-  ) => {
-    if (event.button !== 0) return;
-    setOpenPanel(null);
-    const node = event.currentTarget;
-    const rect = node.getBoundingClientRect();
-    node.setPointerCapture(event.pointerId);
-    activePointerIdRef.current = event.pointerId;
-    activePointerNodeRef.current = node;
-    pointerStartRef.current = { x: event.clientX, y: event.clientY };
-    dragMovedRef.current = false;
-    // dragViz 不在 pointerdown 立即 set:纯 click 切项目走不到 handleMove 阈值,
-    // 也不该触发浮层 mount / ProjectAvatar 实例化。延后到 handleMove 第一次
-    // 跨过 RAIL_DRAG_THRESHOLD_PX 阈值时再初始化。
-    setDragOrigin({
-      draggedId: project.id,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-    });
-  }, []);
-
-  const handleRailItemClick = useCallback((project: Project) => {
-    const shouldSuppressClick =
-      dragMovedRef.current ||
-      (project.id === suppressClickProjectIdRef.current &&
-        performance.now() < suppressClickUntilRef.current);
-    if (shouldSuppressClick) {
+  const handleRailItemPointerDown = useCallback(
+    (project: Project, event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      setOpenPanel(null);
+      const node = event.currentTarget;
+      const rect = node.getBoundingClientRect();
+      node.setPointerCapture(event.pointerId);
+      activePointerIdRef.current = event.pointerId;
+      activePointerNodeRef.current = node;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
       dragMovedRef.current = false;
-      suppressClickUntilRef.current = 0;
-      suppressClickProjectIdRef.current = null;
-      if (suppressClickResetTimerRef.current !== null) {
-        window.clearTimeout(suppressClickResetTimerRef.current);
-        suppressClickResetTimerRef.current = null;
+      // dragViz 不在 pointerdown 立即 set:纯 click 切项目走不到 handleMove 阈值,
+      // 也不该触发浮层 mount / ProjectAvatar 实例化。延后到 handleMove 第一次
+      // 跨过 RAIL_DRAG_THRESHOLD_PX 阈值时再初始化。
+      setDragOrigin({
+        draggedId: project.id,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      });
+    },
+    [],
+  );
+
+  const handleRailItemClick = useCallback(
+    (project: Project) => {
+      const shouldSuppressClick =
+        dragMovedRef.current ||
+        (project.id === suppressClickProjectIdRef.current &&
+          performance.now() < suppressClickUntilRef.current);
+      if (shouldSuppressClick) {
+        dragMovedRef.current = false;
+        suppressClickUntilRef.current = 0;
+        suppressClickProjectIdRef.current = null;
+        if (suppressClickResetTimerRef.current !== null) {
+          window.clearTimeout(suppressClickResetTimerRef.current);
+          suppressClickResetTimerRef.current = null;
+        }
+        return;
       }
-      return;
-    }
-    onSwitch(project);
-    setDrawerOpen(false);
-    setOpenPanel(null);
-  }, [onSwitch]);
+      onSwitch(project);
+      setOpenPanel(null);
+      onClose();
+    },
+    [onSwitch],
+  );
 
   const draggedVisibleIndex = dragOrigin
     ? railProjects.findIndex((p) => p.id === dragOrigin.draggedId)
@@ -311,10 +314,10 @@ export function ProjectRail({
 
   // 尺寸常量注入 CSS 变量:拖拽落点计算(drag.ts)与布局共用同一来源,避免两边漂移。
   const railVars = {
-    "--rail-item-size": `${RAIL_ITEM_SIZE}px`,
-    "--rail-item-gap": `${RAIL_ITEM_GAP}px`,
     "--rail-padding-top": `${RAIL_PADDING_TOP}px`,
   } as React.CSSProperties;
+  const draggedVisibleIdxForRender = draggedVisibleIndex;
+
   const previewVars =
     dragViz &&
     ({
@@ -322,62 +325,80 @@ export function ProjectRail({
       "--rail-preview-y": `${dragViz.previewY}px`,
     } as React.CSSProperties);
 
+  const { t } = useI18n();
+
   return (
-    <div
-      ref={railContainerRef}
-      className="rail-root"
-      data-drawer-open={drawerOpen}
-      style={railVars}
-    >
-      {railProjects.map((project, index) => {
-        const isDragging = dragOrigin?.draggedId === project.id;
-        const activity = getProjectActivity(projectActivityById, project.id);
-        const translateY =
-          dragOrigin && dragViz && draggedVisibleIndex !== -1
-            ? getRailItemTranslateY(index, draggedVisibleIndex, dragViz.dropIndex)
-            : 0;
-        return (
-          <RailItem
-            key={project.id}
-            project={project}
-            isActive={project.id === activeProjectId}
-            status={activity.status}
-            attentionCount={activity.attentionCount}
-            showBadge={attentionBadge}
-            waveNonce={waveNonces.get(project.id) ?? 0}
-            isDragging={isDragging}
-            translateY={translateY}
-            panel={openPanel?.projectId === project.id ? openPanel.panel : null}
-            menuEnabled={!singleProjectMode}
-            onPointerDown={handleRailItemPointerDown}
-            onClick={handleRailItemClick}
-            onPanelChange={handlePanelChange}
-            onToggleHidden={handleToggleHidden}
-            onUpdateAvatar={onUpdateProjectAvatar}
+    <div ref={railContainerRef} className="rail-drawer" style={railVars}>
+      <div className="rail-drawer-header">
+        <div className="rail-drawer-title">{t("welcome.projects")}</div>
+        <div className="rail-drawer-search">
+          <Search size={13} strokeWidth={2} className="rail-drawer-search-icon" />
+          <input
+            autoFocus
+            className="rail-drawer-search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              if (query) {
+                setQuery("");
+              } else {
+                onClose();
+              }
+            }}
+            placeholder={t("welcome.searchProjects")}
           />
-        );
-      })}
+        </div>
+        <button
+          type="button"
+          className="rail-drawer-add"
+          title={t("welcome.openProject")}
+          aria-label={t("welcome.openProject")}
+          onClick={onOpen}
+        >
+          <Plus size={14} strokeWidth={2.4} />
+        </button>
+      </div>
 
-      <div className="rail-spacer" />
-
-      {!singleProjectMode && (
-        <ProjectRailActions
-          drawerOpen={drawerOpen}
-          onToggleDrawer={() => setDrawerOpen((v) => !v)}
-          onOpen={onOpen}
-        />
-      )}
-
-      {drawerOpen && !singleProjectMode && (
-        <ProjectDrawer
-          projects={projects}
-          activityByProjectId={projectActivityById}
-          activeProjectId={activeProjectId}
-          showBadge={attentionBadge}
-          onSwitch={onSwitch}
-          onClose={() => setDrawerOpen(false)}
-        />
-      )}
+      <div className="rail-drawer-list">
+        {railProjects.length === 0 && (
+          <div className="rail-drawer-empty">{t("welcome.noMatchingProjects")}</div>
+        )}
+        {railProjects.map((project, index) => {
+          const isDragging = dragOrigin?.draggedId === project.id;
+          const activity = getProjectActivity(projectActivityById, project.id);
+          const translateY =
+            dragOrigin && dragViz && draggedVisibleIndex !== -1
+              ? getRailItemTranslateY(
+                  index,
+                  draggedVisibleIdxForRender,
+                  dragViz.dropIndex,
+                  DRAWER_ROW_STRIDE,
+                )
+              : 0;
+          return (
+            <RailItem
+              key={project.id}
+              project={project}
+              isActive={project.id === activeProjectId}
+              status={activity.status}
+              attentionCount={activity.attentionCount}
+              showBadge={attentionBadge}
+              waveNonce={waveNonces.get(project.id) ?? 0}
+              isDragging={isDragging}
+              translateY={translateY}
+              panel={openPanel?.projectId === project.id ? openPanel.panel : null}
+              menuEnabled
+              onPointerDown={handleRailItemPointerDown}
+              onClick={handleRailItemClick}
+              onPanelChange={handlePanelChange}
+              onToggleHidden={handleToggleHidden}
+              onUpdateAvatar={onUpdateProjectAvatar}
+              onDelete={onDelete}
+            />
+          );
+        })}
+      </div>
 
       {draggedProject && previewVars && (
         <div className="rail-drag-preview" style={previewVars}>

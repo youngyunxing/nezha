@@ -27,7 +27,6 @@ import {
 import { DEFAULT_UI_FONT, getDefaultMonoFont, isAutoDefaultMonoFont } from "./types";
 import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
-import { WelcomePage } from "./components/WelcomePage";
 import { ProjectPage } from "./components/ProjectPage";
 import { useToast } from "./components/Toast";
 import { isHideWindowShortcut } from "./shortcuts";
@@ -36,11 +35,6 @@ import { normalizeProjectAvatar } from "./projectAvatar";
 import { useTerminalManager } from "./hooks/useTerminalManager";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
 import { useI18n } from "./i18n";
-import {
-  normalizeProjectNameInput,
-  validateProjectName,
-  type ProjectRenameResult,
-} from "./projectName";
 import {
   DARK_THEME_STORAGE_KEY,
   getNextThemeMode,
@@ -517,6 +511,17 @@ function App() {
       }
       setProjects(projectsForState);
 
+      // 没有首页了：启动直接进入最近打开的项目。只设内存状态，不碰 lastOpenedAt
+      // ——否则每次启动都会重写一遍 projects.json。
+      const mostRecent = [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
+      if (mostRecent) {
+        setActiveProject(mostRecent);
+        mountProject(mostRecent.id);
+        invoke("init_project_config", { projectPath: mostRecent.path }).catch((e: unknown) => {
+          console.warn("[init] init_project_config failed:", e);
+        });
+      }
+
       // Load tasks for all known projects。allSettled 隔离单项目失败:
       // 一个 tasks.json 损坏不能让所有项目的任务在 UI 里消失(Promise.all
       // 整体 reject 曾造成这个假象),失败项目单独提示并禁止写盘。
@@ -641,10 +646,6 @@ function App() {
     invoke("init_project_config", { projectPath: project.path }).catch((e: unknown) => {
       showToast(t("toast.initProjectConfigFailed", { error: String(e) }), "warning");
     });
-  }
-
-  function handleBack() {
-    setActiveProject(null);
   }
 
   function invokeRunTask(task: Task, projectPath: string, images: string[], texts: string[] = []) {
@@ -1253,9 +1254,6 @@ function App() {
     if (!ok) return;
     const projectTaskIds = tasks.filter((t) => t.projectId === projectId).map((t) => t.id);
     deleteTasks(projectTaskIds);
-    invoke<number>("cleanup_installations_for_project", { projectId }).catch((e) =>
-      console.error("cleanup_installations_for_project failed", e),
-    );
     setProjects((prev) => {
       const next = prev.filter((p) => p.id !== projectId);
       persistProjects(next, showToast, formatSaveProjectsError);
@@ -1263,11 +1261,15 @@ function App() {
     });
     setMountedProjectIds((prev) => prev.filter((id) => id !== projectId));
     clearProjectView(projectId);
+    // 没有首页了：删掉的是当前项目就回退到下一个，否则会落进空态。
     setActiveProject((prev) => {
-      if (prev?.id === projectId) {
-        return null;
-      }
-      return prev;
+      if (prev?.id !== projectId) return prev;
+      const remaining = projects
+        .filter((p) => p.id !== projectId)
+        .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
+      const next = remaining[0] ?? null;
+      if (next) mountProject(next.id);
+      return next;
     });
   }
 
@@ -1293,32 +1295,6 @@ function App() {
       persistProjects(next, showToast, formatSaveProjectsError);
       return next;
     });
-  }
-
-  async function handleRenameProject(
-    projectId: string,
-    rawName: string,
-  ): Promise<ProjectRenameResult> {
-    const normalizedName = normalizeProjectNameInput(rawName);
-    const current = projects.find((project) => project.id === projectId);
-    if (current?.name === normalizedName) return { ok: true, name: current.name };
-
-    const result = validateProjectName(rawName, projects, projectId);
-    if (!result.ok) return result;
-
-    const next = projects.map((project) =>
-      project.id === projectId ? { ...project, name: result.name } : project,
-    );
-    const saved = await persistProjects(next, showToast, formatSaveProjectsError);
-    if (!saved) return { ok: false, error: "save_failed" };
-
-    setProjects((prev) =>
-      prev.map((project) =>
-        project.id === projectId ? { ...project, name: result.name } : project,
-      ),
-    );
-
-    return result;
   }
 
   // 拖拽结束时一次性提交新顺序;beforeId === null 表示拖到 visible 末尾。
@@ -1421,7 +1397,6 @@ function App() {
         .filter((project): project is Project => !!project),
     [mountedProjectIds, projects],
   );
-  const visibleProjectsForWelcome = sortedProjects;
 
   // 头像外观(缩写 / 颜色去重)按全量 projects 解析一次,供各处 ProjectAvatar 读取。
   const appTree = (
@@ -1468,12 +1443,12 @@ function App() {
               onRegisterTerminal={tm.handleRegisterTerminal}
               onTerminalReady={handleTerminalReady}
               onSnapshot={tm.handleSnapshot}
-              onBack={handleBack}
               onSwitchProject={handleProjectClick}
               onCommitProjectOrder={handleCommitProjectOrder}
               onOpen={handleOpen}
               onToggleProjectHidden={handleToggleProjectHidden}
               onUpdateProjectAvatar={handleUpdateProjectAvatar}
+              onDeleteProject={handleDeleteProject}
               themeVariant={themeVariant}
               themeMode={themeMode}
               systemPrefersDark={systemPrefersDark}
@@ -1495,34 +1470,11 @@ function App() {
           );
         })}
       </div>
-      {!activeProject && (
+      {!activeProject && projects.length === 0 && (
         <div style={s.appWelcomeLayer}>
-          <WelcomePage
-            projects={visibleProjectsForWelcome}
-            onOpen={handleOpen}
-            onProjectClick={handleProjectClick}
-            onDeleteProject={handleDeleteProject}
-            onToggleProjectHidden={handleToggleProjectHidden}
-            onRenameProject={handleRenameProject}
-            onUpdateProjectAvatar={handleUpdateProjectAvatar}
-            themeVariant={themeVariant}
-            themeMode={themeMode}
-            systemPrefersDark={systemPrefersDark}
-            onThemeModeChange={handleThemeModeChange}
-            onToggleTheme={handleToggleTheme}
-            terminalFontSize={terminalFontSize}
-            onTerminalFontSizeChange={setTerminalFontSize}
-            taskDisplayWindow={taskDisplayWindow}
-            onTaskDisplayWindowChange={setTaskDisplayWindow}
-            attentionBadge={attentionBadge}
-            onAttentionBadgeChange={setAttentionBadge}
-            terminalScrollback={terminalScrollback}
-            onTerminalScrollbackChange={handleTerminalScrollbackChange}
-            uiFontFamily={uiFontFamily}
-            onUiFontFamilyChange={setUiFontFamily}
-            monoFontFamily={monoFontFamily}
-            onMonoFontFamilyChange={setMonoFontFamily}
-          />
+          <button style={s.emptyOpenBtn} type="button" onClick={handleOpen}>
+            {t("welcome.openProjectFolder")}
+          </button>
         </div>
       )}
     </div>

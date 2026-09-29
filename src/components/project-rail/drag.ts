@@ -31,12 +31,13 @@ export function computeRailDropIndex(
   railRect: { left: number; right: number; top: number },
   visibleLen: number,
   draggedVisibleIndex: number,
+  stride: number = RAIL_ITEM_STRIDE,
 ): number {
   const escapedX =
     clientX < railRect.left - RAIL_DRAG_ESCAPE_PX || clientX > railRect.right + RAIL_DRAG_ESCAPE_PX;
   if (escapedX) return Math.max(0, draggedVisibleIndex);
   const relativeY = clientY - railRect.top - RAIL_PADDING_TOP;
-  const rawIndex = Math.round(relativeY / RAIL_ITEM_STRIDE);
+  const rawIndex = Math.round(relativeY / stride);
   return Math.max(0, Math.min(visibleLen, rawIndex));
 }
 
@@ -47,12 +48,13 @@ export function getRailItemTranslateY(
   visibleIndex: number,
   draggedVisibleIndex: number,
   dropIndex: number,
+  stride: number = RAIL_ITEM_STRIDE,
 ): number {
   if (visibleIndex === draggedVisibleIndex) return 0;
   if (draggedVisibleIndex < dropIndex) {
-    if (visibleIndex > draggedVisibleIndex && visibleIndex < dropIndex) return -RAIL_ITEM_STRIDE;
+    if (visibleIndex > draggedVisibleIndex && visibleIndex < dropIndex) return -stride;
   } else if (draggedVisibleIndex > dropIndex) {
-    if (visibleIndex >= dropIndex && visibleIndex < draggedVisibleIndex) return RAIL_ITEM_STRIDE;
+    if (visibleIndex >= dropIndex && visibleIndex < draggedVisibleIndex) return stride;
   }
   return 0;
 }

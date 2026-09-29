@@ -5,3 +5,9 @@
 export const RAIL_ITEM_SIZE = 36;
 export const RAIL_ITEM_GAP = 5;
 export const RAIL_ITEM_STRIDE = RAIL_ITEM_SIZE + RAIL_ITEM_GAP;
+
+// 抽屉行：.rail-drawer-item 的 padding 8 + 头像 28 + padding 8 = 44，列表无 gap。
+// 与 project-rail.css 的 .rail-drawer-item / .rail-drawer-list 必须一致。
+export const DRAWER_ROW_HEIGHT = 44;
+export const DRAWER_ROW_GAP = 0;
+export const DRAWER_ROW_STRIDE = DRAWER_ROW_HEIGHT + DRAWER_ROW_GAP;
