@@ -41,7 +41,6 @@
   will-change: transform;
 }
 
-
 /* 招手小人：绝对定位在头像右下，z-index 低于头像，缩回时被头像遮住 */
 .rail-item-mascot {
   position: absolute;
@@ -164,7 +163,9 @@
 }
 
 .rail-drawer-header {
-  padding: 12px 12px 10px;
+  /* 35 + 标题 13 + 标题下边距 8 = 搜索框顶部 56px，与任务面板的搜索框同高。
+     任务面板那边是 panelHeader 的 48px + panelSearchWrap 的 margin-top 8px。 */
+  padding: 35px 12px 10px;
   border-bottom: 1px solid var(--border-dim);
 }
 
@@ -217,7 +218,9 @@
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .rail-drawer-add:hover {
@@ -245,7 +248,9 @@
   background: none;
   color: var(--text-hint);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .rail-drawer-footer-btn:hover {
@@ -348,7 +353,9 @@
   background: none;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .rail-drawer-rename-btn:hover:not(:disabled) {

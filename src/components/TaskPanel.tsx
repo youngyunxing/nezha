@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Search, Plus, Trash2, PanelLeftClose, PanelLeftOpen, Moon, Sun } from "lucide-react";
-import type { Project, Task, ThemeVariant, GitRoot, TaskDisplayWindow } from "../types";
+import { Plus, Search, Trash2 } from "lucide-react";
+import type { Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
@@ -24,12 +24,8 @@ export function TaskPanel({
   onDeleteAllTasks,
   onToggleTaskStar,
   onRunTodo,
-  themeVariant,
-  onToggleTheme,
   taskDisplayWindow,
   active = true,
-  collapsed = false,
-  onToggleCollapsed,
 }: {
   project: Project;
   /** 当前活动 git 根（用于 BranchBar / 多仓库工作区切换） */
@@ -50,65 +46,11 @@ export function TaskPanel({
   onDeleteAllTasks: () => void;
   onToggleTaskStar: (id: string) => void;
   onRunTodo: (task: Task) => void;
-  themeVariant: ThemeVariant;
-  onToggleTheme: () => void;
   taskDisplayWindow: TaskDisplayWindow;
   active?: boolean;
-  collapsed?: boolean;
-  onToggleCollapsed?: () => void;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const isDark = themeVariant === "dark" || themeVariant === "midnight";
-  const hasAttention = tasks.some(
-    (t) =>
-      t.status === "input_required" ||
-      t.status === "awaiting_review" ||
-      t.status === "detached" ||
-      t.status === "interrupted",
-  );
-
-  if (collapsed) {
-    return (
-      <div style={s.taskPanelCollapsedRoot}>
-        <button
-          type="button"
-          style={s.taskPanelExpandBtn}
-          onClick={onToggleCollapsed}
-          title={hasAttention ? t("task.showTasksAttention") : t("task.showTasks")}
-          aria-label={hasAttention ? t("task.showTasksAttentionAria") : t("task.showTasks")}
-        >
-          <PanelLeftOpen size={16} strokeWidth={2} />
-          {hasAttention && <span style={s.taskPanelAttentionDot} aria-hidden />}
-        </button>
-        <div style={s.taskPanelCollapsedBody}>
-          <ProjectAvatar project={project} size={24} />
-          <button
-            type="button"
-            style={
-              isNewTask ? s.taskPanelCollapsedNewBtnActive : s.taskPanelCollapsedNewBtnInactive
-            }
-            onClick={onNewTask}
-            title={t("task.newTask")}
-            aria-label={t("task.newTask")}
-          >
-            <Plus size={15} strokeWidth={2.4} />
-          </button>
-        </div>
-        <div style={s.taskPanelCollapsedFooter}>
-          <button
-            type="button"
-            style={s.taskPanelCollapsedSmallBtn}
-            onClick={onToggleTheme}
-            title={isDark ? t("theme.switchToLight") : t("theme.switchToDark")}
-            aria-label={isDark ? t("theme.switchToLight") : t("theme.switchToDark")}
-          >
-            {isDark ? <Sun size={14} strokeWidth={1.8} /> : <Moon size={14} strokeWidth={1.8} />}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={s.taskPanel}>
@@ -116,14 +58,6 @@ export function TaskPanel({
       <div style={s.panelHeader}>
         <ProjectAvatar project={project} size={22} />
         <span style={s.panelProjectName}>{project.name}</span>
-        <button
-          type="button"
-          style={s.panelCollapseBtn}
-          onClick={onToggleCollapsed}
-          title={t("task.hideTasks")}
-        >
-          <PanelLeftClose size={15} strokeWidth={2} />
-        </button>
       </div>
 
       {/* Search */}

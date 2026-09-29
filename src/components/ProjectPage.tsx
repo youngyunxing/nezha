@@ -191,11 +191,9 @@ export function ProjectPage({
   const [shellProjectPath, setShellProjectPath] = useState(project.path);
   const [showSettings, setShowSettings] = useState(false);
   const [showFileSearch, setShowFileSearch] = useState(false);
-  const [taskPanelCollapsed, setTaskPanelCollapsed] = useState(false);
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   const shellRef = useRef<ShellTerminalPanelHandle>(null);
   const pendingCmdRef = useRef<string | null>(null);
-  const prevHadDiffRef = useRef(false);
   const newTaskDraftRef = useRef<NewTaskDraft | null>(null);
   const handleCacheNewTaskDraft = useCallback((draft: NewTaskDraft | null) => {
     newTaskDraftRef.current = draft;
@@ -251,16 +249,6 @@ export function ProjectPage({
   }, [selectedTaskId, isNewTask]);
 
   // diff viewer 打开/关闭时自动联动任务面板的折叠态，但只在 "无 diff → 有 diff" 或
-  // "有 diff → 无 diff" 跨界的那一刻同步一次。用户中途手动展/收，以及切换不同 diff
-  // 文件（openDiff 引用变化但仍是 truthy）都不会被覆盖。
-  useEffect(() => {
-    const hasDiff = Boolean(openDiff);
-    if (hasDiff !== prevHadDiffRef.current) {
-      setTaskPanelCollapsed(hasDiff);
-      prevHadDiffRef.current = hasDiff;
-    }
-  }, [openDiff]);
-
   const handleSelectTask = useCallback(
     (id: string) => {
       clearFileAndDiff();
@@ -332,36 +320,6 @@ export function ProjectPage({
     onNewTask();
   }, [onNewTask, clearFileAndDiff]);
 
-  const collapseTaskPanelForNewDiff = useCallback(() => {
-    if (!openDiff) {
-      setTaskPanelCollapsed(true);
-    }
-  }, [openDiff]);
-
-  const handleDiffFileSelectWithCollapse = useCallback(
-    (filePath: string, staged: boolean, label: string) => {
-      collapseTaskPanelForNewDiff();
-      handleDiffFileSelect(filePath, staged, label);
-    },
-    [collapseTaskPanelForNewDiff, handleDiffFileSelect],
-  );
-
-  const handleCommitSelectWithCollapse = useCallback(
-    (hash: string, message: string) => {
-      collapseTaskPanelForNewDiff();
-      handleCommitSelect(hash, message);
-    },
-    [collapseTaskPanelForNewDiff, handleCommitSelect],
-  );
-
-  const handleCommitFileClickWithCollapse = useCallback(
-    (hash: string, filePath: string, label: string) => {
-      collapseTaskPanelForNewDiff();
-      handleCommitFileClick(hash, filePath, label);
-    },
-    [collapseTaskPanelForNewDiff, handleCommitFileClick],
-  );
-
   const currentTaskCreatedAt = selectedTask?.createdAt ?? null;
 
   return (
@@ -408,12 +366,8 @@ export function ProjectPage({
         onDeleteAllTasks={onDeleteAllTasks}
         onToggleTaskStar={onToggleTaskStar}
         onRunTodo={onRunTodoTask}
-        themeVariant={themeVariant}
-        onToggleTheme={onToggleTheme}
         taskDisplayWindow={taskDisplayWindow}
         active={visible}
-        collapsed={taskPanelCollapsed}
-        onToggleCollapsed={() => setTaskPanelCollapsed((v) => !v)}
       />
       <div style={s.mainContent}>
         <div style={s.projectMainStage}>
@@ -591,7 +545,7 @@ export function ProjectPage({
                 projectRoot={project.path}
                 repoPath={gitContextPath}
                 currentTaskCreatedAt={currentTaskCreatedAt}
-                onFileSelect={handleDiffFileSelectWithCollapse}
+                onFileSelect={handleDiffFileSelect}
                 width={rightPanelWidth}
               />
             </ErrorBoundary>
@@ -601,8 +555,8 @@ export function ProjectPage({
               <GitHistory
                 projectRoot={project.path}
                 repoPath={gitContextPath}
-                onCommitSelect={handleCommitSelectWithCollapse}
-                onFileClick={handleCommitFileClickWithCollapse}
+                onCommitSelect={handleCommitSelect}
+                onFileClick={handleCommitFileClick}
                 width={rightPanelWidth}
               />
             </ErrorBoundary>
