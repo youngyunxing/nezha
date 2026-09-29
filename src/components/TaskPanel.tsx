@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Pencil, Play, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Plus, Search, Terminal } from "lucide-react";
 import type { LocalClaudeSession, Project, Task, GitRoot, TaskDisplayWindow } from "../types";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
 import { TaskList } from "./task-panel/TaskList";
 import { useI18n } from "../i18n";
+import claudeLogo from "../assets/claude.svg";
+import chatgptLogo from "../assets/chatgpt.svg";
 import { presetSummary, type TaskPreset } from "../taskPresets";
 import s from "../styles";
 
@@ -96,63 +98,61 @@ export function TaskPanel({
       {/* Branch bar */}
       <BranchBar projectRoot={project.path} repoPath={branchRepoPath} active={active} />
 
-      {/* New Task row + 右侧的自定义按钮 */}
-      <div style={s.newTaskRowWrap}>
-        <button
-          style={{
-            ...s.newTaskRowMain,
-            background: isNewTask ? "var(--control-active-bg)" : "var(--bg-card)",
-            color: isNewTask ? "var(--control-active-fg)" : "var(--text-secondary)",
-          }}
-          onClick={onNewTask}
-        >
-          <Plus size={14} strokeWidth={2.5} style={s.flexShrinkIcon} />
-          <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
-        </button>
-        <button
-          type="button"
-          style={s.presetManageBtn}
-          title={t("preset.manage")}
-          aria-label={t("preset.manage")}
-          onClick={() => onManagePresets()}
-        >
-          <SlidersHorizontal size={13} strokeWidth={2.2} />
-        </button>
-      </div>
+      {/* New Task row */}
+      <button style={isNewTask ? s.newTaskRowActive : s.newTaskRowInactive} onClick={onNewTask}>
+        <Plus size={14} strokeWidth={2.5} style={s.flexShrinkIcon} />
+        <span style={s.newTaskRowLabel}>{t("task.newTask")}</span>
+      </button>
 
-      {/* 快捷创建按钮：点一下直接建任务，右边的铅笔改名/改参数 */}
-      {presets.map((preset) => (
-        <div
-          key={preset.id}
-          style={s.presetRow}
-          onMouseEnter={() => setHoverPresetId(preset.id)}
-          onMouseLeave={() => setHoverPresetId((prev) => (prev === preset.id ? null : prev))}
-        >
+      {/* 快捷创建按钮：点一下直接建任务；末尾的「+」打开编辑器（增删改） */}
+      <div style={s.presetChipRow}>
+        {presets.map((preset) => (
           <button
+            key={preset.id}
             type="button"
-            style={s.presetRunBtn}
+            style={{
+              ...s.presetChip,
+              ...(hoverPresetId === preset.id
+                ? { background: "var(--bg-hover)", color: "var(--text-primary)" }
+                : null),
+            }}
             title={presetSummary(preset, {
               claude: "Claude Code",
               codex: "Codex",
               shell: t("terminal.title"),
               worktree: t("newTask.dialogIsolated"),
             })}
+            onMouseEnter={() => setHoverPresetId(preset.id)}
+            onMouseLeave={() => setHoverPresetId((prev) => (prev === preset.id ? null : prev))}
             onClick={() => onRunPreset(preset)}
           >
-            <Play size={11} strokeWidth={2.4} style={s.flexShrinkIcon} />
-            <span style={s.presetRunName}>{preset.name}</span>
+            {preset.agent === "claude" ? (
+              <img src={claudeLogo} style={s.presetChipIcon} />
+            ) : preset.agent === "codex" ? (
+              <img src={chatgptLogo} style={s.presetChipIcon} />
+            ) : (
+              <Terminal size={11} strokeWidth={2.2} style={s.flexShrinkIcon} />
+            )}
+            <span style={s.presetChipLabel}>{preset.name}</span>
           </button>
-          <button
-            type="button"
-            style={{ ...s.presetEditBtn, opacity: hoverPresetId === preset.id ? 1 : 0 }}
-            title={t("preset.manage")}
-            aria-label={t("preset.manage")}
-            onClick={() => onManagePresets(preset.id)}
-          >
-            <Pencil size={12} strokeWidth={2.2} />
-          </button>
-        </div>
-      ))}
+        ))}
+        <button
+          type="button"
+          style={{
+            ...s.presetChipAdd,
+            ...(hoverPresetId === "__add__"
+              ? { background: "var(--bg-hover)", color: "var(--text-secondary)" }
+              : null),
+          }}
+          title={t("preset.manage")}
+          aria-label={t("preset.manage")}
+          onMouseEnter={() => setHoverPresetId("__add__")}
+          onMouseLeave={() => setHoverPresetId((prev) => (prev === "__add__" ? null : prev))}
+          onClick={() => onManagePresets()}
+        >
+          <Plus size={12} strokeWidth={2.4} />
+        </button>
+      </div>
 
       <div style={s.taskDivider} />
 
