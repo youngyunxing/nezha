@@ -1,9 +1,47 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
+
+/** 终端宿主：铺满父容器，滚动交给 xterm 自己管。 */
+const terminalHostStyle: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  overflow: "hidden",
+  cursor: "text",
+};
+
+/** 外层：给右上角那对跳转按钮当定位锚点。 */
+const scrollShellStyle: CSSProperties = { position: "relative", width: "100%", height: "100%" };
+
+/** 跳到顶 / 到底：笔记本没有 Home/End，快捷键记不住时就点这个。 */
+const scrollJumpStyle: CSSProperties = {
+  position: "absolute",
+  top: 6,
+  right: 14,
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  zIndex: 2,
+};
+
+const scrollJumpBtnStyle: CSSProperties = {
+  width: 22,
+  height: 20,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  border: "1px solid var(--border-dim)",
+  borderRadius: 5,
+  background: "var(--bg-card)",
+  color: "var(--text-hint)",
+  opacity: 0.5,
+  cursor: "pointer",
+};
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import {
   DEFAULT_SHIFT_ENTER_NEWLINE,
@@ -374,15 +412,29 @@ export function TerminalView({
   }, [monoFontFamily, notifyResize]);
 
   return (
-    <div
-      ref={containerRef}
-      className="nezha-xterm-host"
-      style={{
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-        cursor: "text",
-      }}
-    />
+    <div style={scrollShellStyle}>
+      <div ref={containerRef} className="nezha-xterm-host" style={terminalHostStyle} />
+      {/* 右上角一对跳转按钮：笔记本没有 Home/End，快捷键记不住也能滚 */}
+      <div style={scrollJumpStyle}>
+        <button
+          type="button"
+          style={scrollJumpBtnStyle}
+          title="跳到顶部"
+          aria-label="跳到顶部"
+          onClick={() => terminalRef.current?.scrollToTop()}
+        >
+          <ChevronUp size={13} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          style={scrollJumpBtnStyle}
+          title="跳到底部"
+          aria-label="跳到底部"
+          onClick={() => terminalRef.current?.scrollToBottom()}
+        >
+          <ChevronDown size={13} strokeWidth={2.2} />
+        </button>
+      </div>
+    </div>
   );
 }

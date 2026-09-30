@@ -110,12 +110,15 @@ describe("scrollJumpForKey（终端跳到顶/底）", () => {
     ...mods,
   });
 
-  test("Cmd/Ctrl + 上下键 / Home / End 命中", () => {
+  test("Cmd + 上下键命中（Mac 限定）", () => {
     expect(scrollJumpForKey(ev("ArrowUp", { metaKey: true }))).toBe("top");
     expect(scrollJumpForKey(ev("ArrowDown", { metaKey: true }))).toBe("bottom");
-    expect(scrollJumpForKey(ev("Home", { metaKey: true }))).toBe("top");
-    expect(scrollJumpForKey(ev("End", { metaKey: true }))).toBe("bottom");
-    expect(scrollJumpForKey(ev("ArrowUp", { ctrlKey: true }))).toBe("top");
+  });
+
+  test("Ctrl / Home / End 都不接管 —— 笔记本没有 Home/End，Ctrl 组合另有含义", () => {
+    expect(scrollJumpForKey(ev("ArrowUp", { ctrlKey: true }))).toBeNull();
+    expect(scrollJumpForKey(ev("Home", { metaKey: true }))).toBeNull();
+    expect(scrollJumpForKey(ev("End", { metaKey: true }))).toBeNull();
   });
 
   test("不按修饰键就不接管 —— TUI 自己要用上下键", () => {

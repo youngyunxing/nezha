@@ -41,21 +41,23 @@ export function getNewlineShortcutKeys(shortcut: SendShortcut): string[] {
 export type ScrollJump = "top" | "bottom";
 
 /**
- * 终端「跳到顶部 / 到底部」的按键：Cmd/Ctrl + ↑↓ 或 Home/End。
+ * 终端「跳到顶部 / 到底部」的按键：**Mac 的 Cmd + ↑↓**。
  *
  * 为什么必须显式接管：xterm 会把 Home/End/PageUp/PageDown **当作输入送进 PTY**，
  * 交互式 TUI（Claude Code / Codex / kimi）自己会消费这些键，所以终端没有普通滚动
- * 容器那种"翻页"行为。Cmd/Ctrl 组合键 TUI 用不到，拿来当终端的滚动命令最省事。
+ * 容器那种"翻页"行为。
+ *
+ * 为什么只要 Cmd：笔记本没有 Home/End 两个键；Ctrl 组合在终端里另有含义
+ * （Ctrl+方向键常被 TUI 或输入法占用），所以不放宽到 Ctrl。终端右上角另有按钮，
+ * 记不住快捷键也能用。
  */
 export function scrollJumpForKey(event: PromptKeyEventLike): ScrollJump | null {
-  if (!event.metaKey && !event.ctrlKey) return null;
+  if (!event.metaKey || event.ctrlKey) return null;
   if (event.altKey || event.shiftKey) return null;
   switch (event.key) {
     case "ArrowUp":
-    case "Home":
       return "top";
     case "ArrowDown":
-    case "End":
       return "bottom";
     default:
       return null;
