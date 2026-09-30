@@ -60,3 +60,19 @@ describe("xterm 重排：窄→宽后长行保持完整", () => {
     expect(intact(ser.serialize())).toBe(true);
   });
 });
+
+describe("硬断行：重绘救不回来（这是选择「不缩窄」的依据）", () => {
+  it("窄宽度下逐行渲染的内容，重绘并变宽后仍然是断的", async () => {
+    const { term, ser, write } = makeTerm(40);
+    // 模拟 TUI 在 20 列下逐行渲染：三行各 20 字符 —— 在缓冲区里本就是三条独立行
+    await write("AAAAAAAAAAAAAAAAAAAA\r\nBBBBBBBBBBBBBBBBBBBB\r\nCCCCCCCCCCCCCCCCCCCC\r\n");
+    const before = ser.serialize().split("\n").filter((l) => l.trim()).length;
+    // 重绘（serialize → reset → 写回）再变宽
+    const snapshot = ser.serialize();
+    term.reset();
+    await write(snapshot);
+    term.resize(40, 10);
+    const after = ser.serialize().split("\n").filter((l) => l.trim()).length;
+    expect({ before, after }).toEqual({ before: 3, after: 3 }); // 三行不会合并
+  });
+});

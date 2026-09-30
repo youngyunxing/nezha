@@ -212,7 +212,6 @@ export function TerminalView({
     //   - 变大：立刻生效（150ms 防抖只是躲开缩放动画的中间帧）；
     //   - 变小：先不告诉 PTY，只有小尺寸持续 SHRINK_DELAY_MS 之后才真的缩。
     // 于是"双击缩放"这种短暂变小不会污染 TUI 的输出，而真的把窗口拖小住手不动，终端照旧会缩。
-    let shrinkTimer: ReturnType<typeof setTimeout> | null = null;
     const applySize = (cols: number, rows: number) => {
       notifiedSizeRef.current = { cols, rows };
       notifyResize(cols, rows);
@@ -221,23 +220,21 @@ export function TerminalView({
       // 只有正在显示的那个终端才能决定 PTY 尺寸：隐藏的后台面板（同项目其它任务、
       // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
       if (!isActiveRef.current) return;
-      if (resizeTimer) clearTimeout(resizeTimer);
-      // 本地 fit 先做：显示要跟着窗口走，哪怕这次不告诉 PTY
-      const s = safeFit(fitAddon, term, container);
-      if (!s) return;
+
+      // 容器变小：**整体不动**，PTY 和网格都保持原尺寸。这样 CLI 永远不会在窄宽度下重排，
+      // 也就不会往历史里写下"窄行"—— TUI 在窄宽度下逐行输出的是独立行（硬断行），滚进历史
+      // 后 serialize / reflow 都合并不回来（见 terminal-reflow.test.ts 的实测：3 行仍是 3 行）。
+      // 代价：小窗口下只能看到左边一部分（布局正确、只是被裁掉），而不是让 CLI 重排一遍。
+      // 想让终端真的缩下去：改一次字号即可（那条路径会重新 fit）。
+      const proposed = fitAddon.proposeDimensions?.();
       const prev = notifiedSizeRef.current;
-      if (prev && s.cols < prev.cols) {
-        if (shrinkTimer) clearTimeout(shrinkTimer);
-        shrinkTimer = setTimeout(() => {
-          shrinkTimer = null;
-          applySize(s.cols, s.rows);
-        }, 800);
+      if (proposed && prev && (proposed.cols < prev.cols || proposed.rows < prev.rows)) {
         return;
       }
-      if (shrinkTimer) {
-        clearTimeout(shrinkTimer);
-        shrinkTimer = null;
-      }
+
+      if (resizeTimer) clearTimeout(resizeTimer);
+      const s = safeFit(fitAddon, term, container);
+      if (!s) return;
       resizeTimer = setTimeout(() => applySize(s.cols, s.rows), 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
@@ -250,7 +247,6 @@ export function TerminalView({
       // 未触发的 fit/缩容定时器要清掉：否则卸载后还会 invoke resize_pty，
       // 给已经换过面板的任务发一个过期尺寸
       if (resizeTimer) clearTimeout(resizeTimer);
-      if (shrinkTimer) clearTimeout(shrinkTimer);
       // 必须最先 unregister:后续任一 dispose 调用抛错会中断 cleanup,
       // 让 term 永久滞留 activeTerminals,下次 sibling 广播命中 zombie。
       unregisterActiveTerminal(term);
