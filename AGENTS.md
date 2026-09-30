@@ -63,7 +63,7 @@ ErrorBoundary  (全局兜底)
             └── GitHistory → GitDiffViewer     — 提交日志、提交差异查看器
 ```
 
-> **参考资料**：`knowledge/references/agent-hooks-support.md` 记录了 Claude Code / Codex 的 hook 事件、payload 字段与配置方式的对照，改 hook 链路前先读它。分支与打包约定见 `FORK.md`。
+> **参考资料**：`knowledge/references/agent-hooks-support.md` 记录了 Claude Code / Codex 的 hook 事件、payload 字段与配置方式的对照，改 hook 链路前先读它。分支与打包约定见本地 `FORK.md`（个人笔记，未随仓库分发）。
 >
 > **复用小组件**（被多处引用）：`StatusIcon` / `IconButton` / `ProjectAvatar`。
 >

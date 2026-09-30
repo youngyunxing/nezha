@@ -46,3 +46,6 @@ src-tauri/icons/Square*.png
 src-tauri/icons/StoreLogo.png
 src-tauri/icons/icon.ico
 src-tauri/icons/64x64.png
+
+# 个人 fork 的工作笔记：只留本地，不推上游（README 里另有一段对外的改动说明）
+FORK.md

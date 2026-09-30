@@ -330,6 +330,7 @@ export function useTerminalManager(options?: {
       }
       return state.generation;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
     [resetTerminalWriteState],
   );
 
@@ -384,6 +385,7 @@ export function useTerminalManager(options?: {
       })();
     }, SCREEN_SAVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
   }, []);
 
   const getTaskRestoreState = useCallback((taskId: string) => {

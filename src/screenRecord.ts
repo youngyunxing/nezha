@@ -1,9 +1,13 @@
 /** 去掉终端转义序列，只留下可见文本。 */
 export function stripAnsi(raw: string): string {
   return raw
+    // eslint-disable-next-line no-control-regex -- 要匹配的就是控制字符本身（ANSI 转义序列）
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "") // OSC：窗口标题、cwd 上报
+    // eslint-disable-next-line no-control-regex -- 要匹配的就是控制字符本身（ANSI 转义序列）
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "") // CSI：颜色、光标移动、清屏
+    // eslint-disable-next-line no-control-regex -- 要匹配的就是控制字符本身（ANSI 转义序列）
     .replace(/\x1b[ -/]*[0-~]/g, "") // 其它转义：ESC = 、ESC (B 、ESC M 、ESC 7 …
+    // eslint-disable-next-line no-control-regex -- 要匹配的就是控制字符本身（ANSI 转义序列）
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ""); // 控制字符（保留 \n \r \t）
 }
 

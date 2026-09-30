@@ -1739,6 +1739,7 @@ function App() {
       nameGenRequestedRef.current.add(task.id);
       void handleGenerateTaskName(task.id, { auto: true }).catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
   }, [tasks]);
 
   function handleUpdateProjectAvatar(projectId: string, avatar: ProjectAvatarStyle | undefined) {
