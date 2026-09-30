@@ -98,6 +98,7 @@ export function RunningView({
   onReconnect,
   onMarkRead,
   onHandoff,
+  onRestart,
   quickInputs,
   quickAutoEnter,
   onQuickAutoEnterChange,
@@ -129,6 +130,8 @@ export function RunningView({
   onMarkRead?: () => void;
   /** 把当前会话流转给另一个 agent；resolve true = 完成，弹窗自己关 */
   onHandoff: (options: HandoffOptions) => Promise<boolean>;
+  /** 没有会话可续时（比如 codex 没留下会话记录）重新开一个，而不是给个死路 */
+  onRestart: () => void;
   /** 会话右下角的快捷输入 */
   quickInputs: QuickInputItem[];
   /** 快捷输入：输入后是否自动回车 */
@@ -163,6 +166,8 @@ export function RunningView({
   const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
   // 纯终端没有会话 id 可 resume：恢复 = 重开一个 shell（屏幕内容由终端快照/输出缓冲带回）。
   const canResume = task.agent === "shell" || !!resumeSessionId;
+  // 没有会话可续（例如 codex 这一版把会话存进 SQLite、没留 rollout）：允许重新开始
+  const canRestart = !canResume;
   const restoreState = getRestoreState?.() ?? {};
 
   const [metricsState, setMetricsState] = useState<{
@@ -678,24 +683,26 @@ export function RunningView({
             <div style={s.interruptedBannerActions}>
               <button
                 type="button"
-                title={!canResume ? t("running.resumeUnavailable") : undefined}
+                title={!canResume ? t("running.restartHint") : undefined}
                 style={{
                   ...s.interruptedPrimaryBtn,
-                  opacity: canResume ? 1 : 0.45,
-                  cursor: canResume ? "pointer" : "not-allowed",
+                  opacity: canResume || canRestart ? 1 : 0.45,
+                  cursor: canResume || canRestart ? "pointer" : "not-allowed",
                 }}
-                disabled={!canResume}
-                onClick={canReconnect ? onReconnect : onResume}
+                disabled={!canResume && !canRestart}
+                onClick={canResume ? (canReconnect ? onReconnect : onResume) : onRestart}
               >
                 <RotateCcw size={12} strokeWidth={2.1} />
                 <span>
-                  {canReconnect
-                    ? bannerCompact
-                      ? t("running.reconnect")
-                      : t("running.reconnectTask")
-                    : bannerCompact
-                      ? t("running.resume")
-                      : t("running.resumeTask")}
+                  {!canResume
+                    ? t("running.restart")
+                    : canReconnect
+                      ? bannerCompact
+                        ? t("running.reconnect")
+                        : t("running.reconnectTask")
+                      : bannerCompact
+                        ? t("running.resume")
+                        : t("running.resumeTask")}
                 </span>
               </button>
             </div>

@@ -1244,6 +1244,36 @@ function App() {
     });
   }
 
+  /** 没有会话可续的任务（例如 codex 这一版不留 rollout / 会话 id 没登记上）：
+   *  用同样的提示词重新拉起一个新会话，而不是给用户一条死路。 */
+  function handleRestartTask(taskId: string) {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const project = projects.find((p) => p.id === task.projectId);
+    if (!project) return;
+
+    void (async () => {
+      tm.resetTaskTerminal(taskId);
+      await seedScreenBeforeRestore(task);
+      const pendingTask: Task = {
+        ...task,
+        status: "pending" as TaskStatus,
+        processAlive: undefined,
+        attentionRequestedAt: undefined,
+        failureReason: undefined,
+        updatedAt: Date.now(),
+      };
+      setTasks((prev) => {
+        const next = prev.map((t) => (t.id === taskId ? pendingTask : t));
+        persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
+        return next;
+      });
+      setTaskRunCounts((prev) => ({ ...prev, [taskId]: (prev[taskId] ?? 0) + 1 }));
+      invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
+      showToast(t("running.restarted"), "success");
+    })();
+  }
+
   function handleResumeTask(taskId: string) {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -1862,6 +1892,7 @@ function App() {
               attentionSeen={attentionSeen}
               presets={presets}
               onHandoffTask={handleHandoff}
+              onRestartTask={handleRestartTask}
               quickInputs={quickInputs}
               quickAutoEnter={quickAutoEnter}
               onQuickAutoEnterChange={setQuickAutoEnter}

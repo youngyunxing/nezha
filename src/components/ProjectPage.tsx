@@ -63,6 +63,7 @@ export function ProjectPage({
   presets,
   onRunPreset,
   onHandoffTask,
+  onRestartTask,
   quickInputs,
   quickAutoEnter,
   onQuickAutoEnterChange,
@@ -141,6 +142,8 @@ export function ProjectPage({
   onRunPreset: (preset: TaskPreset, repoPath: string) => void;
   /** 把当前会话流转给另一个 agent（会话右下角）*/
   onHandoffTask: (taskId: string, options: HandoffOptions) => Promise<boolean>;
+  /** 没有会话可续时重新开一个 */
+  onRestartTask: (taskId: string) => void;
   /** 快捷输入（会话右下角） */
   quickInputs: QuickInputItem[];
   quickAutoEnter: boolean;
@@ -446,6 +449,7 @@ export function ProjectPage({
                   onReconnect={() => onReconnectTask(task.id)}
                   onMarkRead={() => onMarkTaskRead(task.id)}
                   onHandoff={(options) => onHandoffTask(task.id, options)}
+                  onRestart={() => onRestartTask(task.id)}
                   quickInputs={quickInputs}
                   quickAutoEnter={quickAutoEnter}
                   onQuickAutoEnterChange={onQuickAutoEnterChange}
