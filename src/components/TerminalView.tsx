@@ -4,9 +4,6 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 
-/** 重画整屏的代价随缓冲行数线性上升：超过这个行数宁可不重画（留着碎片），
- *  也不要让切任务时卡一下。两万行覆盖日常会话，真的超了说明会话很长。 */
-const REPAINT_MAX_LINES = 20000;
 import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import {
@@ -32,6 +29,33 @@ import {
 } from "./terminalShared";
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
+
+/** 重画整屏的代价随缓冲行数线性上升：超过这个行数宁可不重画（留着碎片），
+ *  也不要让切任务时卡一下。两万行覆盖日常会话，真的超了说明会话很长。 */
+const REPAINT_MAX_LINES = 20000;
+/** 长宽比这个幅度才算"明显变大"（双击缩放那种）；慢速拖动的小步进不重画。 */
+const SIGNIFICANT_GROW_RATIO = 1.25;
+
+/**
+ * 按当前网格重画整个缓冲：serialize 出来的是**逻辑行**（不带屏幕上的硬断行），reset 后整段
+ * 写回，随后的 fit 会按当前宽度重新换行 —— 变窄期间被硬断行过的历史就恢复了。
+ * 备用屏（全屏 TUI）跳过：它自己会随 SIGWINCH 重画，硬灌回去会打乱它的界面状态。
+ * 返回是否真的重画了。
+ */
+function repaintFromSnapshot(term: Terminal, addon: SerializeAddon | null): boolean {
+  if (!addon) return false;
+  const buf = term.buffer.active;
+  if (buf.type !== "normal" || buf.length === 0 || buf.length > REPAINT_MAX_LINES) return false;
+  try {
+    const snapshot = addon.serialize();
+    if (!snapshot) return false;
+    term.reset();
+    term.write(snapshot);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 interface TerminalViewProps {
   onInput: (data: string) => void;
@@ -244,7 +268,13 @@ export function TerminalView({
         clearTimeout(shrinkTimer);
         shrinkTimer = null;
       }
-      resizeTimer = setTimeout(() => applySize(s.cols, s.rows), 150);
+      // 明显变大（双击缩放那种）时重画一遍：变窄期间 CLI 按窄宽度打印过，那些行是硬断行，
+      // 光靠 reflow 救不回来。慢速拖动的小步进不触发（比例不过阈值），免得每拖一下都重画整屏。
+      const significantGrow = !!prev && s.cols > prev.cols * SIGNIFICANT_GROW_RATIO;
+      resizeTimer = setTimeout(() => {
+        if (significantGrow) repaintFromSnapshot(term, serializeAddonRef.current);
+        applySize(s.cols, s.rows);
+      }, 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
@@ -324,24 +354,7 @@ export function TerminalView({
         !!dims &&
         Number.isFinite(dims.cols) &&
         (dims.cols !== term.cols || dims.rows !== term.rows);
-      const lineCount = term.buffer.active.length;
-      if (
-        sizeChanged &&
-        lineCount > 0 &&
-        lineCount <= REPAINT_MAX_LINES &&
-        term.buffer.active.type === "normal" &&
-        serializeAddonRef.current
-      ) {
-        try {
-          const snapshot = serializeAddonRef.current.serialize();
-          if (snapshot) {
-            term.reset();
-            term.write(snapshot);
-          }
-        } catch {
-          /* 重画失败不影响后面的 fit */
-        }
-      }
+      if (sizeChanged) repaintFromSnapshot(term, serializeAddonRef.current);
 
       const s = safeFit(fitAddon, term, container);
       if (s) {
