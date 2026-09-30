@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { trimPromptNoise } from "../screenRecord";
+import { TERMINAL_INPUT_MODE_RESET } from "../components/terminalShared";
 
 // ── Buffer constants ─────────────────────────────────────────────────────────
 
@@ -200,12 +201,19 @@ export function useTerminalManager(options?: {
 
   // ── Public API ───────────────────────────────────────────────────────────
 
+  /** 只复位终端的输入模式（鼠标上报等），不动缓冲区 —— 任务进程结束时用。 */
+  const resetTerminalInputModes = useCallback((taskId: string) => {
+    terminalWriteRefs.current[taskId]?.(TERMINAL_INPUT_MODE_RESET);
+  }, []);
+
   const resetTaskTerminal = useCallback((taskId: string) => {
     taskBufferRef.current[taskId] = createTaskBuffer();
     delete terminalSnapshotRef.current[taskId];
     delete screenSavedRef.current[taskId];
     // 旧记录缓存也清掉：下一次落盘/回放会重新从磁盘读（此时读到的才是最新的那份）
     delete restoredPrefixRef.current[taskId];
+    // 顺带把残留的鼠标上报模式关掉（本地写入 xterm，不进 PTY）
+    terminalWriteRefs.current[taskId]?.(TERMINAL_INPUT_MODE_RESET);
   }, []);
 
   const removeTaskBuffers = useCallback((taskIds: string[]) => {
@@ -411,7 +419,8 @@ export function useTerminalManager(options?: {
 
   return {
     terminalSizeRef,
-    resetTaskTerminal,
+    resetTerminalInputModes,
+      resetTaskTerminal,
     removeTaskBuffers,
     writeErrorToTerminal,
     handleInput,

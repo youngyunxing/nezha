@@ -348,6 +348,7 @@ export function RunningView({
   const terminalPane = (
     <div style={s.terminalContainer}>
       <TerminalView
+                shellOwned={task.agent === "shell"}
         key={`${task.id}-${runCount}`}
         onInput={onInput}
         onResize={onResize}

@@ -7,6 +7,32 @@ import { IS_MAC_WEBKIT } from "../platform";
 import type { ThemeVariant } from "../types";
 import { terminalLinkHandler } from "./terminalLinkHandler";
 import { scrollJumpForKey } from "../shortcuts";
+
+/** 关掉鼠标上报（普通 / button-event / any-event）+ 焦点上报 + 各种编码。
+ *
+ *  为什么要复位：鼠标上报是**应用程序**（Claude / Codex / kimi 这类 TUI）开的，它退出时若
+ *  没关掉，终端就还开着上报模式 —— xterm 会持续把鼠标移动编码后送进 PTY，而当前程序
+ *  （shell 之类）把它当输入就地画在屏幕上，鼠标一动就刷一屏 `^[[<35;39;13M`（实测 PTY 探针：
+ *  序列出现在 IN 侧、OUT 侧一条都没有 —— 所以它不是输出，画屏是行编辑器干的）。
+ *  本地写入 xterm 即可，**不进 PTY**。 */
+/**
+ * 整段就是鼠标上报（SGR `ESC [ < b ; x ; y M/m`，或经典 X10 `ESC [ M` + 3 字节）—— 可能一次来好几条。
+ * 用来在**shell 拥有**的终端里把这类输入拦掉：xterm 之所以还在发，是鼠标模式被某个 TUI 开过、
+ * 退出时没关（探针实测：这些序列全在 IN 侧往 PTY 写，OUT 侧一条没有）。
+ * 注意：只要混进了别的字节（用户真的敲了键）就返回 false —— 宁可漏拦，不能吞掉用户输入。
+ */
+export function isMouseReport(data: string): boolean {
+  if (!data.startsWith("\x1b[<") && !data.startsWith("\x1b[M")) return false;
+  // eslint-disable-next-line no-control-regex -- 要匹配的就是 ESC 本身
+  return /^(?:\x1b\[<\d+(;\d+)*[Mm]|\x1b\[M[\x20-\x7f]{3})+$/.test(data);
+}
+
+export const RESET_MOUSE_REPORTING =
+  "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l";
+
+/** 连焦点上报一起关：只给"shell 拥有"的终端用 —— 活着的 agent 自己拥有 ?1004h，
+ *  无条件关掉会让它的焦点事件失效到下次重启（Orca 的 terminal-mode-reset-profiles 同理）。 */
+export const TERMINAL_INPUT_MODE_RESET = `${RESET_MOUSE_REPORTING}\x1b[?1004l`;
 // xterm 私有字段访问的显式契约——见 xterm-private.d.ts 头部说明。
 import type { XTermWithPrivates } from "./xterm-private";
 

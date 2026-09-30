@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Eraser } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -64,6 +64,8 @@ import {
   refreshTerminalDisplay,
   unregisterActiveTerminal,
   attachTerminalScrollShortcuts,
+  TERMINAL_INPUT_MODE_RESET,
+  isMouseReport,
 } from "./terminalShared";
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
@@ -80,6 +82,8 @@ interface TerminalViewProps {
   terminalScrollback: TerminalScrollback;
   monoFontFamily: FontFamily;
   isActive?: boolean;
+  /** 这个终端是 shell 拥有的（纯终端任务）—— 鼠标上报复位只对它做 */
+  shellOwned?: boolean;
   initialData?: string;
   initialSnapshot?: string;
   onSnapshot?: (snapshot: string) => void;
@@ -95,6 +99,7 @@ export function TerminalView({
   terminalScrollback,
   monoFontFamily,
   isActive = true,
+  shellOwned = false,
   initialData,
   initialSnapshot,
   onSnapshot,
@@ -168,6 +173,14 @@ export function TerminalView({
     const disposeInputFix = attachMacWebKitShiftInputFix(term);
     const webglHandle = loadWebglAddon(term);
 
+    // 兜底复位鼠标上报模式：上一个占用这块终端的 TUI 可能没关掉就退出了
+    // 只对「shell 拥有」的终端复位鼠标上报：模式是某个 TUI 开的、它没了以后没人消费上报，
+    // 鼠标一动就被 shell 的行编辑器画成 `35;42;13M` 之类垃圾（Orca: 02272febf1）。
+    // 活着的 agent（claude/codex/kimi）自己要用鼠标，不能动它的模式。
+    if (shellOwned) {
+      term.write(TERMINAL_INPUT_MODE_RESET);
+    }
+
     const size = safeFit(fitAddon, term, container);
     if (size) {
       notifiedSizeRef.current = { cols: size.cols, rows: size.rows };
@@ -224,7 +237,13 @@ export function TerminalView({
     // 必须挂在 attachMacWebKitTerminalGuard 之后:guard 的 pointerup(恢复
     // textarea + refocus)先按注册顺序执行,复制动作发生在防线状态复原之后。
     const disposeCopyOnSelect = attachCopyOnSelect(term, container);
-    const linuxIME = term.onData((data) => onInputRef.current(data));
+    const linuxIME = term.onData((data) => {
+      // shell 拥有的终端里，鼠标上报只会被 shell 的行编辑器画成 `35;42;13M` 那样的垃圾
+      // （探针实测：这些序列全在 IN 侧）。xterm 还在发是因为鼠标模式被某个 TUI 开过没关 ——
+      // 拦在输入侧是确定性生效的兜底；agent 任务不过滤，TUI 自己要鼠标。
+      if (shellOwned && isMouseReport(data)) return;
+      onInputRef.current(data);
+    });
     const disposeOnData = { dispose: () => linuxIME.dispose() };
 
     const handlePointerDown = (e: PointerEvent) => {
@@ -433,6 +452,15 @@ export function TerminalView({
           onClick={() => terminalRef.current?.scrollToBottom()}
         >
           <ChevronDown size={13} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          style={scrollJumpBtnStyle}
+          title="复位终端（清掉残留的鼠标上报等模式）"
+          aria-label="复位终端"
+          onClick={() => terminalRef.current?.write(TERMINAL_INPUT_MODE_RESET)}
+        >
+          <Eraser size={13} strokeWidth={2.2} />
         </button>
       </div>
     </div>

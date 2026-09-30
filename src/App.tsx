@@ -880,6 +880,8 @@ function App() {
         updateTaskStatus(task_id, status, undefined, failure_reason);
         if (!isActiveTaskStatus(status)) {
           tm.removeTaskBuffers([task_id]);
+          // 进程没了：此时关掉鼠标上报模式绝对安全（不然下次在这个终端里起 shell 就会被刷）
+          tm.resetTerminalInputModes(task_id);
         }
         if (status === "done") scheduleForDoneTask(task_id);
       },
