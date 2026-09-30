@@ -1,3 +1,4 @@
+import type { IMarker } from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
@@ -804,6 +805,49 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
 const MIN_TRUSTED_COLS = 20;
 const MIN_TRUSTED_ROWS = 5;
 
+/**
+ * 视口锚点：fit 会触发整段 scrollback 重排，重排后滚动位置会漂 —— 用户往上翻看历史时
+ * 一缩放就被甩走。xterm 的 marker 会跟着重排走，所以在视口顶行打一个 marker，fit 完
+ * 按它的新位置滚回去；本来就在底部（跟随最新输出）的就继续贴底。
+ * 做法对齐 Orca 的 pane-scroll（captureScrollState / restoreScrollStateAfterFit）。
+ */
+export interface ScrollAnchor {
+  /** fit 前是否贴在底部 */
+  atBottom: boolean;
+  /** 视口顶行的 marker；底部或备用屏（全屏 TUI）时为 null。
+   *  必须留对象本身 —— marker.line 是 fit 之后才更新的，提前读就是旧值。 */
+  marker: IMarker | null;
+}
+
+export function captureScrollAnchor(term: Terminal): ScrollAnchor {
+  const buf = term.buffer.active;
+  const atBottom = buf.viewportY >= buf.baseY;
+  // 备用屏（Claude Code / Codex 这类全屏 TUI）没有滚动历史，也不需要恢复
+  if (atBottom || buf.type !== "normal" || typeof term.registerMarker !== "function") {
+    return { atBottom, marker: null };
+  }
+  // marker 的偏移是相对光标的：视口顶行相对光标所在行的差值
+  const marker = term.registerMarker(buf.viewportY - (buf.baseY + buf.cursorY)) ?? null;
+  return { atBottom, marker };
+}
+
+export function restoreScrollAnchor(term: Terminal, anchor: ScrollAnchor): void {
+  try {
+    if (anchor.atBottom) {
+      term.scrollToBottom();
+      return;
+    }
+    const line = anchor.marker?.line;
+    if (typeof line === "number" && Number.isFinite(line)) {
+      term.scrollToLine(Math.max(0, line));
+    }
+  } catch {
+    /* 视口恢复失败不该影响 fit 本身 */
+  } finally {
+    anchor.marker?.dispose();
+  }
+}
+
 export function safeFit(
   fitAddon: FitAddon,
   term: Terminal,
@@ -820,7 +864,10 @@ export function safeFit(
     // 画了首屏（用户看到的是"最上面很窄"，之后要等下一次尺寸变化才重排）。
     if (dims.cols < MIN_TRUSTED_COLS || dims.rows < MIN_TRUSTED_ROWS) return null;
     if (dims.cols < 2 || dims.rows < 2) return null;
+    // fit 会重排 scrollback：先记视口位置，fit 完按 marker 的新位置滚回去
+    const anchor = captureScrollAnchor(term);
     fitAddon.fit();
+    restoreScrollAnchor(term, anchor);
     return { cols: term.cols, rows: term.rows };
   } catch {
     return null;
