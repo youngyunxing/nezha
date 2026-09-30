@@ -2947,4 +2947,32 @@ mod kimi_parse_tests {
         assert_eq!(texts(&messages), vec![("user".to_string(), "还在".to_string())]);
     }
 
+
+    /// 临时：用真实索引验证延迟绑定能不能找回 12:56 那个 kimi 会话（跑完即删）
+    #[test]
+    fn probe_find_kimi_session() {
+        // 任务 1790744178155 建于 12:56:18.155（epoch ms 1790744178155）
+        for since in [1790744173000i64, 0i64] {
+            let r = find_kimi_session("/Users/apple/Downloads", since);
+            println!("since={} -> {:?}", since, r);
+        }
+        // 逐个候选看为什么被跳过
+        let home = kimi_home().unwrap();
+        for line in fs::read_to_string(home.join("session_index.jsonl")).unwrap().lines().rev() {
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+            let dir = Path::new(v.get("sessionDir").and_then(|x| x.as_str()).unwrap_or(""));
+            let state = fs::read_to_string(dir.join("state.json")).ok();
+            let created = state.as_deref()
+                .and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok())
+                .and_then(|s| s.get("createdAt").and_then(|x| x.as_i64()));
+            println!(
+                "{} workDir={:?} createdAt_raw={:?} as_i64={:?} wire_exists={}",
+                v.get("sessionId").and_then(|x| x.as_str()).unwrap_or("-"),
+                v.get("workDir"),
+                state.as_deref().and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok()).and_then(|s| s.get("createdAt").cloned()),
+                created,
+                kimi_wire_path(dir).is_file(),
+            );
+        }
+    }
 }

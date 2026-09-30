@@ -919,7 +919,11 @@ pub async fn run_task(
     );
 
     // hook 可信时不创建 session 转发通道,也不拉起轮询 watcher。
-    let session_tx = if use_hooks {
+    // kimi 同理跳过：这条轮询是给 claude/codex 找会话文件用的 —— 它会往 PTY 里敲 `/status`
+    // 找会话 id，而 kimi 既没有 `/status` 也不是按项目分目录存会话：既会污染终端输入，
+    // 又可能把同项目下别人的 claude 会话认成这个 kimi 任务的（会话来源见 session.rs 的
+    // spawn_kimi_session_watcher，走 session_index.jsonl）。
+    let session_tx = if use_hooks || agent == "kimi" {
         None
     } else {
         let (session_tx, session_rx) = std::sync::mpsc::channel::<String>();

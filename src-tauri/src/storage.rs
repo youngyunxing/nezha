@@ -40,6 +40,10 @@ pub struct ProjectAvatar {
     pub label: Option<String>,
 }
 
+/// 任务落盘用的 DTO。**字段必须与前端 `src/types.ts` 的 `Task` 一一对应** ——
+/// 前端把整个任务对象发过来，serde 默认丢弃认不出的字段，这里少写一个字段就等于
+/// 「存得下、读不回」，而且不报错（kimiSessionId 就这么丢过一次）。
+/// 对齐检查见本文件 tests::dto_fields_match_frontend_task（会直接比对 `src/types.ts`）。
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Task {
     pub id: String,
@@ -66,6 +70,17 @@ pub struct Task {
     pub codex_session_id: Option<String>,
     #[serde(rename = "codexSessionPath", skip_serializing_if = "Option::is_none")]
     pub codex_session_path: Option<String>,
+    #[serde(rename = "kimiSessionId", skip_serializing_if = "Option::is_none")]
+    pub kimi_session_id: Option<String>,
+    #[serde(rename = "kimiSessionPath", skip_serializing_if = "Option::is_none")]
+    pub kimi_session_path: Option<String>,
+    /// 纯终端任务要跑的命令（快捷按钮带来）。不落盘的话，重启后「重新开始」会退化成
+    /// 一个空 shell。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// fork 出来的任务记着源会话 id：自己的 transcript 是空的时要靠它再 fork 一次。
+    #[serde(rename = "forkedFromSessionId", skip_serializing_if = "Option::is_none")]
+    pub forked_from_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub starred: Option<bool>,
     #[serde(rename = "failureReason", skip_serializing_if = "Option::is_none")]
@@ -284,4 +299,121 @@ pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
         let _ = fs::remove_file(&tmp);
         e.to_string()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Task;
+
+    /// 从 `export interface Task { ... }` 里抠出字段名（够用的行级解析，不引正则）。
+    fn frontend_task_fields(source: &str) -> Vec<String> {
+        let start = source
+            .find("export interface Task {")
+            .expect("src/types.ts 里找不到 `export interface Task`");
+        let rest = &source[start..];
+        let end = rest.find("\n}").expect("Task 接口没有闭合");
+        rest[..end]
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                let name: String = line
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if name.is_empty() {
+                    return None;
+                }
+                let after = line[name.len()..].trim_start();
+                let after = after.strip_prefix('?').unwrap_or(after).trim_start();
+                after.starts_with(':').then_some(name)
+            })
+            .collect()
+    }
+
+    /// 从 `pub struct Task { ... }` 里抠出**发给前端的 JSON key**（serde rename 优先）。
+    fn rust_task_fields(source: &str) -> Vec<String> {
+        let start = source.find("pub struct Task {").expect("找不到 `pub struct Task`");
+        let rest = &source[start..];
+        let end = rest.find("\n}").expect("Task 结构体没有闭合");
+        let mut fields = Vec::new();
+        let mut renamed: Option<String> = None;
+        for line in rest[..end].lines() {
+            let line = line.trim();
+            if let Some(pos) = line.find("rename = \"") {
+                let tail = &line[pos + 10..];
+                if let Some(quote) = tail.find('"') {
+                    renamed = Some(tail[..quote].to_string());
+                }
+                continue;
+            }
+            if let Some(stripped) = line.strip_prefix("pub ") {
+                if let Some(colon) = stripped.find(':') {
+                    fields.push(renamed.take().unwrap_or_else(|| stripped[..colon].to_string()));
+                }
+            }
+        }
+        fields
+    }
+
+    /// 前端把整个任务对象发给 save_project_tasks，serde 对认不出的字段**静默丢弃** ——
+    /// DTO 少写一个字段就是「存得下、读不回」，而且一声不响。kimiSessionId / kimiSessionPath
+    /// 就这么整对丢过：表现是重启后 kimi 任务没有会话 id，回放和恢复都用不了。
+    #[test]
+    fn dto_fields_match_frontend_task() {
+        // 前端类型在仓库根的 src/，本文件在 src-tauri/src/
+        let frontend_src = concat!(env!("CARGO_MANIFEST_DIR"), "/../src/types.ts");
+        let types = std::fs::read_to_string(frontend_src).unwrap();
+        let storage = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/storage.rs")).unwrap();
+
+        let mut frontend = frontend_task_fields(&types);
+        // 启动加载任务时由后端重新算的字段（见 App.tsx 里拿子进程表算 processAlive），故意不落盘
+        frontend.retain(|field| field != "processAlive");
+        frontend.sort();
+
+        let mut dto = rust_task_fields(&storage);
+        dto.sort();
+
+        assert_eq!(dto, frontend, "storage::Task 的字段必须与 types.ts 的 Task 一一对应");
+    }
+
+    #[test]
+    fn dto_keeps_all_three_agents_sessions() {
+        let storage = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/storage.rs")).unwrap();
+        let fields = rust_task_fields(&storage);
+        for field in [
+            "claudeSessionId",
+            "claudeSessionPath",
+            "codexSessionId",
+            "codexSessionPath",
+            "kimiSessionId",
+            "kimiSessionPath",
+        ] {
+            assert!(fields.contains(&field.to_string()), "落盘 DTO 少了 {}", field);
+        }
+    }
+
+    /// 前端发来的任务对象 → 落盘 → 读回，字段一个都不能少。
+    /// （serde 会**静默丢弃**认不出的字段，少写一个字段就是「存得下、读不回」。）
+    #[test]
+    fn task_round_trip_keeps_every_session_field() {
+        let raw = r#"{
+            "id": "1", "projectId": "p", "prompt": "",
+            "agent": "kimi", "permissionMode": "full_access", "status": "idle",
+            "createdAt": 1, "updatedAt": 2, "attentionRequestedAt": 3,
+            "claudeSessionId": "c", "claudeSessionPath": "/c.jsonl",
+            "codexSessionId": "x", "codexSessionPath": "/x.jsonl",
+            "kimiSessionId": "session_k", "kimiSessionPath": "/k/agents/main/wire.jsonl",
+            "command": "pnpm test", "forkedFromSessionId": "src-session",
+            "worktreePath": "/wt", "worktreeBranch": "b", "worktreeRepo": "/repo",
+            "baseBranch": "dev", "worktreeDiscarded": true,
+            "starred": true, "failureReason": "boom", "additions": 1, "deletions": 2
+        }"#;
+
+        let task: Task = serde_json::from_str(raw).unwrap();
+        let back: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&task).unwrap()).unwrap();
+        let original: serde_json::Value = serde_json::from_str(raw).unwrap();
+
+        assert_eq!(back, original, "落盘一趟回来字段必须完全一致");
+    }
 }
