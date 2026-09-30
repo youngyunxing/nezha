@@ -1,5 +1,5 @@
 import { useState, memo } from "react";
-import { Trash2, Star, GitBranch, Terminal } from "lucide-react";
+import { Trash2, Star, GitBranch, Moon, Terminal } from "lucide-react";
 import type { Task } from "../../types";
 import { StatusIcon } from "../StatusIcon";
 import { useI18n } from "../../i18n";
@@ -110,7 +110,9 @@ export const TaskListItem = memo(
                 : t("terminal.title")
               : task.agent === "claude"
                 ? "Claude Code"
-                : "Codex"
+                : task.agent === "kimi"
+                  ? "Kimi"
+                  : "Codex"
           }
           style={{
             ...s.agentBadge,
@@ -125,6 +127,8 @@ export const TaskListItem = memo(
         >
           {task.agent === "shell" ? (
             <Terminal size={13} strokeWidth={2} color="var(--text-muted)" />
+          ) : task.agent === "kimi" ? (
+            <Moon size={13} strokeWidth={2} color="var(--text-muted)" />
           ) : (
             <img
               src={task.agent === "claude" ? claudeLogo : chatgptLogo}
