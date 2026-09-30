@@ -20,13 +20,14 @@ export interface HookInstallStatus {
   script_path: string;
   claude_installed: boolean;
   codex_installed: boolean;
+  kimi_installed: boolean;
   error?: string;
 }
 
 export type HookReadinessReason = "ok" | "no_node" | "not_installed" | "version_too_low";
 
 export interface HookAgentReadiness {
-  agent: "claude" | "codex";
+  agent: "claude" | "codex" | "kimi";
   usable: boolean;
   reason: HookReadinessReason;
   detectedVersion: string;

@@ -2566,7 +2566,7 @@ mod tests {
 // ── Kimi 会话发现（延迟绑定）────────────────────────────────────────────────────
 
 /// kimi 的 home：`KIMI_CODE_HOME` 优先，否则 `~/.kimi-code`（与 CLI 自身解析一致）。
-fn kimi_home() -> Option<PathBuf> {
+pub(crate) fn kimi_home() -> Option<PathBuf> {
     if let Ok(dir) = std::env::var("KIMI_CODE_HOME") {
         let trimmed = dir.trim();
         if !trimmed.is_empty() {
@@ -2736,6 +2736,23 @@ pub(crate) fn spawn_kimi_status_watcher(app: AppHandle, task_id: String, wire_pa
             thread::sleep(Duration::from_millis(1200));
         }
     });
+}
+
+/// 用 session_id（= 会话目录名）反查它的 wire.jsonl，不依赖 session_index.jsonl
+/// —— 那个索引会被裁剪，而目录名本身就是 id。
+pub(crate) fn kimi_wire_path_by_id(session_id: &str) -> Option<PathBuf> {
+    let root = kimi_sessions_root()?;
+    for wd in fs::read_dir(&root).ok()?.flatten() {
+        let dir = wd.path().join(session_id);
+        if !dir.is_dir() {
+            continue;
+        }
+        let wire = kimi_wire_path(&dir);
+        if wire.is_file() {
+            return Some(wire);
+        }
+    }
+    None
 }
 
 /// 恢复 kimi 会话时只知道 session_id（会话目录名），用它反查 wire.jsonl 路径。
@@ -2947,32 +2964,4 @@ mod kimi_parse_tests {
         assert_eq!(texts(&messages), vec![("user".to_string(), "还在".to_string())]);
     }
 
-
-    /// 临时：用真实索引验证延迟绑定能不能找回 12:56 那个 kimi 会话（跑完即删）
-    #[test]
-    fn probe_find_kimi_session() {
-        // 任务 1790744178155 建于 12:56:18.155（epoch ms 1790744178155）
-        for since in [1790744173000i64, 0i64] {
-            let r = find_kimi_session("/Users/apple/Downloads", since);
-            println!("since={} -> {:?}", since, r);
-        }
-        // 逐个候选看为什么被跳过
-        let home = kimi_home().unwrap();
-        for line in fs::read_to_string(home.join("session_index.jsonl")).unwrap().lines().rev() {
-            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
-            let dir = Path::new(v.get("sessionDir").and_then(|x| x.as_str()).unwrap_or(""));
-            let state = fs::read_to_string(dir.join("state.json")).ok();
-            let created = state.as_deref()
-                .and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok())
-                .and_then(|s| s.get("createdAt").and_then(|x| x.as_i64()));
-            println!(
-                "{} workDir={:?} createdAt_raw={:?} as_i64={:?} wire_exists={}",
-                v.get("sessionId").and_then(|x| x.as_str()).unwrap_or("-"),
-                v.get("workDir"),
-                state.as_deref().and_then(|t| serde_json::from_str::<serde_json::Value>(t).ok()).and_then(|s| s.get("createdAt").cloned()),
-                created,
-                kimi_wire_path(dir).is_file(),
-            );
-        }
-    }
 }

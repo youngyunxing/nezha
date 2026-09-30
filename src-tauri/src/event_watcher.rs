@@ -202,10 +202,24 @@ fn handle_session_start(app: &AppHandle, ev: &HookEvent) {
         return;
     }
     let tm = app.state::<TaskManager>();
-    let session_path = ev.transcript_path.clone();
+    // kimi 的 hook payload 不带 transcript_path，用 session_id（会话目录名）反查它自己的
+    // wire.jsonl —— 回放和 token 统计都读这个文件。
+    let session_path = if ev.agent == "kimi" {
+        crate::session::kimi_wire_path_by_id(&ev.session_id)
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    } else {
+        ev.transcript_path.clone()
+    };
 
     // 已注册过且 session_id 一致则跳过,避免重复 emit
     let already = match ev.agent.as_str() {
+        "kimi" => tm
+            .kimi_sessions
+            .lock()
+            .get(&ev.task_id)
+            .map(|info| info.session_id == ev.session_id)
+            .unwrap_or(false),
         "codex" => tm
             .codex_sessions
             .lock()
@@ -225,6 +239,14 @@ fn handle_session_start(app: &AppHandle, ev: &HookEvent) {
 
     if ev.agent == "codex" {
         tm.codex_sessions.lock().insert(
+            ev.task_id.clone(),
+            CodexSessionInfo {
+                session_id: ev.session_id.clone(),
+                session_path: session_path.clone(),
+            },
+        );
+    } else if ev.agent == "kimi" {
+        tm.kimi_sessions.lock().insert(
             ev.task_id.clone(),
             CodexSessionInfo {
                 session_id: ev.session_id.clone(),

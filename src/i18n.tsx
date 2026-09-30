@@ -29,6 +29,8 @@ const translations: Record<string, string> = {
   "appSettings.hooks.claudeMissing": "Claude Code hook 未安装",
   "appSettings.hooks.codexInstalled": "Codex hook 已安装",
   "appSettings.hooks.codexMissing": "Codex hook 未安装",
+  "appSettings.hooks.kimiInstalled": "Kimi hook 已安装",
+  "appSettings.hooks.kimiMissing": "Kimi hook 未安装",
   "appSettings.hooks.effective": "已生效 — {agent} {detected} ≥ {min}",
   "appSettings.hooks.versionLow": "已回退轮询 — {agent} {detected} < {min}",
   "appSettings.hooks.error": "安装错误:{message}",

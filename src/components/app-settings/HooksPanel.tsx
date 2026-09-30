@@ -34,6 +34,7 @@ export function HooksPanel() {
         script_path: "",
         claude_installed: false,
         codex_installed: false,
+        kimi_installed: false,
         error: String(err),
       });
     }
@@ -57,6 +58,7 @@ export function HooksPanel() {
         script_path: prev?.script_path ?? "",
         claude_installed: false,
         codex_installed: false,
+        kimi_installed: false,
         error: String(err),
       }));
     } finally {
@@ -76,15 +78,17 @@ export function HooksPanel() {
 
   const nodeOk = !!status?.node_path;
   const busy = action !== "idle";
-  const uninstallDisabled = busy || (!status?.claude_installed && !status?.codex_installed);
+  const uninstallDisabled =
+    busy || (!status?.claude_installed && !status?.codex_installed && !status?.kimi_installed);
 
   // 已安装 + 有 node 后,额外展示版本是否达到 hook 门槛(生效 / 已回退轮询)。
-  const renderVersionLine = (agentKey: "claude" | "codex", installed: boolean) => {
+  const renderVersionLine = (agentKey: "claude" | "codex" | "kimi", installed: boolean) => {
     const r = readiness.find((x) => x.agent === agentKey);
     if (!r || !installed || r.reason === "no_node" || r.reason === "not_installed") {
       return null;
     }
-    const agentName = agentKey === "claude" ? "Claude Code" : "Codex";
+    const agentName =
+      agentKey === "claude" ? "Claude Code" : agentKey === "kimi" ? "Kimi" : "Codex";
     const ok = r.usable;
     return (
       <div style={s.hooksPanelSubRow}>
@@ -146,6 +150,15 @@ export function HooksPanel() {
           </span>
         </div>
         {renderVersionLine("codex", !!status?.codex_installed)}
+        <div style={s.hooksPanelRow}>
+          <StatusIcon ok={!!status?.kimi_installed} />
+          <span>
+            {status?.kimi_installed
+              ? t("appSettings.hooks.kimiInstalled")
+              : t("appSettings.hooks.kimiMissing")}
+          </span>
+        </div>
+        {renderVersionLine("kimi", !!status?.kimi_installed)}
         {status?.error ? (
           <div style={s.hooksPanelErrorRow}>
             <AlertCircle size={14} />

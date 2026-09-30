@@ -38,6 +38,12 @@ const NEZHA_MARKER_FIELD: &str = "_nezha_managed";
 const CODEX_BEGIN: &str = "# >>> nezha-managed-begin (do not edit; managed by Nezha) >>>";
 const CODEX_END: &str = "# <<< nezha-managed-end <<<";
 
+const KIMI_BEGIN: &str = "# >>> nezha-managed-kimi-begin (do not edit; managed by Nezha) >>>";
+const KIMI_END: &str = "# <<< nezha-managed-kimi-end <<<";
+/// kimi 的 hook 超时（秒）。脚本平时是空跑（NEZHA_TASK_ID 缺失直接退出），
+/// 这个值只是防止某个 hook 卡住 kimi 的会话循环。
+const KIMI_HOOK_TIMEOUT_SECS: u32 = 10;
+
 const CLAUDE_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
@@ -47,6 +53,19 @@ const CLAUDE_EVENTS: &[&str] = &[
     "PostToolUse",
     "Stop",
     "SubagentStop",
+];
+
+/// kimi 的 hook 事件（`~/.kimi-code/config.toml` 的 `[[hooks]]` 表）。
+/// 与 claude/codex 同名的那几个事件在 event_watcher 里走同一套状态映射；
+/// `SessionStart` 的 payload 带 `session_id`，这是 kimi 唯一可靠的会话 id 来源
+/// （实测 2026-09-30，kimi 2.1.1），有了它就不必再轮询 session_index.jsonl。
+const KIMI_EVENTS: &[&str] = &[
+    "SessionStart",
+    "UserPromptSubmit",
+    "PermissionRequest",
+    // 与 CLAUDE_EVENTS 的 PostToolUse 同理：审批通过后把 input_required 复位回 running
+    "PostToolUse",
+    "Stop",
 ];
 
 const CODEX_EVENTS: &[&str] = &[
@@ -65,6 +84,8 @@ pub struct HookInstallStatus {
     pub script_path: String,
     pub claude_installed: bool,
     pub codex_installed: bool,
+    #[serde(default)]
+    pub kimi_installed: bool,
     /// 安装期间发生的错误说明(展示给用户,可选)
     #[serde(skip_serializing_if = "String::is_empty", default)]
     pub error: String,
@@ -94,6 +115,12 @@ pub fn events_dir_for(task_id: &str) -> Result<PathBuf, String> {
 
 fn claude_settings_path() -> Result<PathBuf, String> {
     Ok(home_dir()?.join(".claude").join("settings.json"))
+}
+
+fn kimi_config_path() -> Result<PathBuf, String> {
+    crate::session::kimi_home()
+        .map(|home| home.join("config.toml"))
+        .ok_or_else(|| "Cannot resolve kimi home".to_string())
 }
 
 fn codex_config_path() -> Result<PathBuf, String> {
@@ -319,10 +346,30 @@ fn toml_quote(s: &str) -> String {
     out
 }
 
-/// 将 Nezha 块写入(或更新)指定 TOML 内容。
-fn inject_codex_text(existing: &str, node_path: &str, script: &str) -> String {
-    let block = build_codex_block(node_path, script);
-    if let (Some(begin), Some(end)) = (existing.find(CODEX_BEGIN), existing.find(CODEX_END)) {
+/// kimi 的 hooks 块：每个事件一张 `[[hooks]]` 表。
+///
+/// 不写 `matcher`：kimi 把它当正则解析（Claude 惯用的字面量 `*` 在 kimi 会报错），
+/// 而缺省本来就匹配全部工具。
+fn build_kimi_block(script: &str) -> String {
+    let command = toml_quote(&hook_command(script));
+    let mut out = String::new();
+    out.push_str(KIMI_BEGIN);
+    out.push('\n');
+    for event in KIMI_EVENTS {
+        out.push_str("[[hooks]]\n");
+        out.push_str(&format!("event = \"{}\"\n", event));
+        out.push_str(&format!("command = {}\n", command));
+        out.push_str(&format!("timeout = {}\n", KIMI_HOOK_TIMEOUT_SECS));
+        out.push('\n');
+    }
+    out.push_str(KIMI_END);
+    out.push('\n');
+    out
+}
+
+/// 将 Nezha 块写入(或更新)指定 TOML 内容（codex / kimi 共用）。
+fn inject_toml_block(existing: &str, begin_marker: &str, end_marker: &str, block: &str) -> String {
+    if let (Some(begin), Some(end)) = (existing.find(begin_marker), existing.find(end_marker)) {
         if begin < end {
             let end_line_end = existing[end..]
                 .find('\n')
@@ -358,9 +405,19 @@ fn inject_codex_text(existing: &str, node_path: &str, script: &str) -> String {
     out
 }
 
-/// 从 TOML 内容里移除 Nezha 块。
-fn uninject_codex_text(existing: &str) -> String {
-    let (Some(begin), Some(end)) = (existing.find(CODEX_BEGIN), existing.find(CODEX_END)) else {
+fn inject_codex_text(existing: &str, node_path: &str, script: &str) -> String {
+    let block = build_codex_block(node_path, script);
+    inject_toml_block(existing, CODEX_BEGIN, CODEX_END, &block)
+}
+
+fn inject_kimi_text(existing: &str, script: &str) -> String {
+    let block = build_kimi_block(script);
+    inject_toml_block(existing, KIMI_BEGIN, KIMI_END, &block)
+}
+
+/// 从 TOML 内容里移除 Nezha 块（codex / kimi 共用）。
+fn uninject_toml_block(existing: &str, begin_marker: &str, end_marker: &str) -> String {
+    let (Some(begin), Some(end)) = (existing.find(begin_marker), existing.find(end_marker)) else {
         return existing.to_string();
     };
     if begin >= end {
@@ -390,6 +447,44 @@ fn uninject_codex_text(existing: &str) -> String {
         out.push('\n');
     }
     out
+}
+
+fn uninject_codex_text(existing: &str) -> String {
+    uninject_toml_block(existing, CODEX_BEGIN, CODEX_END)
+}
+
+fn uninject_kimi_text(existing: &str) -> String {
+    uninject_toml_block(existing, KIMI_BEGIN, KIMI_END)
+}
+
+/// 把 kimi 的 hooks 块写进 `~/.kimi-code/config.toml`。
+/// 用户的既有配置（default_model / providers / 自己的 hooks）一律不动，只替换自己的块。
+fn inject_kimi_config_at(path: &Path, script: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create {}: {}", parent.display(), e))?;
+    }
+    let existing = if path.exists() {
+        fs::read_to_string(path).map_err(|e| e.to_string())?
+    } else {
+        String::new()
+    };
+    let updated = inject_kimi_text(&existing, script);
+    // kimi 自己会解析这个文件，写坏了它的 CLI 就起不来 —— 先校验
+    toml::from_str::<toml::Value>(&updated)
+        .map_err(|e| format!("Nezha-injected kimi TOML parse error: {}", e))?;
+    atomic_write(path, &updated)
+}
+
+fn uninject_kimi_config_at(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let existing = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let updated = uninject_kimi_text(&existing);
+    if updated == existing {
+        return Ok(());
+    }
+    atomic_write(path, &updated)
 }
 
 fn inject_codex_config_at(path: &Path, node_path: &str, script: &str) -> Result<(), String> {
@@ -454,6 +549,10 @@ fn readiness_for(agent: &str, status: &HookInstallStatus) -> HookAgentReadiness 
             CODEX_HOOK_MIN_VERSION,
             crate::app_settings::detect_codex_version().unwrap_or_default(),
         )
+    } else if agent == "kimi" {
+        // kimi 不设版本门槛：本机 2.1.1 实测 SessionStart 就带 session_id，
+        // 没见过不支持 hook 的版本（claude/codex 的 hook 是中途才加的，才需要卡版本）。
+        (status.kimi_installed, "", String::new())
     } else {
         (
             status.claude_installed,
@@ -462,12 +561,16 @@ fn readiness_for(agent: &str, status: &HookInstallStatus) -> HookAgentReadiness 
         )
     };
 
-    let version_ok = !detected.is_empty()
-        && if agent == "codex" {
-            crate::app_settings::codex_version_gte(min_version)
-        } else {
-            crate::app_settings::claude_version_gte(min_version)
-        };
+    let version_ok = if agent == "kimi" {
+        true
+    } else {
+        !detected.is_empty()
+            && if agent == "codex" {
+                crate::app_settings::codex_version_gte(min_version)
+            } else {
+                crate::app_settings::claude_version_gte(min_version)
+            }
+    };
 
     let reason = if status.node_path.is_empty() {
         "no_node"
@@ -500,6 +603,8 @@ pub fn usable_for(agent: &str) -> bool {
     }
     if agent == "codex" {
         status.codex_installed && crate::app_settings::codex_version_gte(CODEX_HOOK_MIN_VERSION)
+    } else if agent == "kimi" {
+        status.kimi_installed
     } else {
         status.claude_installed && crate::app_settings::claude_version_gte(CLAUDE_HOOK_MIN_VERSION)
     }
@@ -552,6 +657,19 @@ pub fn ensure_installed() -> HookInstallStatus {
         }
     }
 
+    // Kimi:没有 JSON settings 可复用，只能往它自己的 ~/.kimi-code/config.toml 里
+    // 追加一段带 marker 的 `[[hooks]]` 块（用户配置原样保留）。
+    match kimi_config_path().and_then(|p| inject_kimi_config_at(&p, &script)) {
+        Ok(_) => status.kimi_installed = true,
+        Err(e) => {
+            if status.error.is_empty() {
+                status.error = format!("kimi config: {}", e);
+            } else {
+                status.error = format!("{}; kimi config: {}", status.error, e);
+            }
+        }
+    }
+
     status
 }
 
@@ -570,6 +688,7 @@ pub fn uninstall() -> Result<(), String> {
             .unwrap_or_default(),
         claude_installed: false,
         codex_installed: false,
+        kimi_installed: false,
         error: String::new(),
     });
     regenerate_claude_settings()?;
@@ -577,6 +696,8 @@ pub fn uninstall() -> Result<(), String> {
     uninject_claude_settings_at(&claude)?;
     let codex = codex_config_path()?;
     uninject_codex_config_at(&codex)?;
+    let kimi = kimi_config_path()?;
+    uninject_kimi_config_at(&kimi)?;
     Ok(())
 }
 
@@ -598,6 +719,9 @@ pub fn current_status() -> HookInstallStatus {
     }
     if let Ok(p) = codex_config_path() {
         status.codex_installed = codex_config_has_nezha(&p);
+    }
+    if let Ok(p) = kimi_config_path() {
+        status.kimi_installed = kimi_config_has_nezha(&p);
     }
     status
 }
@@ -622,6 +746,13 @@ fn codex_config_has_nezha(path: &Path) -> bool {
     raw.contains(CODEX_BEGIN) && raw.contains(CODEX_END)
 }
 
+fn kimi_config_has_nezha(path: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return false;
+    };
+    raw.contains(KIMI_BEGIN) && raw.contains(KIMI_END)
+}
+
 // ── Tauri 命令 ──────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -642,6 +773,7 @@ pub async fn get_hook_readiness() -> Result<Vec<HookAgentReadiness>, String> {
         vec![
             readiness_for("claude", &status),
             readiness_for("codex", &status),
+            readiness_for("kimi", &status),
         ]
     })
     .await
@@ -858,5 +990,42 @@ command = \"echo user-stop\"\n";
         assert!(!raw.contains(CODEX_BEGIN));
 
         let _ = fs::remove_file(&tmp);
+    }
+}
+
+#[cfg(test)]
+mod kimi_block_tests {
+    use super::*;
+
+    /// 注入是幂等的：重复安装不能把 `[[hooks]]` 表复制成两份。
+    #[test]
+    fn kimi_block_inject_is_idempotent() {
+        let user_config = "default_model = \"kimi-code/kimi-for-coding\"\n";
+        let once = inject_kimi_text(user_config, "/tmp/nezha-hook.mjs");
+        let twice = inject_kimi_text(&once, "/tmp/nezha-hook.mjs");
+        assert_eq!(once, twice);
+        assert_eq!(twice.matches(KIMI_BEGIN).count(), 1);
+        assert_eq!(twice.matches("[[hooks]]").count(), KIMI_EVENTS.len());
+        // 用户自己的配置一个字节都不能动
+        assert!(twice.starts_with(user_config));
+        // 必须是合法 TOML，否则 kimi 自己起不来
+        toml::from_str::<toml::Value>(&twice).expect("injected kimi TOML must parse");
+    }
+
+    /// 卸载要还原成原样（只剥掉自己的块）。
+    #[test]
+    fn kimi_block_uninject_restores_user_config() {
+        let user_config = "default_model = \"kimi-code/kimi-for-coding\"\n";
+        let injected = inject_kimi_text(user_config, "/tmp/nezha-hook.mjs");
+        let restored = uninject_kimi_text(&injected);
+        assert!(!restored.contains(KIMI_BEGIN));
+        assert_eq!(restored.trim_end(), user_config.trim_end());
+    }
+
+    /// SessionStart 是 kimi 拿到会话 id 的唯一入口，列表里少谁都不能少它。
+    #[test]
+    fn kimi_events_include_session_start() {
+        assert!(KIMI_EVENTS.contains(&"SessionStart"));
+        assert!(KIMI_EVENTS.contains(&"Stop"));
     }
 }

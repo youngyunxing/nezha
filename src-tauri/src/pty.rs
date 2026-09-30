@@ -907,8 +907,9 @@ pub async fn run_task(
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
 
-    if agent == "kimi" {
-        // kimi 没有预置 id 的入口：spawn 后轮询索引，按 workDir 延迟绑定本次会话
+    // kimi 没有预置 id 的入口：装了 hook 就靠 SessionStart 的 payload 立刻拿到会话 id
+    // （见 event_watcher::handle_session_start），只有 hook 不可用时才退回轮询索引。
+    if agent == "kimi" && !use_hooks {
         crate::session::spawn_kimi_session_watcher(app.clone(), task_id.clone(), project_path.clone());
     }
 
