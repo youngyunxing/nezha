@@ -967,7 +967,14 @@ function App() {
     }
   }
 
-  function invokeRunTask(task: Task, projectPath: string, images: string[], texts: string[] = []) {
+  async function invokeRunTask(
+    task: Task,
+    projectPath: string,
+    images: string[],
+    texts: string[] = [],
+  ) {
+    // 先等面板量出真实尺寸，别让 CLI 按默认 220 列画第一帧
+    await tm.waitForMeasuredSize();
     invoke("run_task", {
       taskId: task.id,
       projectPath,
@@ -1201,7 +1208,8 @@ function App() {
     }
   }
 
-  function invokeResumeTask(task: Task, project: Project, sessionId: string) {
+  async function invokeResumeTask(task: Task, project: Project, sessionId: string) {
+    await tm.waitForMeasuredSize();
     invoke("resume_task", {
       taskId: task.id,
       projectPath: task.worktreePath ?? project.path,
@@ -1386,7 +1394,8 @@ function App() {
       invokeResumeTask(task, project, session.sessionId);
   }
 
-  function invokeForkTask(task: Task, project: Project, sourceSessionId: string) {
+  async function invokeForkTask(task: Task, project: Project, sourceSessionId: string) {
+    await tm.waitForMeasuredSize();
     invoke("fork_task", {
       taskId: task.id,
       projectPath: project.path,

@@ -9,6 +9,10 @@ const MAX_BUFFER_CHUNKS = 256; // compact when chunks array exceeds this
 const DRAIN_FRAME_BUDGET = 128 * 1024; // 每帧最多处理 128KB，避免单帧写入时间过长
 /** 屏幕落盘间隔与每次保留的尾部字节数：写整份缓冲太重，留尾部足够回放出最近的屏幕。 */
 const SCREEN_SAVE_INTERVAL_MS = 15000;
+/** 终端尺寸的初始默认值；等真实尺寸最多等这么久。 */
+const DEFAULT_TERMINAL_COLS = 220;
+const DEFAULT_TERMINAL_ROWS = 50;
+const DEFAULT_SIZE_WAIT_MS = 240;
 const SCREEN_TAIL_BYTES = 256 * 1024;
 
 // ── Buffer types & helpers ───────────────────────────────────────────────────
@@ -227,6 +231,22 @@ export function useTerminalManager(options?: {
     invoke("send_input", { taskId, data }).catch(console.error);
   }, []);
 
+  /** 等终端量出真实尺寸再 spawn（最多 DEFAULT_SIZE_WAIT_MS）。
+   *  面板比 spawn 早一步就位：挂载后一帧内会 fit 并把真实 cols/rows 写进 terminalSizeRef。
+   *  不等的话，PTY 会先拿到初始默认值 220×50，CLI 就按 220 列画了第一帧 —— 那个宽度远大于
+   *  面板，会留在终端历史里（实测记录里能看到 220 / 156 / 87 / 39 六种宽度的边框线）。
+   *  已经有真实尺寸（非默认值）或超时就照常返回。 */
+  const waitForMeasuredSize = useCallback(async () => {
+    const isDefaultSize = () =>
+      terminalSizeRef.current.cols === DEFAULT_TERMINAL_COLS &&
+      terminalSizeRef.current.rows === DEFAULT_TERMINAL_ROWS;
+    if (!isDefaultSize()) return;
+    const deadline = Date.now() + DEFAULT_SIZE_WAIT_MS;
+    while (Date.now() < deadline && isDefaultSize()) {
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    }
+  }, []);
+
   /** PTY 建好之后重发一次当前尺寸。
    *  面板通常比 PTY 先就位：挂载 → fit → resize_pty，那一次会打在还没注册的 PTY 上被丢掉，
    *  于是 CLI 按默认 220×50 画了第一屏（首屏换行错乱），要等下一次尺寸变化（切走再切回）
@@ -385,6 +405,7 @@ export function useTerminalManager(options?: {
     handleInput,
     handleResize,
     reapplyTerminalSize,
+    waitForMeasuredSize,
     handleRegisterTerminal,
     seedTaskScreen,
     handleTerminalReady,
