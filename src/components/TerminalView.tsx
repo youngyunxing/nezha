@@ -298,14 +298,25 @@ export function TerminalView({
   useEffect(() => {
     if (!isActive) return;
     window.requestAnimationFrame(() => {
-      if (!fitAddonRef.current || !terminalRef.current || !containerRef.current) return;
-      const s = safeFit(fitAddonRef.current, terminalRef.current, containerRef.current);
-      if (s) {
-        notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
-        notifyResize(s.cols, s.rows);
+      const fitAddon = fitAddonRef.current;
+      const term = terminalRef.current;
+      const container = containerRef.current;
+      if (!fitAddon || !term || !container) return;
+      // 同样遵守「不缩窄」：隐藏期间容器变小了也不缩 —— 缩了就会让 CLI 在窄宽度下重排，
+      // 那正是产生窄行的原因。只有变大（或这个面板还没量过尺寸）才重新 fit。
+      const proposed = fitAddon.proposeDimensions?.();
+      const prev = notifiedSizeRef.current;
+      const wouldShrink =
+        !!proposed && !!prev && (proposed.cols < prev.cols || proposed.rows < prev.rows);
+      if (!wouldShrink) {
+        const s = safeFit(fitAddon, term, container);
+        if (s) {
+          notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
+          notifyResize(s.cols, s.rows);
+        }
       }
-      refreshTerminalDisplay(terminalRef.current);
-      terminalRef.current.focus();
+      refreshTerminalDisplay(term);
+      term.focus();
     });
   }, [isActive, notifyResize]);
 

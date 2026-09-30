@@ -242,8 +242,18 @@ export function useTerminalManager(options?: {
       terminalSizeRef.current.rows === DEFAULT_TERMINAL_ROWS;
     if (!isDefaultSize()) return;
     const deadline = Date.now() + DEFAULT_SIZE_WAIT_MS;
+    // rAF 在窗口被遮挡/隐藏时不会触发（应用的"隐藏到 Dock"、后台启动都算），
+    // 所以每一步都拿 setTimeout 兜底 —— 否则这个 await 会永远挂着，任务再也起不来。
+    const nextFrame = () =>
+      new Promise<void>((resolve) => {
+        const timer = window.setTimeout(resolve, 40);
+        window.requestAnimationFrame(() => {
+          window.clearTimeout(timer);
+          resolve();
+        });
+      });
     while (Date.now() < deadline && isDefaultSize()) {
-      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+      await nextFrame();
     }
   }, []);
 
