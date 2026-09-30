@@ -217,7 +217,7 @@ const translations: Record<string, string> = {
   "task.deleteProjectTitle": "删除项目",
   "task.deleteProjectPrompt": "把项目“{project}”从列表移除？会话记录会保留，之后重新添加这个目录即可恢复。",
   "newTask.dialogTitle": "新建任务",
-  "handoff.button": "流转",
+  "handoff.button": "流转会话",
   "handoff.title": "流转到另一个智能体",
   "handoff.description": "把当前会话（{source}）的上下文交给另一个 agent 接着做。跨 agent 没法恢复对方的会话记录，所以是把上下文原样写进新任务的提示词。",
   "handoff.target": "交给谁",
