@@ -215,7 +215,9 @@ const translations: Record<string, string> = {
   "task.deleteConfirmTitle": "确认删除？",
   "task.deleteConfirmOk": "确认",
   "task.deleteConfirmBody":
-    "删除后：终端屏幕记录会被删掉，worktree 和它里面未提交的改动会被丢弃，正在跑的会话会被停掉；任务条目不可恢复（会话文件本身还留在磁盘上）。只想收起来的话，点「归档」—— 记录、worktree、改动都保留。",
+    "删除后：终端屏幕记录会被删掉，这个任务的记录就找不回来了（会话文件本身还留在磁盘上），正在跑的会话会被停掉。\n\n建议用「归档」：记录全部保留，随时能恢复。",
+  "task.deleteConfirmBodyWorktree":
+    "删除后：终端屏幕记录会被删掉，worktree 和它里面未提交的改动会被丢弃，正在跑的会话会被停掉。\n\n建议用「归档」：记录、worktree、未提交的改动都保留，随时能恢复。",
   "task.archive": "归档",
   "task.unarchive": "恢复",
   "task.archived": "已归档",

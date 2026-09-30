@@ -59,6 +59,21 @@ describe("删除任务的确认框", () => {
     expect(handlers.onArchive).not.toHaveBeenCalled();
   });
 
+  it("worktree 任务的正文提醒未提交的改动会丢，并建议归档", () => {
+    renderDialog({
+      task: { ...task, worktreePath: "/repo/.nezha/worktrees/a", worktreeBranch: "task/a" },
+    });
+    expect(screen.getByText(/未提交的改动会被丢弃/)).toBeTruthy();
+    expect(screen.getByText(/建议用「归档」/)).toBeTruthy();
+  });
+
+  it("普通任务的正文说的是记录找不回来", () => {
+    renderDialog();
+    expect(screen.getByText(/记录就找不回来了/)).toBeTruthy();
+    expect(screen.queryByText(/未提交的改动会被丢弃/)).toBeNull();
+    expect(screen.getByText(/建议用「归档」/)).toBeTruthy();
+  });
+
   it("没有任务时不显示", () => {
     renderDialog({ task: null });
     expect(screen.queryByText("确认删除？")).toBeNull();
