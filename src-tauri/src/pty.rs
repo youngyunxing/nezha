@@ -270,6 +270,8 @@ fn setup_env(cmd: &mut CommandBuilder) {
     cmd.env("COLORTERM", "truecolor");
 }
 
+
+/// 注入 Nezha hook 守卫所需的环境变量。
 /// 注入 Nezha hook 守卫所需的环境变量。
 /// hook 脚本依靠 NEZHA_TASK_ID + NEZHA_EVENT_DIR 同时存在才工作,
 /// 用户在 Nezha 之外手动跑 agent 时这些变量缺失,脚本立即 exit 0。
@@ -922,11 +924,16 @@ pub async fn run_task(
     );
 
     // hook 可信时不创建 session 转发通道,也不拉起轮询 watcher。
-    // kimi 同理跳过：这条轮询是给 claude/codex 找会话文件用的 —— 它会往 PTY 里敲 `/status`
-    // 找会话 id，而 kimi 既没有 `/status` 也不是按项目分目录存会话：既会污染终端输入，
-    // 又可能把同项目下别人的 claude 会话认成这个 kimi 任务的（会话来源见 session.rs 的
-    // spawn_kimi_session_watcher，走 session_index.jsonl）。
-    let session_tx = if use_hooks || agent == "kimi" {
+    //
+    // 另外两类也要跳过 —— 这条轮询是给 claude/codex 找会话文件用的，手段是**往 PTY 里敲
+    // `/status`**（找不到就重试，最多 5 次）：
+    //   - shell（纯终端任务）：shell 没有 `/status` 这回事，敲进去就是一条"command not found"，
+    //     还会和鼠标上报之类的输入混在一起被 shell 当命令执行（实测刷屏 `45M/status`）。
+    //     resume_task 里一直有这道守卫，run_task 这处漏了。
+    //   - kimi：没有 `/status`，也不按项目分目录存会话：既污染终端输入，又可能把同项目下
+    //     别人的 claude 会话认成这个 kimi 任务的（kimi 的会话来源见 session.rs 的
+    //     spawn_kimi_session_watcher，走 session_index.jsonl）。
+    let session_tx = if use_hooks || agent == "kimi" || agent == "shell" {
         None
     } else {
         let (session_tx, session_rx) = std::sync::mpsc::channel::<String>();
