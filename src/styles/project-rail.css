@@ -609,6 +609,12 @@
   letter-spacing: 0;
 }
 
+/* 图片档不要色板渐变底：底色只会在图的透明处透出来，反而像没加载好。
+   圆角沿用 .project-avatar 本身那个（--avatar-size * 0.28），图片铺满即带圆角。 */
+.project-avatar[data-avatar-kind="image"] {
+  background: none;
+}
+
 /* ── rail hover 即时提示:项目名 + 路径,替代原生 title 的 ~1s 延迟 ─────────── */
 
 .project-avatar[data-avatar-kind="emoji"] {
