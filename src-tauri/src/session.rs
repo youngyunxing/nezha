@@ -2473,10 +2473,110 @@ pub(crate) fn spawn_kimi_session_watcher(app: AppHandle, task_id: String, projec
                         "session_path": path_string,
                     }),
                 );
+                spawn_kimi_status_watcher(app.clone(), task_id, wire_path);
                 return;
             }
             thread::sleep(Duration::from_millis(1500));
         }
         eprintln!("[kimi] 60 秒内没在索引里找到 {project_path} 的新会话");
     });
+}
+
+// ── Kimi 状态推断 ──────────────────────────────────────────────────────────────
+
+/// 一条 wire 事件对应什么任务状态（没有就是不改状态）。
+/// kimi 没有 hook，只能靠这两个生命周期事件推：turn 开始 = 正在处理，turn 结束 = 有新回复。
+fn kimi_status_from_event(line: &str) -> Option<&'static str> {
+    let v = serde_json::from_str::<serde_json::Value>(line).ok()?;
+    match v.get("type").and_then(|x| x.as_str()) {
+        Some("agent.turn.started") => Some("running"),
+        Some("agent.turn.ended") => Some("awaiting_review"),
+        _ => None,
+    }
+}
+
+/// 盯住 wire.jsonl 的增量：发出与 hook 通道同一个 `task-status` 事件，前端不必区分来源。
+/// 从文件头开始读，所以恢复一条旧会话时会把当前状态一次补上（取最后一个状态）。
+pub(crate) fn spawn_kimi_status_watcher(app: AppHandle, task_id: String, wire_path: PathBuf) {
+    thread::spawn(move || {
+        let mut offset: u64 = 0;
+        let mut last: Option<&'static str> = None;
+        loop {
+            {
+                let tm = app.state::<TaskManager>();
+                if !tm.child_handles.lock().contains_key(&task_id) {
+                    return; // 进程没了，收工
+                }
+            }
+            if let Ok(mut f) = File::open(&wire_path) {
+                let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+                if len < offset {
+                    offset = 0; // 文件被重建（新会话覆盖了同名路径）
+                }
+                if len > offset {
+                    let mut buf = String::new();
+                    if f.seek(SeekFrom::Start(offset)).is_ok() && f.read_to_string(&mut buf).is_ok() {
+                        // 只推进到最后一个完整行：写盘写一半的行不能算，否则会永久跳过它
+                        if let Some(cut) = buf.rfind('\n') {
+                            let complete = &buf[..=cut];
+                            offset += complete.len() as u64;
+                            for line in complete.lines() {
+                                let Some(status) = kimi_status_from_event(line) else {
+                                    continue;
+                                };
+                                if last == Some(status) {
+                                    continue;
+                                }
+                                last = Some(status);
+                                crate::event_watcher::note_status(&task_id, status);
+                                let _ = app.emit(
+                                    "task-status",
+                                    serde_json::json!({ "task_id": task_id, "status": status }),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(1200));
+        }
+    });
+}
+
+/// 恢复 kimi 会话时只知道 session_id（会话目录名），用它反查 wire.jsonl 路径。
+pub(crate) fn kimi_wire_path_for(session_id: &str) -> Option<PathBuf> {
+    let home = kimi_home()?;
+    let content = fs::read_to_string(home.join("session_index.jsonl")).ok()?;
+    for line in content.lines().rev() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if v.get("sessionId").and_then(|x| x.as_str()) != Some(session_id) {
+            continue;
+        }
+        let dir = Path::new(v.get("sessionDir").and_then(|x| x.as_str())?);
+        let wire = dir.join("agents").join("main").join("wire.jsonl");
+        return wire.is_file().then_some(wire);
+    }
+    None
+}
+
+#[cfg(test)]
+mod kimi_status_tests {
+    use super::kimi_status_from_event;
+
+    #[test]
+    fn maps_turn_lifecycle_to_status() {
+        assert_eq!(
+            kimi_status_from_event(r#"{"type":"agent.turn.started","time":1}"#),
+            Some("running")
+        );
+        assert_eq!(
+            kimi_status_from_event(r#"{"type":"agent.turn.ended","time":2}"#),
+            Some("awaiting_review")
+        );
+        // 其它事件与坏行都不改状态
+        assert_eq!(kimi_status_from_event(r#"{"type":"usage.record"}"#), None);
+        assert_eq!(kimi_status_from_event("写了一半的 {"), None);
+    }
 }

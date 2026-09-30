@@ -1137,9 +1137,17 @@ pub async fn resume_task(
 
     let is_codex = agent == "codex";
 
+    // kimi：没有 hook，状态靠 wire.jsonl 的增量推。恢复时 session_id 已知，
+    // 反查 wire 路径后启动状态监视。
+    if agent == "kimi" {
+        if let Some(wire) = crate::session::kimi_wire_path_for(&session_id) {
+            crate::session::spawn_kimi_status_watcher(app.clone(), task_id.clone(), wire);
+        }
+    }
+
     // resume 时 session_id 已知，直接查找文件并开始监视(hook 可信时跳过)
     // 终端任务没有会话文件，跳过。
-    if !use_hooks && agent != "shell" {
+    if !use_hooks && agent != "shell" && agent != "kimi" {
         spawn_resume_session_watcher(
             app.clone(),
             task_id.clone(),
