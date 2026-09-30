@@ -755,7 +755,9 @@ pub(crate) enum SessionContent {
 pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMessage>, String> {
     let content = std::fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
     let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-    let mut messages = if is_codex_format(&lines) {
+    let mut messages = if is_kimi_format(&lines) {
+        parse_kimi_session(&lines)
+    } else if is_codex_format(&lines) {
         parse_codex_session(&lines)
     } else {
         parse_claude_session(&lines)
@@ -1063,6 +1065,143 @@ fn parse_codex_session(lines: &[&str]) -> Vec<SessionMessage> {
     messages
 }
 
+// ── Kimi wire.jsonl 解析 ──────────────────────────────────────────────────────
+
+/// 探测 Kimi Code 的 wire.jsonl：第一行是 `{"type":"metadata","protocol_version":…}`，
+/// 事件流以 `turn.prompt` / `context.append_loop_event` 为单位。
+/// 与 codex 的 `session_meta` 不重叠，两家都不会误判。
+fn is_kimi_format(lines: &[&str]) -> bool {
+    for line in lines.iter().take(10) {
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        match val.get("type").and_then(|v| v.as_str()) {
+            // "metadata" 这个词太泛，必须带上 protocol_version 才算 kimi
+            Some("metadata") if val.get("protocol_version").is_some() => return true,
+            Some("turn.prompt") | Some("context.append_loop_event") => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// 解析 kimi 的 `agents/<main>/wire.jsonl`。
+///
+/// - user 侧取 `turn.prompt`（一轮一条）。kimi 往里注入的 system-reminder 只走
+///   `context.append_message`，不会混进 turn.prompt，所以这里不用再过滤 origin。
+/// - assistant 侧把 `content.part` 的 text 分片**累积**起来，到 `step.end` 才成一条：
+///   同一段回复会被拆成多个分片，不合并就会碎成几十条。
+/// - 工具调用与思考块在这里保留、到 `read_session_messages` 出口统一丢掉，与另两种格式一致。
+fn parse_kimi_session(lines: &[&str]) -> Vec<SessionMessage> {
+    let mut messages: Vec<SessionMessage> = Vec::new();
+    let mut pending: Vec<(String, String)> = Vec::new();
+
+    for line in lines {
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        match val.get("type").and_then(|v| v.as_str()).unwrap_or("") {
+            "turn.prompt" => {
+                flush_kimi_parts(&mut messages, &mut pending);
+                if let Some(text) = kimi_prompt_text(&val) {
+                    messages.push(SessionMessage {
+                        role: "user".to_string(),
+                        content: vec![SessionContent::Text { text }],
+                    });
+                }
+            }
+            "context.append_loop_event" => {
+                let Some(event) = val.get("event") else { continue };
+                match event.get("type").and_then(|v| v.as_str()).unwrap_or("") {
+                    "content.part" => {
+                        let Some(part) = event.get("part") else { continue };
+                        if part.get("type").and_then(|v| v.as_str()) != Some("text") {
+                            continue;
+                        }
+                        let Some(text) = part.get("text").and_then(|v| v.as_str()) else {
+                            continue;
+                        };
+                        if text.is_empty() {
+                            continue;
+                        }
+                        let uuid = event
+                            .get("stepUuid")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        // 同一个 step 的分片续在同一段后面（文件里实测每步最多一个分片，
+                        // 但按协议分片可以是多个）
+                        match pending.last_mut() {
+                            Some((u, t)) if *u == uuid => t.push_str(text),
+                            _ => pending.push((uuid, text.to_string())),
+                        }
+                    }
+                    "step.end" => flush_kimi_parts(&mut messages, &mut pending),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // 被 ctrl-c / 退出截断的最后一轮没有 step.end，尾巴不能丢
+    flush_kimi_parts(&mut messages, &mut pending);
+    messages
+}
+
+fn flush_kimi_parts(messages: &mut Vec<SessionMessage>, pending: &mut Vec<(String, String)>) {
+    for (_, text) in pending.drain(..) {
+        if text.trim().is_empty() {
+            continue;
+        }
+        messages.push(SessionMessage {
+            role: "assistant".to_string(),
+            content: vec![SessionContent::Text { text }],
+        });
+    }
+}
+
+/// 一轮的提示词文本。`origin.kind` 区分来源：
+/// - `user`：用户自己打的（斜杠命令也是它，`/xxx` 会原样留在文本里）；
+/// - `skill_activation`：技能激活，文本是展开后的技能全文（实测近 1 万字），
+///   换成 `/<技能名>` —— 那才是回放里该看到的东西；
+/// - `system_trigger` 等：定时/系统触发，加前缀标出来，免得看不出是机器说的。
+fn kimi_prompt_text(val: &serde_json::Value) -> Option<String> {
+    let text: String = val
+        .get("input")?
+        .as_array()?
+        .iter()
+        .filter(|p| p.get("type").and_then(|v| v.as_str()) == Some("text"))
+        .filter_map(|p| p.get("text").and_then(|v| v.as_str()))
+        .collect();
+    if text.trim().is_empty() {
+        return None;
+    }
+
+    let origin = val.get("origin");
+    let kind = origin
+        .and_then(|o| o.get("kind"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("user");
+    Some(match kind {
+        "user" => text,
+        "skill_activation" => {
+            let name = origin
+                .and_then(|o| o.get("skillName"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let is_slash = origin.and_then(|o| o.get("trigger")).and_then(|v| v.as_str())
+                == Some("user-slash");
+            if is_slash {
+                format!("/{}", name)
+            } else {
+                format!("[技能] {}", name)
+            }
+        }
+        other => format!("[{}] {}", other, text),
+    })
+}
+
 // ── 会话摘要提取（供任务命名等上下文感知功能复用） ─────────────────────────────
 
 /// 摘要提取允许读取的最大会话文件尺寸。超过该值直接返回 None，
@@ -1096,6 +1235,14 @@ pub(crate) fn validate_session_path(
         return Err("Session path is not a regular file".into());
     }
 
+    // kimi 的会话不按项目分目录（`wd_<name>_<hash>` 是路径哈希），项目归属看会话目录里
+    // state.json 的 cwd，所以单独判，不能塞进下面按项目列根的循环里。
+    if let Some(root) = kimi_sessions_root().and_then(|p| p.canonicalize().ok()) {
+        if canonical.starts_with(&root) {
+            return validate_kimi_session(&canonical, project_path);
+        }
+    }
+
     let allowed_roots: Vec<PathBuf> = if is_codex {
         codex_sessions_roots(project_path)
             .into_iter()
@@ -1122,6 +1269,31 @@ pub(crate) fn validate_session_path(
             canonical.display()
         ))
     }
+}
+
+/// kimi 会话的项目归属：会话目录里 state.json 的 `cwd` 就是 CLI 自己记下的工作目录。
+/// 取不到 state.json（老版本 / 目录被搬动）时只认「在 kimi 会话根下」——
+/// 路径本来就是我们自己的绑定逻辑写进任务的，不必因为缺个字段就拒掉回放。
+fn validate_kimi_session(canonical: &Path, project_path: &str) -> Result<PathBuf, String> {
+    let cwd = canonical
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|dir| dir.join("state.json"))
+        .and_then(|state| fs::read_to_string(state).ok())
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|v| v.get("cwd").and_then(|c| c.as_str()).map(str::to_string));
+
+    match cwd {
+        Some(cwd) if same_path(&cwd, project_path) => Ok(canonical.to_path_buf()),
+        None => Ok(canonical.to_path_buf()),
+        Some(other) => Err(format!("Session belongs to another project: {}", other)),
+    }
+}
+
+/// 两边都尽量规范化再比，避开软链与结尾斜杠的差异。
+fn same_path(a: &str, b: &str) -> bool {
+    let norm = |s: &str| Path::new(s).canonicalize().unwrap_or_else(|_| PathBuf::from(s));
+    norm(a) == norm(b)
 }
 
 /// 读取并解析会话 JSONL，输出一段紧凑的纯文本摘要供 LLM 二次处理。
@@ -1161,7 +1333,9 @@ pub(crate) fn extract_session_summary_text(
     let lines = head;
     let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
 
-    let messages = if is_codex_format(&line_refs) {
+    let messages = if is_kimi_format(&line_refs) {
+        parse_kimi_session(&line_refs)
+    } else if is_codex_format(&line_refs) {
         parse_codex_session(&line_refs)
     } else {
         parse_claude_session(&line_refs)
@@ -1888,7 +2062,9 @@ fn export_session_markdown_inner(
         }
     }
     let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
-    let messages = if is_codex_format(&line_refs) {
+    let messages = if is_kimi_format(&line_refs) {
+        parse_kimi_session(&line_refs)
+    } else if is_codex_format(&line_refs) {
         parse_codex_session(&line_refs)
     } else {
         parse_claude_session(&line_refs)
@@ -2400,6 +2576,25 @@ fn kimi_home() -> Option<PathBuf> {
     Some(crate::platform::home_dir()?.join(".kimi-code"))
 }
 
+fn kimi_sessions_root() -> Option<PathBuf> {
+    Some(kimi_home()?.join("sessions"))
+}
+
+/// 主 agent 的 wire.jsonl。主 agent 的 id 不一定叫 `main`，以 state.json 的 agents 里
+/// `type == "main"` 那条为准（本地实测都叫 main，取不到就回落到 main）。
+fn kimi_wire_path(session_dir: &Path) -> PathBuf {
+    let main_id = fs::read_to_string(session_dir.join("state.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| {
+            v.get("agents")?.as_object()?.iter().find_map(|(id, a)| {
+                (a.get("type").and_then(|t| t.as_str()) == Some("main")).then(|| id.clone())
+            })
+        })
+        .unwrap_or_else(|| "main".to_string());
+    session_dir.join("agents").join(main_id).join("wire.jsonl")
+}
+
 fn epoch_ms() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -2437,7 +2632,7 @@ fn find_kimi_session(project_path: &str, since_ms: i64) -> Option<(String, PathB
         if created < since_ms {
             continue;
         }
-        let wire = dir.join("agents").join("main").join("wire.jsonl");
+        let wire = kimi_wire_path(dir);
         if best.as_ref().map(|(c, _, _)| created > *c).unwrap_or(true) {
             best = Some((created, session_id.to_string(), wire));
         }
@@ -2555,7 +2750,7 @@ pub(crate) fn kimi_wire_path_for(session_id: &str) -> Option<PathBuf> {
             continue;
         }
         let dir = Path::new(v.get("sessionDir").and_then(|x| x.as_str())?);
-        let wire = dir.join("agents").join("main").join("wire.jsonl");
+        let wire = kimi_wire_path(dir);
         return wire.is_file().then_some(wire);
     }
     None
@@ -2579,4 +2774,177 @@ mod kimi_status_tests {
         assert_eq!(kimi_status_from_event(r#"{"type":"usage.record"}"#), None);
         assert_eq!(kimi_status_from_event("写了一半的 {"), None);
     }
+}
+
+#[cfg(test)]
+mod kimi_parse_tests {
+    use super::*;
+
+    /// 一行 wire 事件
+    fn ev(v: serde_json::Value) -> String {
+        v.to_string()
+    }
+
+    fn prompt(origin: &str, text: &str) -> String {
+        ev(serde_json::json!({
+            "type": "turn.prompt",
+            "input": [{"type": "text", "text": text}],
+            "origin": serde_json::from_str::<serde_json::Value>(origin).unwrap(),
+            "time": 1000
+        }))
+    }
+
+    fn part(step: &str, text: &str) -> String {
+        ev(serde_json::json!({
+            "type": "context.append_loop_event",
+            "event": {
+                "type": "content.part",
+                "stepUuid": step,
+                "part": {"type": "text", "text": text}
+            }
+        }))
+    }
+
+    fn think(step: &str) -> String {
+        ev(serde_json::json!({
+            "type": "context.append_loop_event",
+            "event": {
+                "type": "content.part",
+                "stepUuid": step,
+                "part": {"type": "think", "think": "自言自语"}
+            }
+        }))
+    }
+
+    fn step_end(step: &str) -> String {
+        ev(serde_json::json!({
+            "type": "context.append_loop_event",
+            "event": {"type": "step.end", "stepUuid": step, "usage": {"output": 10}}
+        }))
+    }
+
+    fn joined(parts: &[String]) -> Vec<SessionMessage> {
+        let lines: Vec<&str> = parts.iter().map(String::as_str).collect();
+        parse_kimi_session(&lines)
+    }
+
+    fn texts(messages: &[SessionMessage]) -> Vec<(String, String)> {
+        messages
+            .iter()
+            .map(|m| {
+                let text = m
+                    .content
+                    .iter()
+                    .filter_map(|c| match c {
+                        SessionContent::Text { text } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                (m.role.clone(), text)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn detects_kimi_wire_not_codex_or_claude() {
+        let kimi = [r#"{"type":"metadata","protocol_version":"1.5","created_at":1}"#.to_string()];
+        let refs: Vec<&str> = kimi.iter().map(String::as_str).collect();
+        assert!(is_kimi_format(&refs));
+        // claude 的会话头是 summary/user 行，codex 是 session_meta —— 都不能被认成 kimi
+        assert!(!is_kimi_format(&[r#"{"type":"summary","summary":"x"}"#]));
+        assert!(!is_kimi_format(&[r#"{"type":"session_meta","payload":{}}"#]));
+        // 只有 "metadata" 不算数：太泛
+        assert!(!is_kimi_format(&[r#"{"type":"metadata","foo":1}"#]));
+    }
+
+    #[test]
+    fn groups_step_fragments_into_one_reply() {
+        // 同一 step 的多个分片要并成一条；换 step 就是另一条
+        let messages = joined(&[
+            prompt(r#"{"kind":"user"}"#, "你好"),
+            part("s1", "前半"),
+            part("s1", "后半"),
+            step_end("s1"),
+            part("s2", "第二段"),
+            step_end("s2"),
+        ]);
+        assert_eq!(
+            texts(&messages),
+            vec![
+                ("user".to_string(), "你好".to_string()),
+                ("assistant".to_string(), "前半后半".to_string()),
+                ("assistant".to_string(), "第二段".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn injected_user_messages_are_absent_from_turn_prompts() {
+        // 注入的 system-reminder 只走 context.append_message，不进 turn.prompt
+        let injected = ev(serde_json::json!({
+            "type": "context.append_message",
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": "<system-reminder>今天是…</system-reminder>"}],
+                "origin": {"kind": "injection"}
+            }
+        }));
+        let messages = joined(&[prompt(r#"{"kind":"user"}"#, "真问题"), injected]);
+        assert_eq!(texts(&messages), vec![("user".to_string(), "真问题".to_string())]);
+    }
+
+    #[test]
+    fn skill_activation_renders_as_slash_command() {
+        // 技能激活的正文是展开后的技能全文（近万字），回放里只该看到用户敲的那个斜杠命令
+        let messages = joined(&[prompt(
+            r#"{"kind":"skill_activation","skillName":"update-config","trigger":"user-slash"}"#,
+            "<skill-loaded name=\"update-config\">…一万字…",
+        )]);
+        assert_eq!(texts(&messages), vec![("user".to_string(), "/update-config".to_string())]);
+    }
+
+    #[test]
+    fn interrupted_tail_is_kept() {
+        // ctrl-c 掉的最后一轮没有 step.end，已生成的部分不能丢
+        let messages = joined(&[
+            prompt(r#"{"kind":"user"}"#, "问题"),
+            part("s1", "说到一半"),
+        ]);
+        assert_eq!(
+            texts(&messages),
+            vec![
+                ("user".to_string(), "问题".to_string()),
+                ("assistant".to_string(), "说到一半".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn thinking_parts_are_not_replies() {
+        let messages = joined(&[
+            prompt(r#"{"kind":"user"}"#, "问题"),
+            think("s1"),
+            part("s1", "答案"),
+            step_end("s1"),
+        ]);
+        assert_eq!(
+            texts(&messages),
+            vec![
+                ("user".to_string(), "问题".to_string()),
+                ("assistant".to_string(), "答案".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn broken_lines_are_skipped() {
+        let messages = joined(&[
+            "写了一半的 {".to_string(),
+            prompt(r#"{"kind":"user"}"#, "还在"),
+            String::new(),
+        ]);
+        assert_eq!(texts(&messages), vec![("user".to_string(), "还在".to_string())]);
+    }
+
 }

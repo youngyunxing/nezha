@@ -218,6 +218,20 @@ export function defaultTaskName(agent: AgentType, id: string): string {
   return `${prefix}-${id}`;
 }
 
+/** agent 的显示名。流转 / 复制会话时要写进提示词，说清楚这段上下文是谁给的。 */
+export function agentLabel(agent: AgentType): string {
+  if (agent === "codex") return "Codex";
+  if (agent === "kimi") return "Kimi";
+  if (agent === "shell") return "终端";
+  return "Claude Code";
+}
+
+/** 能分叉会话的 agent：claude（--fork-session）与 codex（exec resume）。
+ *  kimi 也有 `kimi fork <id>`，但要先 fork 拿新 id 再 resume 两步走，还没接。 */
+export function canForkAgent(agent: AgentType): boolean {
+  return agent === "claude" || agent === "codex";
+}
+
 /** 任务的会话 id（按 agent 取对应字段；Claude / Codex / Kimi 各存一套）。 */
 export function taskSessionId(task: Task): string | undefined {
   if (task.agent === "codex") return task.codexSessionId;

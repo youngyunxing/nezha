@@ -17,6 +17,7 @@ import type {
   LocalClaudeSession,
 } from "./types";
 import {
+  agentLabel,
   isActiveTaskStatus,
   DEFAULT_TERMINAL_FONT_SIZE,
   clampTerminalFontSize,
@@ -543,8 +544,8 @@ function App() {
     const project = projects.find((p) => p.id === task.projectId);
     const sessionPath = taskSessionPath(task);
     if (!project || !sessionPath) return false;
-    const sourceLabel = task.agent === "codex" ? "Codex" : "Claude Code";
-    const targetLabel = options.agent === "codex" ? "Codex" : "Claude Code";
+    const sourceLabel = agentLabel(task.agent);
+    const targetLabel = agentLabel(options.agent);
     try {
       // 压缩摘要：让源 agent 把会话读一遍再写交接摘要（比原样搬更适合长会话）
       const contextText =

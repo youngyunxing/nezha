@@ -122,6 +122,121 @@ fn is_codex_session(content: &str) -> bool {
     false
 }
 
+/// 探测 Kimi Code 的 wire.jsonl：与 `session.rs::is_kimi_format` 保持一致 ——
+/// 首行 `metadata` 带 `protocol_version`，或事件流里出现 `turn.prompt`。
+fn is_kimi_session(content: &str) -> bool {
+    for line in content.lines().take(10) {
+        let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+        match v.get("type").and_then(|t| t.as_str()) {
+            Some("metadata") if v.get("protocol_version").is_some() => return true,
+            Some("turn.prompt") | Some("context.append_loop_event") => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// kimi 的 token 账本在 wire 里的 `usage.record`（每步一条）：
+/// `{inputOther, output, inputCacheRead, inputCacheCreation}`，四项都算进总消耗。
+/// `usageScope == "session"` 的是**累计值**，算了会重复计，跳过。
+///
+/// TPS 比 Claude 那边准：`step.end` 直接带 `llmFirstTokenLatencyMs` + `llmStreamDurationMs`，
+/// 不用靠"前一条 user 记录"反推窗口。口径与 Claude 对齐 —— 窗口含首字等待（整轮吞吐），
+/// 不是纯解码速度。
+fn parse_kimi_metrics(content: &str) -> SessionMetrics {
+    let mut tool_calls: u64 = 0;
+    let mut total_tokens: u64 = 0;
+    let mut last_usage: Option<Value> = None;
+    let mut first_ts: Option<f64> = None;
+    let mut last_ts: Option<f64> = None;
+    let mut samples: Vec<TpsSample> = Vec::new();
+
+    for line in content.lines() {
+        let Ok(val) = serde_json::from_str::<Value>(line) else { continue };
+        let ts = val.get("time").and_then(|v| v.as_i64()).map(|ms| ms as f64 / 1000.0);
+        if let Some(ts) = ts {
+            if first_ts.is_none() {
+                first_ts = Some(ts);
+            }
+            last_ts = Some(ts);
+        }
+
+        match val.get("type").and_then(|v| v.as_str()).unwrap_or("") {
+            "usage.record" => {
+                if val.get("usageScope").and_then(|v| v.as_str()) == Some("session") {
+                    continue;
+                }
+                let Some(usage) = val.get("usage") else { continue };
+                total_tokens += kimi_usage_total(usage);
+                last_usage = Some(usage.clone());
+            }
+            "context.append_loop_event" => {
+                let Some(event) = val.get("event") else { continue };
+                match event.get("type").and_then(|v| v.as_str()).unwrap_or("") {
+                    "tool.call" => tool_calls += 1,
+                    "step.end" => {
+                        let Some(end) = ts else { continue };
+                        let output = event
+                            .get("usage")
+                            .and_then(|u| u.get("output"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let ttft = event
+                            .get("llmFirstTokenLatencyMs")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        let stream = event
+                            .get("llmStreamDurationMs")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0);
+                        let window = (ttft + stream) / 1000.0;
+                        if output == 0 || window < TPS_MIN_WINDOW_SECS {
+                            continue;
+                        }
+                        let sample = TpsSample { end, tokens: output, window };
+                        if sample.rate() > TPS_MAX_PLAUSIBLE {
+                            continue;
+                        }
+                        samples.push(sample);
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let end = last_ts.unwrap_or(0.0);
+    SessionMetrics {
+        tool_calls,
+        duration_secs: duration_from(first_ts, last_ts),
+        session_file_bytes: 0,
+        total_tokens,
+        // 上下文占用 = 最后一步的 prompt 大小（缓存命中算在内，它就是实际喂进去的量）
+        context_tokens: last_usage.as_ref().map(kimi_context_tokens).unwrap_or(0),
+        context_window: 0, // kimi 不暴露窗口大小，留 0 让前端隐藏
+        tps_current: current_rate(&samples),
+        tps_5h: aggregate_rate(&samples, end),
+        last_activity_ts: end,
+    }
+}
+
+/// 四项全算：kimi 的 `inputOther` 是非缓存输入、`inputCacheRead` 是命中缓存的输入。
+fn kimi_usage_total(usage: &Value) -> u64 {
+    ["inputOther", "output", "inputCacheRead", "inputCacheCreation"]
+        .iter()
+        .filter_map(|k| usage.get(*k).and_then(|v| v.as_u64()))
+        .sum()
+}
+
+/// 上下文占用不含 output：输出是这一轮新产生的，不是"占着窗口的存量"。
+fn kimi_context_tokens(usage: &Value) -> u64 {
+    ["inputOther", "inputCacheRead", "inputCacheCreation"]
+        .iter()
+        .filter_map(|k| usage.get(*k).and_then(|v| v.as_u64()))
+        .sum()
+}
+
 fn parse_claude_metrics(content: &str) -> SessionMetrics {
     /// 一条 assistant message 的累计用量。同一条 message 会被写成多行 JSONL，且每行都带
     /// 同一份 usage —— 必须按 message.id 去重，否则 token 总量与 TPS 会成倍虚高
@@ -340,7 +455,9 @@ pub(crate) fn parse_session_metrics_from_path(path: &std::path::Path) -> Session
         return SessionMetrics::default();
     };
     let session_file_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let mut metrics = if is_codex_session(&content) {
+    let mut metrics = if is_kimi_session(&content) {
+        parse_kimi_metrics(&content)
+    } else if is_codex_session(&content) {
         parse_codex_metrics(&content)
     } else {
         parse_claude_metrics(&content)
@@ -408,6 +525,98 @@ mod tests {
 
     fn user(ts: &str) -> String {
         format!(r#"{{"type":"user","timestamp":"{ts}","message":{{"role":"user","content":"hi"}}}}"#)
+    }
+
+    /// kimi wire 的一行（省掉无关字段）
+    fn kimi_line(v: serde_json::Value) -> String {
+        v.to_string()
+    }
+
+    fn kimi_usage(out: u64, other: u64, cache_read: u64) -> serde_json::Value {
+        serde_json::json!({
+            "inputOther": other,
+            "output": out,
+            "inputCacheRead": cache_read,
+            "inputCacheCreation": 0
+        })
+    }
+
+    #[test]
+    fn kimi_metrics_read_usage_and_real_ttft() {
+        // 两步：每一步的 output + 真实 ttft/流时长都在 step.end 里，不用反推窗口
+        let content = [
+            "{\"type\":\"metadata\",\"protocol_version\":\"1.5\",\"created_at\":1}".to_string(),
+            kimi_line(serde_json::json!({
+                "type": "usage.record", "usageScope": "turn",
+                "usage": kimi_usage(356, 0, 32013), "time": 1_000_000
+            })),
+            kimi_line(serde_json::json!({
+                "type": "context.append_loop_event",
+                "event": {"type": "tool.call", "name": "Bash"}, "time": 1_000_000
+            })),
+            kimi_line(serde_json::json!({
+                "type": "context.append_loop_event",
+                "event": {
+                    "type": "step.end",
+                    "usage": kimi_usage(356, 0, 32013),
+                    "llmFirstTokenLatencyMs": 1898,
+                    "llmStreamDurationMs": 7986
+                },
+                "time": 1_010_000
+            })),
+            // 累计值：算了就重复计，必须跳过
+            kimi_line(serde_json::json!({
+                "type": "usage.record", "usageScope": "session",
+                "usage": kimi_usage(99999, 99999, 99999), "time": 1_010_000
+            })),
+            kimi_line(serde_json::json!({
+                "type": "usage.record", "usageScope": "turn",
+                "usage": kimi_usage(159, 645, 30976), "time": 1_020_000
+            })),
+            kimi_line(serde_json::json!({
+                "type": "context.append_loop_event",
+                "event": {
+                    "type": "step.end",
+                    "usage": kimi_usage(159, 645, 30976),
+                    "llmFirstTokenLatencyMs": 4944,
+                    "llmStreamDurationMs": 3236
+                },
+                "time": 1_020_000
+            })),
+        ]
+        .join("\n");
+
+        let m = parse_kimi_metrics(&content);
+        assert_eq!(m.tool_calls, 1);
+        // 两项 usage.record 四项相加，(session 作用域那条不算)
+        assert_eq!(m.total_tokens, 32369 + 31780);
+        // 上下文 = 最后一步的 prompt（非缓存输入 + 缓存命中）
+        assert_eq!(m.context_tokens, 645 + 30976);
+        assert_eq!(m.context_window, 0, "kimi 不暴露窗口，前端据此隐藏那一栏");
+        // 窗口 = ttft + 流时长：356 / 9.884 ≈ 36.0
+        assert!((m.tps_current - 159.0 / 8.18).abs() < 0.1);
+        assert!((m.tps_5h - 515.0 / 18.064).abs() < 0.1);
+        assert_eq!(m.last_activity_ts, 1_020_000.0 / 1000.0);
+        assert_eq!(m.duration_secs, 20.0);
+    }
+
+    #[test]
+    fn kimi_metrics_without_usage_is_zero() {
+        let content = [
+            "{\"type\":\"metadata\",\"protocol_version\":\"1.4\",\"created_at\":1}".to_string(),
+            kimi_line(serde_json::json!({
+                "type": "turn.prompt",
+                "input": [{"type": "text", "text": "还没跑完"}],
+                "origin": {"kind": "user"},
+                "time": 500_000
+            })),
+        ]
+        .join("\n");
+        let m = parse_kimi_metrics(&content);
+        assert_eq!(m.total_tokens, 0);
+        assert_eq!(m.context_tokens, 0);
+        assert_eq!(m.tps_5h, 0.0);
+        assert_eq!(m.last_activity_ts, 500.0);
     }
 
     #[test]

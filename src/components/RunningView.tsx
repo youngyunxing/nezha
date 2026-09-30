@@ -13,7 +13,7 @@ import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
-import { taskSessionId, taskSessionPath } from "../types";
+import { agentLabel, canForkAgent, taskSessionId, taskSessionPath } from "../types";
 import { CopySession } from "./running-view/CopySession";
 import { FlowHandoff, type HandoffOptions } from "./running-view/FlowHandoff";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
@@ -197,7 +197,8 @@ export function RunningView({
   // 能 Fork 才算得上「可以 Fork 的会话」：工作树任务和没有会话 id 的（纯终端）都不行，
   // 这两种情况下按钮直接不出现，而不是置灰占位。跑着的会话也能 Fork —— CLI 是读落盘的
   // transcript 复制，正在生成的那一轮还没落盘、不会被带过去。
-  const canFork = !task.worktreePath && Boolean(resumeSessionId) && Boolean(onFork);
+  const canFork =
+    canForkAgent(task.agent) && !task.worktreePath && Boolean(resumeSessionId) && Boolean(onFork);
   // 导出不设门槛：只要有会话文件就显示（跑着的任务也能导，等于给当前进度拍个快照）。
   const canExport = Boolean(sessionPath);
 
@@ -378,7 +379,7 @@ export function RunningView({
         {sessionPath && (
           <CopySession
             sessionPath={sessionPath}
-            assistantLabel={task.agent === "codex" ? "Codex" : task.agent === "kimi" ? "Kimi" : "Claude Code"}
+            assistantLabel={agentLabel(task.agent)}
           />
         )}
         <QuickInput
@@ -592,7 +593,7 @@ export function RunningView({
       </div>
       <FlowHandoff
         open={handoffOpen}
-        sourceLabel={task.agent === "codex" ? "Codex" : task.agent === "kimi" ? "Kimi" : "Claude Code"}
+        sourceLabel={agentLabel(task.agent)}
         defaultTarget={task.agent === "codex" ? "claude" : "codex"}
         onOpenChange={setHandoffOpen}
         onHandoff={onHandoff}

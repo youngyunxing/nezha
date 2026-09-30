@@ -531,6 +531,13 @@ fn spawn_fork_task_process(
 ) -> Result<SpawnedForkTask, String> {
     validate_task_project_path(project_path)?;
 
+    // claude 有 --fork-session，codex 有 exec resume 的派生语义；kimi 要分叉得先跑
+    // `kimi fork <id> -y` 拿到新会话 id 再 resume（两步，还没接）。在那之前直接拒 ——
+    // 别把 claude 的参数塞给 kimi 二进制起一个坏会话（前端也不给它挂 Fork 按钮）。
+    if !matches!(agent, "claude" | "codex") {
+        return Err(format!("Fork is not supported for agent: {}", agent));
+    }
+
     let launch = crate::app_settings::get_agent_launch_spec(agent);
     let agent_bin = launch.program.clone();
     let is_codex = agent == "codex";
