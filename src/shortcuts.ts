@@ -37,6 +37,31 @@ export function getNewlineShortcutKeys(shortcut: SendShortcut): string[] {
   return ["↵"];
 }
 
+/** 终端里跳转的方向。 */
+export type ScrollJump = "top" | "bottom";
+
+/**
+ * 终端「跳到顶部 / 到底部」的按键：Cmd/Ctrl + ↑↓ 或 Home/End。
+ *
+ * 为什么必须显式接管：xterm 会把 Home/End/PageUp/PageDown **当作输入送进 PTY**，
+ * 交互式 TUI（Claude Code / Codex / kimi）自己会消费这些键，所以终端没有普通滚动
+ * 容器那种"翻页"行为。Cmd/Ctrl 组合键 TUI 用不到，拿来当终端的滚动命令最省事。
+ */
+export function scrollJumpForKey(event: PromptKeyEventLike): ScrollJump | null {
+  if (!event.metaKey && !event.ctrlKey) return null;
+  if (event.altKey || event.shiftKey) return null;
+  switch (event.key) {
+    case "ArrowUp":
+    case "Home":
+      return "top";
+    case "ArrowDown":
+    case "End":
+      return "bottom";
+    default:
+      return null;
+  }
+}
+
 /**
  * Cmd+W —— 收起窗口（隐藏到 Dock）。
  * 在全局 keydown 捕获阶段匹配，绕过 webview 默认的关闭行为。

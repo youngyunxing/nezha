@@ -6,6 +6,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { IS_MAC_WEBKIT } from "../platform";
 import type { ThemeVariant } from "../types";
 import { terminalLinkHandler } from "./terminalLinkHandler";
+import { scrollJumpForKey } from "../shortcuts";
 // xterm 私有字段访问的显式契约——见 xterm-private.d.ts 头部说明。
 import type { XTermWithPrivates } from "./xterm-private";
 
@@ -558,6 +559,30 @@ export function initTerminal(
   registerActiveTerminal(term);
 
   return { term, fitAddon, whenFontsReady };
+}
+
+/**
+ * 给终端挂「Cmd/Ctrl + ↑↓ / Home / End = 跳到顶/底」。
+ *
+ * 用 xterm 自己的 `attachCustomKeyEventHandler`：命中就滚、返回 false 让按键**不进 PTY**
+ * ——否则 TUI 会收到 Cmd+↑ 的转义序列，行为不可预期。没命中一律返回 true，按键照常
+ * 交给终端，不影响 IME / 选区（这里不碰 textarea，也不抢焦点）。
+ */
+export function attachTerminalScrollShortcuts(term: Terminal): () => void {
+  term.attachCustomKeyEventHandler((event) => {
+    // 同一个 keydown 会以 keydown/keypress 两种 type 各来一次，只在 keydown 处理
+    if (event.type !== "keydown") return true;
+    const jump = scrollJumpForKey(event);
+    if (!jump) return true;
+    if (jump === "top") {
+      term.scrollToTop();
+    } else {
+      term.scrollToBottom();
+    }
+    return false;
+  });
+  // xterm 的 handler 是单个而非数组，置回"全部放行"即等价于卸载
+  return () => term.attachCustomKeyEventHandler(() => true);
 }
 
 export function attachTerminalScrollbarAutoHide(term: Terminal, container: HTMLElement): () => void {

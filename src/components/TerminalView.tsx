@@ -25,6 +25,7 @@ import {
   applyDomCharSizeOverride,
   refreshTerminalDisplay,
   unregisterActiveTerminal,
+  attachTerminalScrollShortcuts,
 } from "./terminalShared";
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
@@ -125,6 +126,7 @@ export function TerminalView({
     // 必须在 term.open() 之后挂：_charSizeService 在 open 时才实例化。
     const disposeCharSizeOverride = applyDomCharSizeOverride(term);
     const disposeScrollbarAutoHide = attachTerminalScrollbarAutoHide(term, container);
+    const disposeScrollShortcuts = attachTerminalScrollShortcuts(term);
     const disposeInputFix = attachMacWebKitShiftInputFix(term);
     const webglHandle = loadWebglAddon(term);
 
@@ -261,6 +263,7 @@ export function TerminalView({
       disposeCharSizeOverride();
       webglHandle.dispose();
       disposeScrollbarAutoHide();
+      disposeScrollShortcuts();
       disposeMacWebKitGuard();
       disposeInputFix();
       disposeSmartCopy();
