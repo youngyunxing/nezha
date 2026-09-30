@@ -467,12 +467,12 @@ export const panels = {
     borderRadius: 3,
     outline: "none",
   },
-  fileCtxBackdrop: {
+  ctxMenuBackdrop: {
     position: "fixed" as const,
     inset: 0,
     zIndex: 999,
   },
-  fileCtxMenu: {
+  ctxMenu: {
     position: "fixed" as const,
     zIndex: 1000,
     background: "var(--bg-sidebar)",
@@ -483,12 +483,12 @@ export const panels = {
     padding: "3px 0",
     fontSize: 12.5,
   },
-  fileCtxSeparator: {
+  ctxMenuSeparator: {
     height: 1,
     background: "var(--border-dim)",
     margin: "4px 6px",
   },
-  fileCtxMenuItem: {
+  ctxMenuItem: {
     display: "block",
     width: "calc(100% - 8px)",
     height: 26,

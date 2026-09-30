@@ -1,31 +1,33 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import s from "../../styles";
+import type { Task } from "../../types";
 import { useI18n } from "../../i18n";
-import type { ContextMenuState } from "./types";
+import s from "../../styles";
+
+/** 右键点在哪条任务上（坐标 + 那条任务）。 */
+export type TaskContextMenuState = { x: number; y: number; task: Task };
 
 const VIEWPORT_MARGIN = 8;
 
-export function FileExplorerContextMenu({
+/** 任务列表的右键菜单：重命名 / 收藏 / 删除。
+ *  行内那对「收藏、删除」小按钮已删掉 —— 悬停才出现的小图标既难点中也容易误触。 */
+export function TaskContextMenu({
   ctxMenu,
   onClose,
-  onNewFile,
-  onNewFolder,
+  onRename,
+  onToggleStar,
   onDelete,
-  onOpenInSystem,
-  onCopyPath,
 }: {
-  ctxMenu: ContextMenuState;
+  ctxMenu: TaskContextMenuState;
   onClose: () => void;
-  onNewFile: () => void;
-  onNewFolder: () => void;
+  onRename: () => void;
+  onToggleStar: () => void;
   onDelete: () => void;
-  onOpenInSystem: (e: React.MouseEvent, path: string) => void;
-  onCopyPath: (e: React.MouseEvent, path: string, withAt: boolean) => void;
 }) {
   const { t } = useI18n();
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: ctxMenu.x, y: ctxMenu.y });
 
+  // 夹进视口：菜单贴着屏幕右/下边缘时右键会弹到窗口外面去。
   const updatePosition = useCallback(() => {
     const menu = menuRef.current;
     if (!menu) return;
@@ -53,19 +55,14 @@ export function FileExplorerContextMenu({
   }, [updatePosition]);
 
   const items = [
-    { label: t("file.newFile"), action: "newFile" },
-    { label: t("file.newFolder"), action: "newFolder" },
-    { action: "separator" },
-    { label: t("file.openInSystemFolder"), action: "open" },
-    { label: t("file.copyFullPath"), action: "copy", withAt: false },
-    { label: t("file.copyAtFullPath"), action: "copy", withAt: true },
-    ...(ctxMenu.isRoot
-      ? []
-      : ([
-          { action: "separator" },
-          { label: t("file.delete"), action: "delete", destructive: true },
-        ] as const)),
-  ] as const;
+    { label: t("task.renameTask"), onSelect: onRename, destructive: false },
+    {
+      label: ctxMenu.task.starred ? t("task.unstar") : t("task.star"),
+      onSelect: onToggleStar,
+      destructive: false,
+    },
+    { label: t("task.deleteTask"), onSelect: onDelete, destructive: true },
+  ];
 
   return (
     <>
@@ -87,12 +84,8 @@ export function FileExplorerContextMenu({
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {items.map((item, idx) => {
-          if (item.action === "separator") {
-            return <div key={`sep-${idx}`} style={s.ctxMenuSeparator} />;
-          }
-          const isDestructive = item.action === "delete";
-          const baseColor = isDestructive
+        {items.map((item) => {
+          const baseColor = item.destructive
             ? "var(--danger-action-bg, #d23f3f)"
             : "var(--text-primary)";
           return (
@@ -101,10 +94,10 @@ export function FileExplorerContextMenu({
               key={item.label}
               style={{ ...s.ctxMenuItem, color: baseColor }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = isDestructive
+                e.currentTarget.style.background = item.destructive
                   ? "var(--danger-action-bg, #d23f3f)"
                   : "var(--accent)";
-                e.currentTarget.style.color = isDestructive
+                e.currentTarget.style.color = item.destructive
                   ? "var(--danger-action-fg, #ffffff)"
                   : "var(--fg-on-accent)";
               }}
@@ -113,31 +106,9 @@ export function FileExplorerContextMenu({
                 e.currentTarget.style.color = baseColor;
               }}
               onClick={(event) => {
-                if (item.action === "newFile") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onNewFile();
-                  return;
-                }
-                if (item.action === "newFolder") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onNewFolder();
-                  return;
-                }
-                if (item.action === "delete") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDelete();
-                  return;
-                }
-                if (item.action === "open") {
-                  onOpenInSystem(event, ctxMenu.path);
-                  return;
-                }
-                if (item.action === "copy") {
-                  onCopyPath(event, ctxMenu.path, item.withAt);
-                }
+                event.preventDefault();
+                event.stopPropagation();
+                item.onSelect();
               }}
             >
               {item.label}

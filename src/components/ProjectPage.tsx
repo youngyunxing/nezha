@@ -370,6 +370,7 @@ export function ProjectPage({
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
+        onRenameTask={onRenameTask}
         taskDisplayWindow={taskDisplayWindow}
       />
       <div style={s.mainContent}>
@@ -509,7 +510,6 @@ export function ProjectPage({
                   onTerminalReady={(generation) => onTerminalReady(task.id, generation)}
                   onSnapshot={(snapshot) => onSnapshot(task.id, snapshot)}
                   getRestoreState={() => getTaskRestoreState(task.id)}
-                  onRename={(name) => onRenameTask(task.id, name)}
                   themeVariant={themeVariant}
                   terminalFontSize={terminalFontSize}
                   terminalScrollback={terminalScrollback}

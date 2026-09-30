@@ -24,7 +24,6 @@ import s from "../styles";
 import {
   ArrowRightLeft,
   RotateCcw,
-  Pencil,
   GitMerge,
   Trash2,
   AlertTriangle,
@@ -111,7 +110,6 @@ export function RunningView({
   onTerminalReady,
   onSnapshot,
   getRestoreState,
-  onRename,
   themeVariant,
   terminalFontSize,
   terminalScrollback,
@@ -146,7 +144,6 @@ export function RunningView({
   onTerminalReady: (generation: number) => void;
   onSnapshot?: (snapshot: string) => void;
   getRestoreState?: () => { initialData?: string; initialSnapshot?: string };
-  onRename: (name: string) => void;
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
   terminalScrollback: TerminalScrollback;
@@ -178,15 +175,11 @@ export function RunningView({
   } | null>(null);
   const currentMetricsState = metricsState?.sessionPath === sessionPath ? metricsState : null;
   const metrics = currentMetricsState?.status === "ready" ? currentMetricsState.metrics : null;
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [editValue, setEditValue] = useState("");
-  const [hoverHeader, setHoverHeader] = useState(false);
   const [worktreeBusy, setWorktreeBusy] = useState<"merge" | "discard" | null>(null);
   const [exporting, setExporting] = useState(false);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [bannerCompact, setBannerCompact] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
   const interruptedBannerRef = useRef<HTMLDivElement>(null);
 
   const defaultForkName = buildDefaultForkTaskName(
@@ -201,6 +194,17 @@ export function RunningView({
     canForkAgent(task.agent) && !task.worktreePath && Boolean(resumeSessionId) && Boolean(onFork);
   // 导出不设门槛：只要有会话文件就显示（跑着的任务也能导，等于给当前进度拍个快照）。
   const canExport = Boolean(sessionPath);
+  // 头部那行只剩动作按钮了（任务名在标签条上）。一个按钮都没有的终端（纯终端任务）
+  // 就不占这 36px —— 那点高度留给终端自己。
+  const canResumeHere = !isActive && !isInterrupted && Boolean(onResume) && canResume && !task.worktreeDiscarded;
+  const canMergeWorktree =
+    !isActive && task.status === "done" && Boolean(task.worktreePath) && Boolean(task.worktreeBranch) &&
+    !task.worktreeDiscarded && Boolean(onMergeWorktree);
+  const canDiscardWorktree =
+    !isActive && Boolean(task.worktreePath) && Boolean(task.worktreeBranch) && !task.worktreeDiscarded &&
+    Boolean(onDiscardWorktree);
+  const showHeaderActions =
+    canFork || canExport || canResumeHere || canMergeWorktree || canDiscardWorktree;
 
   const handleExport = async () => {
     if (exporting || !sessionPath) return;
@@ -410,188 +414,99 @@ export function RunningView({
         zIndex: visible ? 1 : 0,
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          ...s.runHeader,
-          // 纯终端没有指标行（没有会话文件），分割线就没人画了 —— 补在任务名这一行下面，
-          // 和左侧面板头部的分割线一样落在 36px 处。有指标行时由指标行负责那条线。
-          ...(metrics || sessionPath ? null : { borderBottom: "1px solid var(--border-dim)" }),
-        }}
-        onMouseEnter={() => setHoverHeader(true)}
-        onMouseLeave={() => setHoverHeader(false)}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              style={{
-                maxWidth: 420,
-                width: "100%",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                background: "transparent",
-                border: "none",
-                borderBottom: "2px solid var(--border-strong)",
-                borderRadius: 0,
-                padding: "0 2px",
-                outline: "none",
-              }}
-              value={editValue}
-              placeholder={task.prompt.slice(0, 60)}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  onRename(editValue.trim());
-                  setEditingTitle(false);
-                }
-                if (e.key === "Escape") {
-                  setEditingTitle(false);
-                }
-              }}
-              onBlur={() => {
-                onRename(editValue.trim());
-                setEditingTitle(false);
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {(() => {
-                const t = task.name ?? task.prompt;
-                return t.slice(0, 70) + (t.length > 70 ? "…" : "");
-              })()}
-            </span>
-          )}
-          {sessionPath && !editingTitle && (
+      {/* 头部：任务名已移到主区域标签条，这里只剩动作按钮 */}
+      {showHeaderActions && (
+        <div
+          style={{
+            ...s.runHeader,
+            // 动作按钮那一行的下沿线：底下没有指标行时（纯终端）由这一行自己画。
+            ...(metrics || sessionPath ? null : { borderBottom: "1px solid var(--border-dim)" }),
+          }}
+        >
+          {/* 任务名不在这儿了 —— 主区域标签条上已经有（components/main-tabs/MainTabBar）。
+              这里只留占位，让右边的动作按钮继续靠右。 */}
+          <div style={{ flex: 1, minWidth: 0 }} />
+          {canResumeHere && (
+            <button style={s.resumeBtn} onClick={() => onResume?.()}>
+                <RotateCcw size={12} strokeWidth={2.5} />
+                <span>{t("running.resume")}</span>
+              </button>
+            )}
+          {canMergeWorktree && (
+            <button
+                style={{
+                  ...s.resumeBtn,
+                  opacity: worktreeBusy ? 0.6 : 1,
+                  cursor: worktreeBusy ? "not-allowed" : "pointer",
+                }}
+                disabled={!!worktreeBusy}
+                onClick={async () => {
+                  setWorktreeBusy("merge");
+                  try {
+                    await onMergeWorktree?.();
+                  } finally {
+                    setWorktreeBusy(null);
+                  }
+                }}
+              >
+                <GitMerge size={12} strokeWidth={2.5} />
+                <span>
+                  {worktreeBusy === "merge"
+                    ? t("running.merging")
+                    : t("running.mergeTo", { branch: task.baseBranch ?? "" })}
+                </span>
+              </button>
+            )}
+          {canDiscardWorktree && (
+            <button
+                style={{
+                  ...s.cancelBtn,
+                  opacity: worktreeBusy ? 0.6 : 1,
+                  cursor: worktreeBusy ? "not-allowed" : "pointer",
+                }}
+                disabled={!!worktreeBusy}
+                onClick={async () => {
+                  setWorktreeBusy("discard");
+                  try {
+                    await onDiscardWorktree?.();
+                  } finally {
+                    setWorktreeBusy(null);
+                  }
+                }}
+              >
+                <Trash2 size={12} strokeWidth={2.5} />
+                <span>
+                  {worktreeBusy === "discard"
+                    ? t("running.discarding")
+                    : t("running.discardWorktree")}
+                </span>
+              </button>
+            )}
+          {canFork && (
             <button
               type="button"
-              title={t("task.renameTask")}
-              style={{
-                ...s.taskRenameBtn,
-                flexShrink: 0,
-                color: "var(--text-secondary)",
-                opacity: hoverHeader ? 1 : 0.65,
-                background: hoverHeader ? "var(--bg-input)" : "transparent",
-                transition: "opacity 0.15s ease, background 0.15s ease",
-              }}
-              onClick={() => {
-                setEditValue(task.name ?? "");
-                setEditingTitle(true);
-                setTimeout(() => titleInputRef.current?.focus(), 0);
-              }}
+              style={s.resumeBtn}
+              title={t("running.forkSession")}
+              onClick={() => setForkDialogOpen(true)}
             >
-              <Pencil size={13} strokeWidth={2.25} />
+              <GitFork size={12} strokeWidth={2.4} />
+              <span>{t("running.forkSession")}</span>
+            </button>
+          )}
+          {canExport && (
+            <button
+              type="button"
+              style={{ ...s.resumeBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
+              title={t("running.exportMarkdown")}
+              disabled={exporting}
+              onClick={handleExport}
+            >
+              <Download size={12} strokeWidth={2.4} className={exporting ? "spin" : ""} />
+              <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
             </button>
           )}
         </div>
-        {isActive && (
-          <>
-          </>
-        )}
-        {!isActive &&
-          !isInterrupted &&
-          onResume &&
-          canResume &&
-          !task.worktreeDiscarded && (
-            <button style={s.resumeBtn} onClick={onResume}>
-              <RotateCcw size={12} strokeWidth={2.5} />
-              <span>{t("running.resume")}</span>
-            </button>
-          )}
-        {!isActive &&
-          task.status === "done" &&
-          task.worktreePath &&
-          task.worktreeBranch &&
-          !task.worktreeDiscarded &&
-          onMergeWorktree && (
-            <button
-              style={{
-                ...s.resumeBtn,
-                opacity: worktreeBusy ? 0.6 : 1,
-                cursor: worktreeBusy ? "not-allowed" : "pointer",
-              }}
-              disabled={!!worktreeBusy}
-              onClick={async () => {
-                setWorktreeBusy("merge");
-                try {
-                  await onMergeWorktree();
-                } finally {
-                  setWorktreeBusy(null);
-                }
-              }}
-            >
-              <GitMerge size={12} strokeWidth={2.5} />
-              <span>
-                {worktreeBusy === "merge"
-                  ? t("running.merging")
-                  : t("running.mergeTo", { branch: task.baseBranch ?? "" })}
-              </span>
-            </button>
-          )}
-        {!isActive &&
-          task.worktreePath &&
-          task.worktreeBranch &&
-          !task.worktreeDiscarded &&
-          onDiscardWorktree && (
-            <button
-              style={{
-                ...s.cancelBtn,
-                opacity: worktreeBusy ? 0.6 : 1,
-                cursor: worktreeBusy ? "not-allowed" : "pointer",
-              }}
-              disabled={!!worktreeBusy}
-              onClick={async () => {
-                setWorktreeBusy("discard");
-                try {
-                  await onDiscardWorktree();
-                } finally {
-                  setWorktreeBusy(null);
-                }
-              }}
-            >
-              <Trash2 size={12} strokeWidth={2.5} />
-              <span>
-                {worktreeBusy === "discard"
-                  ? t("running.discarding")
-                  : t("running.discardWorktree")}
-              </span>
-            </button>
-          )}
-        {canFork && (
-          <button
-            type="button"
-            style={s.resumeBtn}
-            title={t("running.forkSession")}
-            onClick={() => setForkDialogOpen(true)}
-          >
-            <GitFork size={12} strokeWidth={2.4} />
-            <span>{t("running.forkSession")}</span>
-          </button>
-        )}
-        {canExport && (
-          <button
-            type="button"
-            style={{ ...s.resumeBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
-            title={t("running.exportMarkdown")}
-            disabled={exporting}
-            onClick={handleExport}
-          >
-            <Download size={12} strokeWidth={2.4} className={exporting ? "spin" : ""} />
-            <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
-          </button>
-        )}
-      </div>
+      )}
       <FlowHandoff
         open={handoffOpen}
         sourceLabel={agentLabel(task.agent)}
@@ -608,8 +523,8 @@ export function RunningView({
       {(metrics || sessionPath) && (
         <div
           style={{
-            // 任务名那行是 36px 高、文字居中，文字下方本来就空着 ~8px；所以这里顶部不给
-            // 内边距，视觉上到任务名的距离才等于到底部分割线的 8px。
+            // 上面那行动作按钮是 36px 高、内容居中，按钮下方本来就空着 ~8px；所以这里顶部
+            // 不给内边距，视觉上到按钮的距离才等于到底部分割线的 8px。
             padding: "0 20px 8px",
             borderBottom: "1px solid var(--border-dim)",
             flexShrink: 0,

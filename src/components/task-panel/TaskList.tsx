@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
+import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
 import { LocalSessionRow } from "./LocalSessionRow";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
@@ -44,6 +45,7 @@ export function TaskList({
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
+  onRenameTask,
 }: {
   tasks: Task[];
   taskDisplayWindow: TaskDisplayWindow;
@@ -56,11 +58,15 @@ export function TaskList({
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
+  onRenameTask: (id: string, name: string) => void;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
+  // 右键菜单挂在哪条任务上；改名中的那条任务 id
+  const [ctxMenu, setCtxMenu] = useState<TaskContextMenuState | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -221,48 +227,78 @@ export function TaskList({
   const visibleRows = rows.slice(startIndex, endIndex);
 
   return (
-    <div ref={scrollRef} style={s.taskListScroll} onScroll={handleScroll}>
-      {tasks.length === 0 && localSessions.length === 0 && (
-        <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>
-      )}
-      <div style={{ height: totalHeight, position: "relative" }}>
-        {visibleRows.map((row, visibleIndex) => {
-          const rowIndex = startIndex + visibleIndex;
-          const top = offsets[rowIndex] ?? 0;
+    <>
+      <div ref={scrollRef} style={s.taskListScroll} onScroll={handleScroll}>
+        {tasks.length === 0 && localSessions.length === 0 && (
+          <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>
+        )}
+        <div style={{ height: totalHeight, position: "relative" }}>
+          {visibleRows.map((row, visibleIndex) => {
+            const rowIndex = startIndex + visibleIndex;
+            const top = offsets[rowIndex] ?? 0;
 
-          return (
-            <div
-              key={row.key}
-              style={{
-                position: "absolute",
-                top,
-                left: 0,
-                right: 0,
-                height: row.height,
-                overflow: "hidden",
-              }}
-            >
-              {row.type === "group" ? (
-                <div style={s.groupLabel}>{row.label}</div>
-              ) : row.type === "local" ? (
-                <LocalSessionRow
-                  session={row.session}
-                  selected={selectedLocalSessionId === row.session.sessionId}
-                  onClick={() => onSelectLocalSession(row.session)}
-                />
-              ) : (
-                <TaskListItem
-                  task={row.task}
-                  selected={selectedId === row.task.id && !isNewTask}
-                  onClick={() => onSelectTask(row.task.id)}
-                  onDelete={() => onDeleteTask(row.task.id)}
-                  onToggleStar={() => onToggleTaskStar(row.task.id)}
-                />
-              )}
-            </div>
-          );
-        })}
+            return (
+              <div
+                key={row.key}
+                style={{
+                  position: "absolute",
+                  top,
+                  left: 0,
+                  right: 0,
+                  height: row.height,
+                  overflow: "hidden",
+                }}
+              >
+                {row.type === "group" ? (
+                  <div style={s.groupLabel}>{row.label}</div>
+                ) : row.type === "local" ? (
+                  <LocalSessionRow
+                    session={row.session}
+                    selected={selectedLocalSessionId === row.session.sessionId}
+                    onClick={() => onSelectLocalSession(row.session)}
+                  />
+                ) : (
+                  <TaskListItem
+                    task={row.task}
+                    selected={selectedId === row.task.id && !isNewTask}
+                    onClick={() => onSelectTask(row.task.id)}
+                    onContextMenu={(event) => {
+                      // 顶掉 webview 自带的右键菜单，换成任务操作（跟文件树一致）。
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setCtxMenu({ x: event.clientX, y: event.clientY, task: row.task });
+                    }}
+                    renaming={renamingId === row.task.id}
+                    onRenameSubmit={(name) => {
+                      onRenameTask(row.task.id, name);
+                      setRenamingId(null);
+                    }}
+                    onRenameCancel={() => setRenamingId(null)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    {ctxMenu && (
+      <TaskContextMenu
+        ctxMenu={ctxMenu}
+        onClose={() => setCtxMenu(null)}
+        onRename={() => {
+          setRenamingId(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+        onToggleStar={() => {
+          onToggleTaskStar(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+        onDelete={() => {
+          onDeleteTask(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+      />
+    )}
+    </>
   );
 }

@@ -25,6 +25,7 @@ export function TaskPanel({
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
+  onRenameTask,
   taskDisplayWindow,
 }: {
   project: Project;
@@ -45,6 +46,8 @@ export function TaskPanel({
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
+  /** 列表右键菜单的「重命名」 */
+  onRenameTask: (id: string, name: string) => void;
   taskDisplayWindow: TaskDisplayWindow;
 }) {
   const { t } = useI18n();
@@ -177,6 +180,7 @@ export function TaskPanel({
         onSelectTask={onSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
+        onRenameTask={onRenameTask}
       />
     </div>
   );

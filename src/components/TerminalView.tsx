@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from "react";
-import { ChevronDown, ChevronUp, Eraser } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -452,15 +452,6 @@ export function TerminalView({
           onClick={() => terminalRef.current?.scrollToBottom()}
         >
           <ChevronDown size={13} strokeWidth={2.2} />
-        </button>
-        <button
-          type="button"
-          style={scrollJumpBtnStyle}
-          title="复位终端（清掉残留的鼠标上报等模式）"
-          aria-label="复位终端"
-          onClick={() => terminalRef.current?.write(TERMINAL_INPUT_MODE_RESET)}
-        >
-          <Eraser size={13} strokeWidth={2.2} />
         </button>
       </div>
     </div>

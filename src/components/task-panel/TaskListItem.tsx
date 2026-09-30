@@ -1,5 +1,6 @@
-import { useState, memo } from "react";
-import { Trash2, Star, GitBranch, Moon, Terminal } from "lucide-react";
+import { useEffect, useRef, useState, memo } from "react";
+import type React from "react";
+import { GitBranch, Moon, Terminal } from "lucide-react";
 import type { Task } from "../../types";
 import { StatusIcon } from "../StatusIcon";
 import { useI18n } from "../../i18n";
@@ -54,18 +55,37 @@ export const TaskListItem = memo(
     task,
     selected,
     onClick,
-    onDelete,
-    onToggleStar,
+    onContextMenu,
+    renaming,
+    onRenameSubmit,
+    onRenameCancel,
   }: {
     task: Task;
     selected: boolean;
     onClick: () => void;
-    onDelete: () => void;
-    onToggleStar: () => void;
+    /** 右键：重命名 / 收藏 / 删除（收藏与删除原来挂在行内悬停按钮上，已删） */
+    onContextMenu: (event: React.MouseEvent) => void;
+    renaming: boolean;
+    onRenameSubmit: (name: string) => void;
+    onRenameCancel: () => void;
   }) {
     const { t } = useI18n();
     const [hov, setHov] = useState(false);
+    // Enter / Esc 已经处理过一次后，紧接着的 blur 不要再提交一遍。每次进入改名态重置，
+    // 否则同一条任务第二次改名时（组件实例还留着）会被上次的 true 挡掉 blur 提交。
+    const renameDoneRef = useRef(false);
+    useEffect(() => {
+      if (renaming) renameDoneRef.current = false;
+    }, [renaming]);
     const displayTitle = task.name ?? task.prompt;
+    const hintKey = statusHintKey(task.status, task.agent);
+
+    const submitRename = (value: string) => {
+      if (renameDoneRef.current) return;
+      renameDoneRef.current = true;
+      onRenameSubmit(value.trim());
+    };
+
     return (
       <div
         style={{
@@ -76,19 +96,40 @@ export const TaskListItem = memo(
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         onClick={onClick}
+        onContextMenu={onContextMenu}
       >
         <div style={{ flexShrink: 0, marginTop: 1 }}>
           <StatusIcon status={task.status} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={s.taskCardTitle}>
-            {displayTitle.slice(0, 70)}
-            {displayTitle.length > 70 ? "…" : ""}
-          </div>
-          <div
-            style={s.taskCardSub}
-            title={statusHintKey(task.status, task.agent) ? t(statusHintKey(task.status, task.agent)!) : undefined}
-          >
+          {renaming ? (
+            <input
+              style={s.taskItemRenameInput}
+              defaultValue={task.name ?? ""}
+              placeholder={task.prompt.slice(0, 60)}
+              autoFocus
+              onClick={(event) => event.stopPropagation()}
+              onContextMenu={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitRename(event.currentTarget.value);
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  renameDoneRef.current = true;
+                  onRenameCancel();
+                }
+              }}
+              onBlur={(event) => submitRename(event.target.value)}
+            />
+          ) : (
+            <div style={s.taskCardTitle}>
+              {displayTitle.slice(0, 70)}
+              {displayTitle.length > 70 ? "…" : ""}
+            </div>
+          )}
+          <div style={s.taskCardSub} title={hintKey ? t(hintKey) : undefined}>
             {t(statusLabelKey(task.status, task.agent, task.processAlive))}
             {task.status === "done" &&
               task.worktreePath &&
@@ -119,9 +160,7 @@ export const TaskListItem = memo(
             position: "absolute",
             right: 16,
             top: 11,
-            opacity: hov ? 0 : 1,
             pointerEvents: "none",
-            transition: "opacity 0.12s ease",
             zIndex: 1,
           }}
         >
@@ -141,50 +180,15 @@ export const TaskListItem = memo(
           )}
         </span>
         {task.worktreePath && task.worktreeBranch && (
-          <span
-            title={t("task.worktreeBadge", { branch: task.worktreeBranch })}
-            style={{ ...s.worktreeBadge, opacity: hov ? 0 : 1 }}
-          >
+          <span title={t("task.worktreeBadge", { branch: task.worktreeBranch })} style={s.worktreeBadge}>
             <GitBranch size={11} strokeWidth={2.2} />
           </span>
         )}
-        <button
-          type="button"
-          aria-label={task.starred ? t("task.unstar") : t("task.star")}
-          title={task.starred ? t("task.unstar") : t("task.star")}
-          style={{
-            ...s.taskStarBtn,
-            opacity: task.starred ? 1 : hov ? 0.7 : 0,
-            pointerEvents: task.starred || hov ? "auto" : "none",
-            color: task.starred ? "var(--star-fg)" : "var(--text-hint)",
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleStar();
-          }}
-        >
-          <Star size={12} strokeWidth={2.2} fill={task.starred ? "currentColor" : "none"} />
-        </button>
-        <button
-          type="button"
-          aria-label={t("task.deleteTask")}
-          title={t("task.deleteTask")}
-          style={{
-            ...s.taskDeleteBtn,
-            opacity: hov ? 1 : 0,
-            pointerEvents: hov ? "auto" : "none",
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 size={12} strokeWidth={2.2} />
-        </button>
       </div>
     );
   },
   (prev, next) =>
     prev.task === next.task &&
-    prev.selected === next.selected,
+    prev.selected === next.selected &&
+    prev.renaming === next.renaming,
 );
