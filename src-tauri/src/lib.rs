@@ -190,6 +190,7 @@ pub fn run() {
             fs::open_in_system_file_manager,
             fs::read_file_content,
             fs::read_image_preview,
+            fs::read_image_as_data_url,
             fs::write_file_content,
             fs::create_file,
             fs::create_directory,

@@ -18,16 +18,19 @@ export function ProjectAvatar({
 }) {
   const appearance = useProjectAppearance(project);
   const sizeVar = { "--avatar-size": `${size}px` } as React.CSSProperties;
+  // 图片直接从项目本体兜一道底：解析层负责同屏去重/配色，不该因为漏传一个字段就让头像丢图
+  const image = appearance.image ?? project.avatar?.image;
+  const showImage = Boolean(image);
   const showEmoji = Boolean(appearance.emoji);
   return (
     <div
       className={className ? `project-avatar ${className}` : "project-avatar"}
       data-avatar-color={appearance.color}
-      data-avatar-kind={showEmoji ? "emoji" : "label"}
-      data-avatar-len={showEmoji ? undefined : appearance.label.length}
+      data-avatar-kind={showImage ? "image" : showEmoji ? "emoji" : "label"}
+      data-avatar-len={showImage || showEmoji ? undefined : appearance.label.length}
       style={sizeVar}
     >
-      {showEmoji ? appearance.emoji : appearance.label}
+      {showImage ? <img className="project-avatar-img" src={image} alt="" /> : showEmoji ? appearance.emoji : appearance.label}
     </div>
   );
 }

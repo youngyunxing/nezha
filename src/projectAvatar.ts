@@ -20,6 +20,8 @@ export interface ResolvedProjectAppearance {
   autoLabel: string;
   /** 用户自定义的 emoji / 符号，有则替代缩写显示 */
   emoji?: string;
+  /** 用户自定义图片（data URL），有则整个头像显示它 */
+  image?: string;
 }
 
 // 色板顺序即色环顺序（红 → 橙 → … → 粉 → 中性色），也是编辑器里色块的展示顺序。
@@ -184,7 +186,21 @@ export function normalizeProjectAvatar(
   if (emoji) out.emoji = emoji;
   const label = avatar.label ? takeLabel(avatar.label) : "";
   if (label) out.label = label;
+  const image = normalizeAvatarImage(avatar.image);
+  if (image) out.image = image;
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** 头像图上限：data URL 的字符数。约合 2.2MB 原图 —— 够用，又不至于把 projects.json 撑爆。 */
+export const PROJECT_AVATAR_IMAGE_MAX_CHARS = 3 * 1024 * 1024;
+
+/** 只认内联图片 data URL，顺带卡大小；其它一律当作没设置。 */
+export function normalizeAvatarImage(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(trimmed)) return undefined;
+  if (trimmed.length > PROJECT_AVATAR_IMAGE_MAX_CHARS) return undefined;
+  return trimmed;
 }
 
 // ── 自动缩写 ─────────────────────────────────────────────────────────────────

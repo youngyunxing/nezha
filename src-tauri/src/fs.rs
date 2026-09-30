@@ -773,3 +773,54 @@ mod tests {
         std::fs::remove_dir_all(&workspace).ok();
     }
 }
+
+/// 把用户挑选的图片读成 data URL，给「项目图标自定义」用。
+///
+/// 为什么存 data URL 而不是图片路径：用户把原图挪走/删掉，头像不该变成破图 —— 图片就内联
+/// 在 projects.json 里。代价是文件变大，所以这里卡两道：只认图片扩展名、单文件 ≤ 4MB
+/// （前端还有一道 3MB 的 data URL 长度上限）。
+#[tauri::command]
+pub async fn read_image_as_data_url(path: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let p = std::path::Path::new(&path);
+        if !p.is_absolute() {
+            return Err("Image path must be absolute".into());
+        }
+        let canonical = p.canonicalize().map_err(|e| format!("Cannot resolve image path: {}", e))?;
+        if !canonical.is_file() {
+            return Err("Image path is not a regular file".into());
+        }
+        let ext = canonical
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            "gif" => "image/gif",
+            _ => return Err(format!("Unsupported image type: .{}", ext)),
+        };
+        let meta = std::fs::metadata(&canonical).map_err(|e| e.to_string())?;
+        if meta.len() > MAX_AVATAR_IMAGE_BYTES {
+            return Err(format!(
+                "Image too large: {} MB (max {} MB)",
+                meta.len() / 1024 / 1024,
+                MAX_AVATAR_IMAGE_BYTES / 1024 / 1024
+            ));
+        }
+        let bytes = std::fs::read(&canonical).map_err(|e| e.to_string())?;
+        use base64::Engine;
+        Ok(format!(
+            "data:{};base64,{}",
+            mime,
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ))
+    })
+    .await
+    .map_err(|e| format!("read_image_as_data_url join error: {}", e))?
+}
+
+/// 头像原图上限。前端另有一道 3MB 的 data URL 长度限制。
+const MAX_AVATAR_IMAGE_BYTES: u64 = 4 * 1024 * 1024;

@@ -38,6 +38,10 @@ pub struct ProjectAvatar {
     pub emoji: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// 自定义图片（data URL）。**字段必须与前端 ProjectAvatarStyle 同步** —— 少写一个
+    /// 就是「存得下读不回」（kimiSessionId 那样翻车过一次）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 /// 任务落盘用的 DTO。**字段必须与前端 `src/types.ts` 的 `Task` 一一对应** ——

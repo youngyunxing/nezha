@@ -527,6 +527,56 @@
 /* 注意:不要在这里给 --avatar-from / --avatar-to 写默认值——它和上面的
    [data-avatar-color] 映射特异性相同且排在后面,会把映射整段盖掉(所有头像变成同一色)。
    兜底放在 var() 的第二个参数里。 */
+/* 自定义图片头像：铺满整个头像方块并裁切，底色渐变仍然在（图片透明处会透出来） */
+/* 头像编辑器里的「自定义图片」区块 */
+.avatar-editor-image-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.avatar-editor-image-preview {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-dim);
+}
+
+.avatar-editor-image-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-dim);
+  border-radius: 7px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.avatar-editor-image-btn:hover {
+  background: var(--bg-hover);
+}
+
+.avatar-editor-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-hint);
+  line-height: 1.5;
+}
+
+.project-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
 .project-avatar {
   width: var(--avatar-size, 28px);
   height: var(--avatar-size, 28px);

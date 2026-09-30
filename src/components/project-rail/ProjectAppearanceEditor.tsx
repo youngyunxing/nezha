@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { Image as ImageIcon } from "lucide-react";
 import { RotateCcw, Sparkles, X } from "lucide-react";
 import type { Project, ProjectAvatarColor, ProjectAvatarStyle } from "../../types";
 import { ProjectAvatar } from "../ProjectAvatar";
@@ -89,6 +92,22 @@ export function ProjectAppearanceEditor({
     if (next === "label" && avatar?.emoji) {
       setEmojiDraft("");
       commit({ emoji: undefined });
+    }
+  };
+
+  // 选一张本机图片 → 读成 data URL 存进项目（原图挪走/删掉都不会变破图）。
+  // 失败只写 console：这个编辑器没有 toast 通道，硬塞会把 props 链拉长，另开一刀再说。
+  const handlePickImage = async () => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
+    });
+    if (typeof picked !== "string") return;
+    try {
+      const dataUrl = await invoke<string>("read_image_as_data_url", { path: picked });
+      commit({ image: dataUrl });
+    } catch (err) {
+      console.error("读取头像图片失败：", err);
     }
   };
 
@@ -249,6 +268,34 @@ export function ProjectAppearanceEditor({
             );
           })}
         </div>
+      </div>
+
+      <div className="avatar-editor-section">
+        <span className="avatar-editor-label">{t("project.appearance.image")}</span>
+        <div className="avatar-editor-image-row">
+          {avatar?.image ? (
+            <>
+              <img className="avatar-editor-image-preview" src={avatar.image} alt="" />
+              <button
+                type="button"
+                className="avatar-editor-image-btn"
+                onClick={() => commit({ image: undefined })}
+              >
+                {t("project.appearance.imageRemove")}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="avatar-editor-image-btn"
+              onClick={handlePickImage}
+            >
+              <ImageIcon size={12} strokeWidth={2} />
+              {t("project.appearance.imagePick")}
+            </button>
+          )}
+        </div>
+        <span className="avatar-editor-hint">{t("project.appearance.imageHint")}</span>
       </div>
 
       <div className="avatar-editor-footer">

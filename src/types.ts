@@ -13,6 +13,9 @@ export interface Project {
 
 /** 项目头像的自定义项，三项全部可选、可组合。 */
 export interface ProjectAvatarStyle {
+  /** 自定义图片（data URL）。存 data URL 而不是路径：用户把原图挪走/删掉，
+   *  头像不会变成破图；代价是 projects.json 里会多几百 KB。 */
+  image?: string;
   /** 预设色板 key；缺省自动分配 */
   color?: ProjectAvatarColor;
   /** 单个 emoji / 符号（一个 grapheme），有则替代缩写显示 */
