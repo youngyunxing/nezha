@@ -113,6 +113,13 @@ export function FlowHandoff({
               </button>
               <button
                 type="button"
+                style={contextMode === "all" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setContextMode("all")}
+              >
+                {t("handoff.contextAll")}
+              </button>
+              <button
+                type="button"
                 style={contextMode === "recent" ? s.handoffChipActive : s.handoffChip}
                 onClick={() => setContextMode("recent")}
               >
@@ -129,13 +136,6 @@ export function FlowHandoff({
                   <span style={s.copySessionRecentLabel}>{t("copySession.recentSuffix")}</span>
                 </>
               )}
-              <button
-                type="button"
-                style={contextMode === "all" ? s.handoffChipActive : s.handoffChip}
-                onClick={() => setContextMode("all")}
-              >
-                {t("handoff.contextAll")}
-              </button>
             </div>
             <span style={s.newTaskDialogHint}>
               {contextMode === "compress" ? t("handoff.compressHint") : t("handoff.contextHint")}

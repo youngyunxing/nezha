@@ -379,6 +379,7 @@ export function RunningView({
         <QuickInput
           items={quickInputs}
           sessionKind={task.agent === "shell" ? "command" : "prompt"}
+          projectId={task.projectId}
           autoEnter={quickAutoEnter}
           onAutoEnterChange={onQuickAutoEnterChange}
           onInsert={onInput}

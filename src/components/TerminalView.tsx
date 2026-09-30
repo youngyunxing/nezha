@@ -199,14 +199,17 @@ export function TerminalView({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    const resizeObserver = new ResizeObserver(() => {
+    const scheduleFit = () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         const s = safeFit(fitAddon, term, container);
         if (s) notifyResize(s.cols, s.rows);
       }, 50);
-    });
+    };
+    const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
+    // 观察器偶发漏掉整窗缩放（容器尺寸由多层面板间接决定），窗口级事件再兜一次
+    window.addEventListener("resize", scheduleFit);
 
     return () => {
       disposed = true;
@@ -231,6 +234,7 @@ export function TerminalView({
       disposeOnData.dispose();
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleFit);
       container.removeEventListener("pointerdown", handlePointerDown as EventListener);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       terminalRef.current = null;

@@ -6,6 +6,9 @@
  */
 export type QuickInputKind = "prompt" | "command";
 
+/** 适用范围：默认所有项目通用，也可以只属于某个项目。 */
+export type QuickInputScope = "all" | "project";
+
 export interface QuickInput {
   id: string;
   /** 弹层里显示的短名 */
@@ -14,20 +17,24 @@ export interface QuickInput {
   text: string;
   /** prompt = 给 agent 的提示词；command = 给终端的命令 */
   kind: QuickInputKind;
+  /** 默认 all；project 时配合 projectId 只在那个项目里出现 */
+  scope: QuickInputScope;
+  projectId?: string;
 }
 
 const STORAGE_KEY = "nezha:quick-inputs";
 
 /** 首次使用时给两条，免得功能看着是空的。 */
 export const DEFAULT_QUICK_INPUTS: QuickInput[] = [
-  { id: "qi-continue", label: "继续", text: "继续", kind: "prompt" },
+  { id: "qi-continue", label: "继续", text: "继续", kind: "prompt", scope: "all" },
   {
     id: "qi-summary",
     label: "总结进度",
     text: "把当前进度总结一下：已经做完什么、还剩什么、下一步建议做什么",
     kind: "prompt",
+    scope: "all",
   },
-  { id: "qi-status", label: "git status", text: "git status", kind: "command" },
+  { id: "qi-status", label: "git status", text: "git status", kind: "command", scope: "all" },
 ];
 
 function sanitize(raw: unknown): QuickInput | null {
@@ -39,7 +46,10 @@ function sanitize(raw: unknown): QuickInput | null {
   const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : text.trim();
   // 老数据没有 kind：按"给 agent 的提示词"处理（更保守，不会在终端里被执行）
   const kind: QuickInputKind = o.kind === "command" ? "command" : "prompt";
-  return { id, label, text, kind };
+  const projectId = typeof o.projectId === "string" && o.projectId ? o.projectId : undefined;
+  // 只有明确写了 scope=project 且带着 projectId 才算项目专属，其余一律通用
+  const scope: QuickInputScope = o.scope === "project" && projectId ? "project" : "all";
+  return { id, label, text, kind, scope, projectId: scope === "project" ? projectId : undefined };
 }
 
 export function loadQuickInputs(): QuickInput[] {
@@ -88,7 +98,18 @@ export function saveQuickAutoEnter(value: boolean): void {
   }
 }
 
-/** 按会话类型筛出该显示的快捷输入：终端只给命令，agent 只给提示词。 */
-export function quickInputsForKind(list: QuickInput[], kind: QuickInputKind): QuickInput[] {
-  return list.filter((item) => item.kind === kind);
+/**
+ * 筛出当前会话该显示的快捷输入，两个条件都要满足：
+ * - 类型对得上（终端只给命令，agent 只给提示词）；
+ * - 范围对得上（通用的一律显示；项目专属的只在它那个项目里显示）。
+ */
+export function quickInputsForSession(
+  list: QuickInput[],
+  kind: QuickInputKind,
+  projectId: string | undefined,
+): QuickInput[] {
+  return list.filter(
+    (item) =>
+      item.kind === kind && (item.scope === "all" || (!!projectId && item.projectId === projectId)),
+  );
 }

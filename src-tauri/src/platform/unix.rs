@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::fs;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
@@ -45,32 +45,44 @@ pub(crate) fn default_shell_command() -> ShellCommand {
     }
 }
 
-/// 随桌面 App 一起装的 CLI：不在 PATH 上，但可以直接执行。
-/// ChatGPT 桌面版自带 codex（实测 /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex
-/// 能跑出 `codex-cli 0.159.0`），而用户往往以为"装了 ChatGPT 就等于装了 codex"。
-const APP_BUNDLED_BINARIES: &[(&str, &[&str])] = &[(
-    "codex",
-    &[
-        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
-        "/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex",
-    ],
-)];
+/// ChatGPT 桌面版把 codex 装在自己的 bundle 里，具体相对路径随版本变过
+/// （见过 `Contents/Resources/codex-cli/bin/codex`，也有 `.../CodexCLI.app/Contents/MacOS/codex`），
+/// 所以先试已知路径，再在 `Contents/Resources/*/bin/codex` 浅扫一层。
+fn chatgpt_bundled_codex() -> Option<String> {
+    const KNOWN: &[&str] = &[
+        "codex-cli/bin/codex",
+        "codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    ];
+    let mut apps = vec![std::path::PathBuf::from("/Applications/ChatGPT.app")];
+    if let Some(home) = crate::platform::home_dir() {
+        apps.push(home.join("Applications").join("ChatGPT.app"));
+    }
 
-fn bundled_binary_path(binary: &str) -> Option<String> {
-    let (_, candidates) = APP_BUNDLED_BINARIES.iter().find(|(name, _)| *name == binary)?;
-    let home_apps = crate::platform::home_dir().map(|home| home.join("Applications"));
-    for candidate in *candidates {
-        if Path::new(candidate).is_file() {
-            return Some((*candidate).to_string());
+    for app in apps {
+        let resources = app.join("Contents").join("Resources");
+        for rel in KNOWN {
+            let candidate = resources.join(rel);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
+        }
+        let Ok(entries) = fs::read_dir(&resources) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let candidate = entry.path().join("bin").join("codex");
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
         }
     }
-    // ~/Applications 下也装一份的情况
-    if let Some(apps) = home_apps {
-        let tail = candidates[0].trim_start_matches("/Applications/");
-        let p = apps.join(tail);
-        if p.is_file() {
-            return Some(p.to_string_lossy().to_string());
-        }
+    None
+}
+
+fn bundled_binary_path(binary: &str) -> Option<String> {
+    // 目前只有 codex 是"随 App 装"的；换成别的 CLI 就在这里加分支
+    if binary == "codex" {
+        return chatgpt_bundled_codex();
     }
     None
 }

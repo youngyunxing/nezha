@@ -800,6 +800,10 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
  * 里是 `if (isNaN(cols) || isNaN(rows)) return`，但 xterm.js 这条 NaN 路径
  * 不存在，必须在 rect 层先拦。
  */
+/** 小于这个尺寸认为是"布局还没稳"，先不告诉 PTY —— 免得 TUI 按它画首屏。 */
+const MIN_TRUSTED_COLS = 20;
+const MIN_TRUSTED_ROWS = 5;
+
 export function safeFit(
   fitAddon: FitAddon,
   term: Terminal,
@@ -812,6 +816,9 @@ export function safeFit(
   try {
     const dims = fitAddon.proposeDimensions();
     if (!dims || !Number.isFinite(dims.cols) || !Number.isFinite(dims.rows)) return null;
+    // 下限别只拦 2：容器刚开始布局时可能只有十几列，这个尺寸一发出去，TUI 就按窄宽度
+    // 画了首屏（用户看到的是"最上面很窄"，之后要等下一次尺寸变化才重排）。
+    if (dims.cols < MIN_TRUSTED_COLS || dims.rows < MIN_TRUSTED_ROWS) return null;
     if (dims.cols < 2 || dims.rows < 2) return null;
     fitAddon.fit();
     return { cols: term.cols, rows: term.rows };

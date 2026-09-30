@@ -6,9 +6,10 @@ import { useI18n } from "../../i18n";
 import s from "../../styles";
 import {
   makeQuickInputId,
-  quickInputsForKind,
+  quickInputsForSession,
   type QuickInput as QuickInputItem,
   type QuickInputKind,
+  type QuickInputScope,
 } from "../../quickInputs";
 
 /**
@@ -18,6 +19,7 @@ import {
 export function QuickInput({
   items,
   sessionKind,
+  projectId,
   autoEnter,
   onAutoEnterChange,
   onInsert,
@@ -27,6 +29,8 @@ export function QuickInput({
   items: QuickInputItem[];
   /** 当前会话是 agent（提示词）还是终端（命令）——只显示对应类型，免得提示词在终端里被执行 */
   sessionKind: QuickInputKind;
+  /** 当前项目 id：项目专属的快捷输入只有在这个项目里才显示 */
+  projectId: string;
   /** 开启后点一条 = 输入并直接发送（替你按回车） */
   autoEnter: boolean;
   onAutoEnterChange: (value: boolean) => void;
@@ -41,7 +45,7 @@ export function QuickInput({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // 只列当前会话类型对得上的那些
-  const visibleItems = quickInputsForKind(items, sessionKind);
+  const visibleItems = quickInputsForSession(items, sessionKind, projectId);
 
   return (
     <>
@@ -136,6 +140,7 @@ export function QuickInput({
         open={dialogOpen}
         editing={editing}
         defaultKind={sessionKind}
+        projectId={projectId}
         onOpenChange={setDialogOpen}
         onSave={onSave}
         onDelete={onDelete}
@@ -149,6 +154,7 @@ function QuickInputDialog({
   open,
   editing,
   defaultKind,
+  projectId,
   onOpenChange,
   onSave,
   onDelete,
@@ -157,6 +163,7 @@ function QuickInputDialog({
   editing: QuickInputItem | null;
   /** 新建时的默认类型：跟着当前会话走 */
   defaultKind: QuickInputKind;
+  projectId: string;
   onOpenChange: (open: boolean) => void;
   onSave: (item: QuickInputItem) => void;
   onDelete: (id: string) => void;
@@ -165,6 +172,7 @@ function QuickInputDialog({
   const [label, setLabel] = useState("");
   const [text, setText] = useState("");
   const [kind, setKind] = useState<QuickInputKind>(defaultKind);
+  const [scope, setScope] = useState<QuickInputScope>("all");
 
   // 每次打开把当前要改的那条灌进表单（新增就是空的）
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -175,6 +183,7 @@ function QuickInputDialog({
       setLabel(editing?.label ?? "");
       setText(editing?.text ?? "");
       setKind(editing?.kind ?? defaultKind);
+      setScope(editing?.scope ?? "all");
     }
   }
 
@@ -216,6 +225,27 @@ function QuickInputDialog({
               </button>
             </div>
             <span style={s.newTaskDialogHint}>{t("quickInput.kindHint")}</span>
+          </div>
+
+          <div style={s.presetFieldRow}>
+            <label style={s.forkDialogLabel}>{t("quickInput.scope")}</label>
+            <div style={s.handoffContextRow}>
+              <button
+                type="button"
+                style={scope === "all" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setScope("all")}
+              >
+                {t("quickInput.scopeAll")}
+              </button>
+              <button
+                type="button"
+                style={scope === "project" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setScope("project")}
+              >
+                {t("quickInput.scopeProject")}
+              </button>
+            </div>
+            <span style={s.newTaskDialogHint}>{t("quickInput.scopeHint")}</span>
           </div>
 
           <div style={s.presetFieldRow}>
@@ -276,6 +306,8 @@ function QuickInputDialog({
                   label: label.trim() || trimmedText,
                   text: trimmedText,
                   kind,
+                  scope,
+                  projectId: scope === "project" ? projectId : undefined,
                 });
                 onOpenChange(false);
               }}
