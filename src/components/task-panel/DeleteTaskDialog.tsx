@@ -21,9 +21,6 @@ export function DeleteTaskDialog({
   onArchive: () => void;
 }) {
   const { t } = useI18n();
-  const promptPreview = task
-    ? `${task.prompt.slice(0, 100)}${task.prompt.length > 100 ? "..." : ""}`
-    : "";
   // 有 worktree 的任务，删除时丢掉的是「未提交的改动」；普通任务丢的是它自己的记录。
   // 两种代价差得远，正文分开写（判据与 cleanupTaskWorktree 一致）。
   const hasWorktree = !!task?.worktreePath && !!task.worktreeBranch && !task.worktreeDiscarded;
@@ -44,7 +41,6 @@ export function DeleteTaskDialog({
           <Dialog.Description style={s.forkDialogDescription}>
             {hasWorktree ? t("task.deleteConfirmBodyWorktree") : t("task.deleteConfirmBody")}
           </Dialog.Description>
-          {task && <div style={s.deleteTaskPreview}>{promptPreview}</div>}
           <div style={s.forkDialogActions}>
             <button type="button" style={s.forkDialogCancelBtn} onClick={onCancel}>
               {t("common.cancel")}

@@ -27,13 +27,12 @@ function renderDialog(over: Partial<Parameters<typeof DeleteTaskDialog>[0]> = {}
 }
 
 describe("删除任务的确认框", () => {
-  it("标题是「确认删除？」，三颗按钮齐全，带上任务内容", () => {
+  it("标题是「确认删除？」，三颗按钮齐全", () => {
     renderDialog();
     expect(screen.getByText("确认删除？")).toBeTruthy();
     expect(screen.getByText("取消")).toBeTruthy();
     expect(screen.getByText("归档")).toBeTruthy();
     expect(screen.getByText("确认")).toBeTruthy();
-    expect(screen.getByText("重构一下会话解析")).toBeTruthy();
   });
 
   it("三颗按钮各走各的回调", () => {
@@ -67,10 +66,11 @@ describe("删除任务的确认框", () => {
     expect(screen.getByText(/建议用「归档」/)).toBeTruthy();
   });
 
-  it("普通任务的正文说的是记录找不回来", () => {
+  it("普通任务的正文说记录找不回来，但明说代码不会被动", () => {
     renderDialog();
     expect(screen.getByText(/记录就找不回来了/)).toBeTruthy();
     expect(screen.queryByText(/未提交的改动会被丢弃/)).toBeNull();
+    expect(screen.getByText(/你的代码不会被动/)).toBeTruthy();
     expect(screen.getByText(/建议用「归档」/)).toBeTruthy();
   });
 
