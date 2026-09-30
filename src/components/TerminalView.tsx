@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
-
 import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import {
@@ -29,33 +28,6 @@ import {
 } from "./terminalShared";
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
-
-/** 重画整屏的代价随缓冲行数线性上升：超过这个行数宁可不重画（留着碎片），
- *  也不要让切任务时卡一下。两万行覆盖日常会话，真的超了说明会话很长。 */
-const REPAINT_MAX_LINES = 20000;
-/** 长宽比这个幅度才算"明显变大"（双击缩放那种）；慢速拖动的小步进不重画。 */
-const SIGNIFICANT_GROW_RATIO = 1.25;
-
-/**
- * 按当前网格重画整个缓冲：serialize 出来的是**逻辑行**（不带屏幕上的硬断行），reset 后整段
- * 写回，随后的 fit 会按当前宽度重新换行 —— 变窄期间被硬断行过的历史就恢复了。
- * 备用屏（全屏 TUI）跳过：它自己会随 SIGWINCH 重画，硬灌回去会打乱它的界面状态。
- * 返回是否真的重画了。
- */
-function repaintFromSnapshot(term: Terminal, addon: SerializeAddon | null): boolean {
-  if (!addon) return false;
-  const buf = term.buffer.active;
-  if (buf.type !== "normal" || buf.length === 0 || buf.length > REPAINT_MAX_LINES) return false;
-  try {
-    const snapshot = addon.serialize();
-    if (!snapshot) return false;
-    term.reset();
-    term.write(snapshot);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 interface TerminalViewProps {
   onInput: (data: string) => void;
@@ -98,7 +70,6 @@ export function TerminalView({
   isActiveRef.current = isActive;
   /** 最近一次真正告诉 PTY 的尺寸：用来区分"变大"和"变小" */
   const notifiedSizeRef = useRef<{ cols: number; rows: number } | null>(null);
-  const serializeAddonRef = useRef<SerializeAddon | null>(null);
 
   const onReadyRef = useRef(onReady);
   const onSnapshotRef = useRef(onSnapshot);
@@ -149,7 +120,6 @@ export function TerminalView({
     let disposed = false;
 
     const serializeAddon = new SerializeAddon();
-    serializeAddonRef.current = serializeAddon;
     term.loadAddon(serializeAddon);
     term.open(container);
     // 必须在 term.open() 之后挂：_charSizeService 在 open 时才实例化。
@@ -268,13 +238,7 @@ export function TerminalView({
         clearTimeout(shrinkTimer);
         shrinkTimer = null;
       }
-      // 明显变大（双击缩放那种）时重画一遍：变窄期间 CLI 按窄宽度打印过，那些行是硬断行，
-      // 光靠 reflow 救不回来。慢速拖动的小步进不触发（比例不过阈值），免得每拖一下都重画整屏。
-      const significantGrow = !!prev && s.cols > prev.cols * SIGNIFICANT_GROW_RATIO;
-      resizeTimer = setTimeout(() => {
-        if (significantGrow) repaintFromSnapshot(term, serializeAddonRef.current);
-        applySize(s.cols, s.rows);
-      }, 150);
+      resizeTimer = setTimeout(() => applySize(s.cols, s.rows), 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
@@ -338,31 +302,14 @@ export function TerminalView({
   useEffect(() => {
     if (!isActive) return;
     window.requestAnimationFrame(() => {
-      const fitAddon = fitAddonRef.current;
-      const term = terminalRef.current;
-      const container = containerRef.current;
-      if (!fitAddon || !term || !container) return;
-
-      // 重新可见时按当前网格重画一遍（对齐 Orca 的 hidden-restore paint）。
-      // 隐藏期间容器尺寸变过的话，缓冲区里按旧宽度硬换行过的历史会留下窄行碎片；
-      // serialize 出来的是**逻辑行**，重新写回并 fit 时会按当前宽度重新换行，碎片就没了。
-      // 顺序是先重画再 fit：这样 fit 的 reflow 作用在刚归一化过的内容上（换行标记完整），
-      // 反过来先 fit 会把已经断开的硬行一起 serialize 进去，越弄越碎。
-      // 全屏 TUI（备用屏）跳过：它自己在 SIGWINCH 时会重画，硬灌回去会打乱它的界面状态。
-      const dims = fitAddon.proposeDimensions?.();
-      const sizeChanged =
-        !!dims &&
-        Number.isFinite(dims.cols) &&
-        (dims.cols !== term.cols || dims.rows !== term.rows);
-      if (sizeChanged) repaintFromSnapshot(term, serializeAddonRef.current);
-
-      const s = safeFit(fitAddon, term, container);
+      if (!fitAddonRef.current || !terminalRef.current || !containerRef.current) return;
+      const s = safeFit(fitAddonRef.current, terminalRef.current, containerRef.current);
       if (s) {
         notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
         notifyResize(s.cols, s.rows);
       }
-      refreshTerminalDisplay(term);
-      term.focus();
+      refreshTerminalDisplay(terminalRef.current);
+      terminalRef.current.focus();
     });
   }, [isActive, notifyResize]);
 
