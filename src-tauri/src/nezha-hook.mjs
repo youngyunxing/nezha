@@ -22,6 +22,18 @@ const pick = (payload, ...keys) => {
   return "";
 };
 
+// 纯终端任务里手敲的可能是 claude / codex / kimi 任一家，而 NEZHA_AGENT 只有 "shell"。
+// 按 payload 形状认人：codex 用 event_name/conversation_id；kimi 的 session_id 带 session_ 前缀
+// （claude 是裸 uuid）；都不像就按 claude 算。
+const agentFromPayload = (payload) => {
+  const env = process.env.NEZHA_AGENT || "";
+  if (env && env !== "shell") return env;
+  if (payload.event_name || payload.conversation_id) return "codex";
+  const sid = typeof payload.session_id === "string" ? payload.session_id : "";
+  if (sid.startsWith("session_")) return "kimi";
+  return "claude";
+};
+
 let raw = "";
 let done = false;
 
@@ -36,7 +48,7 @@ function finish() {
       JSON.stringify({
         ts: Date.now(),
         task_id: taskId,
-        agent: process.env.NEZHA_AGENT || "",
+        agent: agentFromPayload(payload),
         event: pick(payload, "hook_event_name", "event_name", "hookEventName", "event"),
         session_id:
           pick(payload, "session_id", "conversation_id", "sessionId", "conversationId") ||

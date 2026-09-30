@@ -274,6 +274,9 @@ fn handle_session_start(app: &AppHandle, ev: &HookEvent) {
             "task_id": ev.task_id,
             "session_id": ev.session_id,
             "session_path": session_path,
+            // 会话属于哪家：纯终端任务里手敲的 claude/codex/kimi 都往这个任务上报，
+            // 前端据此存到对应字段（任务自己的 agent 在这里不够用）。
+            "agent": ev.agent,
         }),
     );
 }

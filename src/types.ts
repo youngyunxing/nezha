@@ -239,6 +239,9 @@ export function canForkAgent(agent: AgentType): boolean {
 export function taskSessionId(task: Task): string | undefined {
   if (task.agent === "codex") return task.codexSessionId;
   if (task.agent === "kimi") return task.kimiSessionId;
+  if (task.agent === "shell") {
+    return task.claudeSessionId ?? task.kimiSessionId ?? task.codexSessionId;
+  }
   return task.claudeSessionId;
 }
 
@@ -246,6 +249,10 @@ export function taskSessionId(task: Task): string | undefined {
 export function taskSessionPath(task: Task): string | undefined {
   if (task.agent === "codex") return task.codexSessionPath;
   if (task.agent === "kimi") return task.kimiSessionPath;
+  // 纯终端任务：它自己没有 agent，里面手敲的可能是任一家 —— 哪个字段有值就用哪个
+  if (task.agent === "shell") {
+    return task.claudeSessionPath ?? task.kimiSessionPath ?? task.codexSessionPath;
+  }
   return task.claudeSessionPath;
 }
 

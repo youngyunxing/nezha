@@ -884,11 +884,11 @@ function App() {
         if (status === "done") scheduleForDoneTask(task_id);
       },
     );
-    const p2 = listen<{ task_id: string; session_id: string; session_path: string }>(
+    const p2 = listen<{ task_id: string; session_id: string; session_path: string; agent?: string }>(
       "task-session",
       (e) => {
-        const { task_id, session_id, session_path } = e.payload;
-        updateTaskSession(task_id, session_id, session_path);
+        const { task_id, session_id, session_path, agent } = e.payload;
+        updateTaskSession(task_id, session_id, session_path, agent);
       },
     );
     return () => {
@@ -1815,27 +1815,27 @@ function App() {
     });
   }
 
-  function updateTaskSession(taskId: string, sessionId: string, sessionPath: string) {
+  function updateTaskSession(
+    taskId: string,
+    sessionId: string,
+    sessionPath: string,
+    sessionAgent?: string,
+  ) {
     setTasks((prev) => {
       let changed = false;
       const next = prev.map((task) => {
         if (task.id !== taskId) return task;
-        if (task.agent === "claude") {
+        // 事件的 agent 优先：纯终端任务里手敲的那家才是会话真正的主人
+        const agent = sessionAgent || task.agent;
+        if (agent === "claude") {
           if (task.claudeSessionId === sessionId && task.claudeSessionPath === sessionPath)
             return task;
           changed = true;
           return { ...task, claudeSessionId: sessionId, claudeSessionPath: sessionPath };
-        } else if (task.agent === "kimi") {
+        } else if (agent === "kimi") {
           if (task.kimiSessionId === sessionId && task.kimiSessionPath === sessionPath) return task;
           changed = true;
           return { ...task, kimiSessionId: sessionId, kimiSessionPath: sessionPath };
-        } else if (task.agent === "shell") {
-          // 纯终端任务里手动起的 claude：记到 claude 字段 —— taskSessionPath 对 shell 读的
-          // 正是 claudeSessionPath，于是回放/导出都能用（状态由 hook 直接驱动）。
-          if (task.claudeSessionId === sessionId && task.claudeSessionPath === sessionPath)
-            return task;
-          changed = true;
-          return { ...task, claudeSessionId: sessionId, claudeSessionPath: sessionPath };
         } else {
           if (task.codexSessionId === sessionId && task.codexSessionPath === sessionPath)
             return task;
