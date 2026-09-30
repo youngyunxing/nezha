@@ -128,8 +128,8 @@ export function RunningView({
   onReconnect: () => void;
   /** 这一轮的新回复已被看到：把「有新回复」落回「空闲待命」 */
   onMarkRead?: () => void;
-  /** 把当前会话流转给另一个 agent */
-  onHandoff: (options: HandoffOptions) => void;
+  /** 把当前会话流转给另一个 agent；resolve true = 完成，弹窗自己关 */
+  onHandoff: (options: HandoffOptions) => Promise<boolean>;
   /** 会话右下角的快捷输入 */
   quickInputs: QuickInputItem[];
   /** 快捷输入：输入后是否自动回车 */
@@ -589,10 +589,7 @@ export function RunningView({
         sourceLabel={task.agent === "codex" ? "Codex" : "Claude Code"}
         defaultTarget={task.agent === "codex" ? "claude" : "codex"}
         onOpenChange={setHandoffOpen}
-        onHandoff={(options) => {
-          setHandoffOpen(false);
-          onHandoff(options);
-        }}
+        onHandoff={onHandoff}
       />
       <ForkTaskDialog
         open={forkDialogOpen}

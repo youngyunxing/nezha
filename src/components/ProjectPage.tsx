@@ -140,7 +140,7 @@ export function ProjectPage({
   presets: TaskPreset[];
   onRunPreset: (preset: TaskPreset, repoPath: string) => void;
   /** 把当前会话流转给另一个 agent（会话右下角）*/
-  onHandoffTask: (taskId: string, options: HandoffOptions) => void;
+  onHandoffTask: (taskId: string, options: HandoffOptions) => Promise<boolean>;
   /** 快捷输入（会话右下角） */
   quickInputs: QuickInputItem[];
   quickAutoEnter: boolean;

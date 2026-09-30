@@ -196,6 +196,7 @@ pub fn run() {
             fs::search_project_files,
             git::discover_git_roots,
             agent_assist::generate_task_name,
+            agent_assist::compress_session_context,
             git::git_status,
             git::git_list_branches,
             git::git_create_branch,

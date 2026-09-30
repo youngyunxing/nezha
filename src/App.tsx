@@ -535,24 +535,34 @@ function App() {
 
   /** 把当前会话的上下文交给另一个 agent：跨 agent 没法恢复对方的会话记录，所以是把
    *  上下文原样写进新任务的提示词。新任务用占位名，跑完第一轮会自动起标题。 */
-  async function handleHandoff(taskId: string, options: HandoffOptions) {
+  async function handleHandoff(taskId: string, options: HandoffOptions): Promise<boolean> {
     const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
+    if (!task) return false;
     const project = projects.find((p) => p.id === task.projectId);
     const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
-    if (!project || !sessionPath) return;
+    if (!project || !sessionPath) return false;
     const sourceLabel = task.agent === "codex" ? "Codex" : "Claude Code";
     const targetLabel = options.agent === "codex" ? "Codex" : "Claude Code";
     try {
-      const messages = await invoke<CopyableMessage[]>("read_session_messages", { sessionPath });
-      const contextText = sessionMessagesToText(messages, {
-        count: options.contextCount,
-        assistantLabel: sourceLabel,
-        youLabel: t("copySession.you"),
-      });
+      // 压缩摘要：让源 agent 把会话读一遍再写交接摘要（比原样搬更适合长会话）
+      const contextText =
+        options.contextMode === "compress"
+          ? await invoke<string>("compress_session_context", {
+              projectPath: project.path,
+              agent: task.agent,
+              sessionPath,
+            })
+          : sessionMessagesToText(
+              await invoke<CopyableMessage[]>("read_session_messages", { sessionPath }),
+              {
+                count: options.contextMode === "all" ? undefined : options.contextCount,
+                assistantLabel: sourceLabel,
+                youLabel: t("copySession.you"),
+              },
+            );
       if (!contextText) {
         showToast(t("copySession.empty"), "warning");
-        return;
+        return false;
       }
       showToast(t("handoff.created", { agent: targetLabel }), "success");
       await handleSubmitTask(project, {
@@ -565,8 +575,10 @@ function App() {
         baseBranch: "",
         name: defaultTaskName(options.agent, `${Date.now()}`),
       });
+      return true;
     } catch (error) {
       showToast(t("handoff.failed", { error: String(error) }), "error");
+      return false;
     }
   }
 

@@ -8,9 +8,13 @@ import { SelectField } from "../new-task/NewTaskDialog";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
+export type HandoffContextMode = "compress" | "recent" | "all";
+
 export interface HandoffOptions {
   agent: AgentType;
-  /** 带过去的上下文条数；undefined = 全部 */
+  /** 上下文怎么带：压缩摘要（默认）/ 原样最近 N 条 / 原样全部 */
+  contextMode: HandoffContextMode;
+  /** contextMode="recent" 时的条数 */
   contextCount?: number;
   note: string;
 }
@@ -33,11 +37,12 @@ export function FlowHandoff({
   /** 默认交给另一个 agent（Claude 转 Codex、Codex 转 Claude） */
   defaultTarget: AgentType;
   onOpenChange: (open: boolean) => void;
-  onHandoff: (options: HandoffOptions) => void;
+  /** 返回 true 表示交接完成（弹窗关闭），false 表示失败（保持打开） */
+  onHandoff: (options: HandoffOptions) => Promise<boolean>;
 }) {
   const { t } = useI18n();
   const [agent, setAgent] = useState<AgentType>(defaultTarget);
-  const [allContext, setAllContext] = useState(false);
+  const [contextMode, setContextMode] = useState<HandoffContextMode>("compress");
   const [count, setCount] = useState(String(DEFAULT_CONTEXT));
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,7 +55,8 @@ export function FlowHandoff({
   }
 
   const parsedCount = Number.parseInt(count, 10);
-  const validCount = allContext || (Number.isFinite(parsedCount) && parsedCount > 0);
+  const validCount =
+    contextMode !== "recent" || (Number.isFinite(parsedCount) && parsedCount > 0);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -100,19 +106,19 @@ export function FlowHandoff({
             <div style={s.handoffContextRow}>
               <button
                 type="button"
-                style={allContext ? s.handoffChipActive : s.handoffChip}
-                onClick={() => setAllContext(true)}
+                style={contextMode === "compress" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setContextMode("compress")}
               >
-                {t("handoff.contextAll")}
+                {t("handoff.contextCompress")}
               </button>
               <button
                 type="button"
-                style={allContext ? s.handoffChip : s.handoffChipActive}
-                onClick={() => setAllContext(false)}
+                style={contextMode === "recent" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setContextMode("recent")}
               >
                 {t("handoff.contextRecent")}
               </button>
-              {!allContext && (
+              {contextMode === "recent" && (
                 <>
                   <input
                     style={s.copySessionCountInput}
@@ -123,8 +129,17 @@ export function FlowHandoff({
                   <span style={s.copySessionRecentLabel}>{t("copySession.recentSuffix")}</span>
                 </>
               )}
+              <button
+                type="button"
+                style={contextMode === "all" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setContextMode("all")}
+              >
+                {t("handoff.contextAll")}
+              </button>
             </div>
-            <span style={s.newTaskDialogHint}>{t("handoff.contextHint")}</span>
+            <span style={s.newTaskDialogHint}>
+              {contextMode === "compress" ? t("handoff.compressHint") : t("handoff.contextHint")}
+            </span>
           </div>
 
           <div style={s.presetFieldRow}>
@@ -154,14 +169,18 @@ export function FlowHandoff({
               onClick={() => {
                 if (busy || !validCount) return;
                 setBusy(true);
-                onHandoff({
+                void onHandoff({
                   agent,
-                  contextCount: allContext ? undefined : parsedCount,
+                  contextMode,
+                  contextCount: contextMode === "recent" ? parsedCount : undefined,
                   note,
+                }).then((ok) => {
+                  setBusy(false);
+                  if (ok) onOpenChange(false);
                 });
               }}
             >
-              {t("handoff.confirm")}
+              {busy && contextMode === "compress" ? t("handoff.compressing") : t("handoff.confirm")}
             </button>
           </div>
         </Dialog.Content>

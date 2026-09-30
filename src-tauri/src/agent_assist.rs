@@ -64,7 +64,7 @@ async fn read_pipe_to_end<R: AsyncRead + Unpin>(
 
 /// 异步启动命名 agent 子进程。超时后通过 `start_kill()` 终止子进程，
 /// 避免阻塞线程和后台 agent 持续运行（M-2 修复）。
-async fn run_naming_agent_with_timeout(
+async fn run_assist_agent_with_timeout(
     agent: &str,
     project_path: &str,
     prompt: &str,
@@ -172,6 +172,21 @@ fn extract_titled_answer(stdout: &str) -> Option<String> {
         None
     } else {
         Some(inner.split_whitespace().collect::<Vec<_>>().join(" "))
+    }
+}
+
+/// 取 `<SUMMARY>…</SUMMARY>` 里的正文。**保留换行** —— 摘要是有结构的（分点、代码块），
+/// 不能像标题那样把空白压成一行。
+fn extract_summary_answer(stdout: &str) -> Option<String> {
+    const OPEN: &str = "<SUMMARY>";
+    const CLOSE: &str = "</SUMMARY>";
+    let close_pos = stdout.rfind(CLOSE)?;
+    let open_start = stdout[..close_pos].rfind(OPEN)? + OPEN.len();
+    let inner = stdout[open_start..close_pos].trim();
+    if inner.is_empty() {
+        None
+    } else {
+        Some(inner.to_string())
     }
 }
 
@@ -324,7 +339,7 @@ pub async fn generate_task_name(
 
     // 4. 调用 agent 子进程（kill-on-timeout）
     let output =
-        run_naming_agent_with_timeout(&agent, &project_path, &full_prompt, NAMING_TIMEOUT).await?;
+        run_assist_agent_with_timeout(&agent, &project_path, &full_prompt, NAMING_TIMEOUT).await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -451,5 +466,99 @@ mod tests {
     fn build_naming_prompt_without_summary_uses_fallback() {
         let p = build_naming_prompt("写个 hello world", None);
         assert!(p.contains(NAMING_FALLBACK_SUMMARY));
+    }
+}
+
+// ── 流转用的上下文压缩 ────────────────────────────────────────────────────────
+
+/// 压缩要读完整个会话再写摘要，比起名慢得多。
+const COMPRESS_TIMEOUT: Duration = Duration::from_secs(120);
+/// 交给压缩 agent 的会话正文上限（起名那条路只用 7000，这里要够长才有摘要质量）。
+const COMPRESS_SUMMARY_CHARS: usize = 24000;
+
+const COMPRESS_PROMPT_TEMPLATE: &str = r#"下面是一段开发会话的记录。请把它压缩成一份**交接摘要**，给另一个 AI 助手接着干活用。
+
+要求：
+- 只输出摘要本身，用 <SUMMARY> 和 </SUMMARY> 包住，不要写任何别的话；
+- 结构固定为：1) 目标 2) 已完成 3) 未完成 / 卡在哪 4) 关键决策与原因 5) 关键文件与命令 6) 建议的下一步；
+- 保留必要的文件路径、命令、报错原文；删掉闲聊、寒暄和重复内容；
+- 用中文，控制在 800 字以内。
+
+<会话记录>
+{summary}
+</会话记录>"#;
+
+/// 把一个会话压成交接摘要（流转时默认走这条，而不是把整段对话原样搬过去）。
+/// 用的是**源** agent 的 CLI：它一定装着，也最了解自己的会话。
+#[tauri::command]
+pub async fn compress_session_context(
+    project_path: String,
+    agent: String,
+    session_path: Option<String>,
+) -> Result<String, String> {
+    if !matches!(agent.as_str(), "claude" | "codex") {
+        return Err(format!("Unsupported agent: {}", agent));
+    }
+
+    let project_for_validation = project_path.clone();
+    tokio::task::spawn_blocking(move || validate_project_path_for_naming(&project_for_validation))
+        .await
+        .map_err(|e| format!("project_path 校验线程错误: {}", e))??;
+
+    let raw_path = session_path.ok_or_else(|| "缺少会话文件路径".to_string())?;
+    let project_for_summary = project_path.clone();
+    let transcript = tokio::task::spawn_blocking(move || {
+        match crate::session::validate_session_path(&raw_path, &project_for_summary, false) {
+            Ok(canonical) => crate::session::extract_session_summary_text(
+                &canonical.to_string_lossy(),
+                COMPRESS_SUMMARY_CHARS,
+            ),
+            Err(e) => {
+                eprintln!("[compress_session_context] session_path 校验失败：{}", e);
+                None
+            }
+        }
+    })
+    .await
+    .map_err(|e| format!("摘要线程错误: {}", e))?
+    .ok_or_else(|| "读不到会话内容".to_string())?;
+
+    let prompt = COMPRESS_PROMPT_TEMPLATE.replace("{summary}", &transcript);
+    let output = run_assist_agent_with_timeout(&agent, &project_path, &prompt, COMPRESS_TIMEOUT).await?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Agent failed: {}{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        ));
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).into_owned();
+    extract_summary_answer(&raw)
+        .or_else(|| {
+            let trimmed = raw.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        })
+        .ok_or_else(|| "压缩没有返回内容".to_string())
+}
+
+#[cfg(test)]
+mod compress_tests {
+    use super::extract_summary_answer;
+
+    #[test]
+    fn keeps_line_breaks_and_structure() {
+        let out = "废话\n<SUMMARY>\n1) 目标：修登录\n2) 已完成：改了 auth.ts\n</SUMMARY>\n尾巴";
+        assert_eq!(
+            extract_summary_answer(out).unwrap(),
+            "1) 目标：修登录\n2) 已完成：改了 auth.ts"
+        );
+    }
+
+    #[test]
+    fn none_when_missing_or_empty() {
+        assert!(extract_summary_answer("没有标签").is_none());
+        assert!(extract_summary_answer("<SUMMARY>   </SUMMARY>").is_none());
     }
 }
