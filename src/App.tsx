@@ -67,6 +67,7 @@ import {
 } from "./projectName";
 import { useI18n } from "./i18n";
 import { ProjectDrawer } from "./components/ProjectDrawer";
+import { DeleteTaskDialog } from "./components/task-panel/DeleteTaskDialog";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -285,6 +286,8 @@ const noop = () => {};
 
 function App() {
   const { showToast } = useToast();
+  /** 正在确认删除的任务 id（null = 没有弹窗） */
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const { t } = useI18n();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialThemeMode);
@@ -1560,16 +1563,11 @@ function App() {
     });
   }
 
-  async function handleDeleteTask(taskId: string) {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    const promptPreview = `${task.prompt.slice(0, 100)}${task.prompt.length > 100 ? "..." : ""}`;
-    const ok = await confirm(t("task.deletePrompt", { prompt: promptPreview }), {
-      title: t("task.deleteTitle"),
-      kind: "warning",
-    });
-    if (!ok) return;
-    deleteTasks([taskId]);
+  /** 删除任务：先开确认框（确认 / 取消 / 归档）。原生 confirm 只有两个按钮，
+   *  没法给「归档」这条更安全的路，所以换成自己画的 DialogTaskDialog。 */
+  function handleDeleteTask(taskId: string) {
+    if (!tasks.some((item) => item.id === taskId)) return;
+    setDeleteTaskId(taskId);
   }
 
   /** 归档 = 退出会话 + 移进「已归档」分组。**不删任何东西**：会话文件、worktree、终端屏幕都留着，
@@ -2058,6 +2056,21 @@ function App() {
           />
         </div>
       )}
+
+      <DeleteTaskDialog
+        task={tasks.find((item) => item.id === deleteTaskId) ?? null}
+        onCancel={() => setDeleteTaskId(null)}
+        onConfirm={() => {
+          const id = deleteTaskId;
+          setDeleteTaskId(null);
+          if (id) deleteTasks([id]);
+        }}
+        onArchive={() => {
+          const id = deleteTaskId;
+          setDeleteTaskId(null);
+          if (id) void handleArchiveTask(id);
+        }}
+      />
     </div>
   );
   return <ProjectAppearanceProvider projects={projects}>{appTree}</ProjectAppearanceProvider>;

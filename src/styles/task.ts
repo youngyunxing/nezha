@@ -425,6 +425,20 @@ export const task = {
     padding: "1px 4px",
     outline: "none",
   },
+  /** 删除确认框里那行任务内容（提示词预览） */
+  deleteTaskPreview: {
+    marginTop: 10,
+    padding: "7px 10px",
+    borderRadius: 6,
+    background: "var(--bg-input)",
+    border: "1px solid var(--border-dim)",
+    color: "var(--text-secondary)",
+    fontSize: 12,
+    lineHeight: 1.45,
+    maxHeight: 72,
+    overflowY: "auto" as const,
+    wordBreak: "break-word" as const,
+  },
   taskCardSub: { fontSize: 11, color: "var(--text-muted)", marginTop: 1 },
   taskDiffStats: {
     display: "inline-flex",
