@@ -138,6 +138,7 @@ export function TaskPanel({
             title={presetSummary(preset, {
               claude: "Claude Code",
               codex: "Codex",
+              kimi: "Kimi",
               shell: t("terminal.title"),
               worktree: t("newTask.dialogIsolated"),
             })}

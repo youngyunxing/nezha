@@ -30,6 +30,8 @@ import {
   defaultTaskName,
   getDefaultMonoFont,
   isAutoDefaultMonoFont,
+  taskSessionId,
+  taskSessionPath,
 } from "./types";
 import type { FontFamily, ProjectAvatarStyle } from "./types";
 import { quoteFontName } from "./utils/fonts";
@@ -539,7 +541,7 @@ function App() {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return false;
     const project = projects.find((p) => p.id === task.projectId);
-    const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
+    const sessionPath = taskSessionPath(task);
     if (!project || !sessionPath) return false;
     const sourceLabel = task.agent === "codex" ? "Codex" : "Claude Code";
     const targetLabel = options.agent === "codex" ? "Codex" : "Claude Code";
@@ -769,9 +771,8 @@ function App() {
           autoResume.push({ task, project, sessionId: null });
           continue;
         }
-        const isCodex = task.agent === "codex";
-        const sessionId = isCodex ? task.codexSessionId : task.claudeSessionId;
-        const sessionPath = isCodex ? task.codexSessionPath : task.claudeSessionPath;
+        const sessionId = taskSessionId(task);
+        const sessionPath = taskSessionPath(task);
         if (!sessionId || !sessionPath) continue;
         autoResume.push({ task, project, sessionId });
       }
@@ -1287,7 +1288,7 @@ function App() {
     if (!task) return;
     // 纯终端没有会话可 resume：直接重开一个 shell（屏幕上先回放终端快照/输出缓冲）。
     const isShell = task.agent === "shell";
-    const sessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
+    const sessionId = taskSessionId(task);
     if (!isShell && !sessionId) {
       showToast(t("running.resumeUnavailable"), "warning");
       return;
@@ -1598,7 +1599,7 @@ function App() {
     const auto = opts?.auto === true;
     // 按 agent 选择对应字段，避免历史数据两个字段都有时取错
     const sessionPath =
-      task.agent === "codex" ? (task.codexSessionPath ?? null) : (task.claudeSessionPath ?? null);
+      taskSessionPath(task) ?? null;
     // 点击瞬间的快照，用于 await 完成后的并发校验（防止用户期间 rerun/resume/手改名）
     const expectedPriorName = task.name ?? "";
     const expectedPrompt = task.prompt;
@@ -1622,10 +1623,7 @@ function App() {
         if ((current.name ?? "") !== expectedPriorName) return prev;
         if (current.prompt !== expectedPrompt) return prev;
         if (!auto && current.status !== expectedStatus) return prev;
-        const currentSessionPath =
-          current.agent === "codex"
-            ? (current.codexSessionPath ?? null)
-            : (current.claudeSessionPath ?? null);
+        const currentSessionPath = taskSessionPath(current) ?? null;
         if (currentSessionPath !== expectedSessionPath) return prev;
 
         const next = prev.map((x) => (x.id === taskId ? { ...x, name: trimmed || undefined } : x));
@@ -1735,7 +1733,7 @@ function App() {
       }
       if (nameGenRequestedRef.current.has(task.id)) continue;
       if (task.agent === "shell") continue;
-      if (!/^(?:claude|codex)-\d+$/.test(task.name ?? "")) continue; // 用户填过名字
+      if (!/^(?:claude|codex|kimi)-\d+$/.test(task.name ?? "")) continue; // 用户填过名字
       if (!NAMABLE.has(task.status)) continue;
       nameGenRequestedRef.current.add(task.id);
       void handleGenerateTaskName(task.id, { auto: true }).catch(() => {});
@@ -1825,6 +1823,10 @@ function App() {
             return task;
           changed = true;
           return { ...task, claudeSessionId: sessionId, claudeSessionPath: sessionPath };
+        } else if (task.agent === "kimi") {
+          if (task.kimiSessionId === sessionId && task.kimiSessionPath === sessionPath) return task;
+          changed = true;
+          return { ...task, kimiSessionId: sessionId, kimiSessionPath: sessionPath };
         } else {
           if (task.codexSessionId === sessionId && task.codexSessionPath === sessionPath)
             return task;

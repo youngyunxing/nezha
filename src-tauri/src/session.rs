@@ -2386,3 +2386,97 @@ mod tests {
         assert_eq!(canonical.extension().and_then(|e| e.to_str()), Some("md"));
     }
 }
+
+// ── Kimi 会话发现（延迟绑定）────────────────────────────────────────────────────
+
+/// kimi 的 home：`KIMI_CODE_HOME` 优先，否则 `~/.kimi-code`（与 CLI 自身解析一致）。
+fn kimi_home() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("KIMI_CODE_HOME") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+    Some(crate::platform::home_dir()?.join(".kimi-code"))
+}
+
+fn epoch_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// 从 `session_index.jsonl` 找"这次启动创建的"kimi 会话：按 workDir 匹配、createdAt 晚于
+/// `since_ms`、取最新的一条。返回 (session_id, wire.jsonl 路径)。
+/// session_id 就是会话目录名（形如 `session_<uuid>`），可直接喂给 `kimi --session`。
+fn find_kimi_session(project_path: &str, since_ms: i64) -> Option<(String, PathBuf)> {
+    let home = kimi_home()?;
+    let content = fs::read_to_string(home.join("session_index.jsonl")).ok()?;
+    let mut best: Option<(i64, String, PathBuf)> = None;
+    for line in content.lines().rev() {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if v.get("workDir").and_then(|x| x.as_str()) != Some(project_path) {
+            continue;
+        }
+        let (Some(session_id), Some(session_dir)) = (
+            v.get("sessionId").and_then(|x| x.as_str()),
+            v.get("sessionDir").and_then(|x| x.as_str()),
+        ) else {
+            continue;
+        };
+        let dir = Path::new(session_dir);
+        // 索引只保证追加顺序，真正的时间在 state.json 里；顺带确认目录确实存在
+        let created = fs::read_to_string(dir.join("state.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|s| s.get("createdAt").and_then(|x| x.as_i64()))
+            .unwrap_or(0);
+        if created < since_ms {
+            continue;
+        }
+        let wire = dir.join("agents").join("main").join("wire.jsonl");
+        if best.as_ref().map(|(c, _, _)| created > *c).unwrap_or(true) {
+            best = Some((created, session_id.to_string(), wire));
+        }
+    }
+    best.map(|(_, id, wire)| (id, wire))
+}
+
+/// kimi 没有预置会话 id 的入口，`-c`（恢复最近）在多开时又会恢复错，所以只能延迟绑定：
+/// spawn 后轮询索引，取「workDir 匹配 + createdAt 最新」的那条，回填到任务的会话表里。
+pub(crate) fn spawn_kimi_session_watcher(app: AppHandle, task_id: String, project_path: String) {
+    thread::spawn(move || {
+        let since = epoch_ms() - 5_000; // 留一点写入/时钟抖动
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while Instant::now() < deadline {
+            if let Some((session_id, wire_path)) = find_kimi_session(&project_path, since) {
+                let path_string = wire_path.to_string_lossy().to_string();
+                {
+                    let tm = app.state::<TaskManager>();
+                    tm.kimi_sessions.lock().insert(
+                        task_id.clone(),
+                        CodexSessionInfo {
+                            session_id: session_id.clone(),
+                            session_path: path_string.clone(),
+                        },
+                    );
+                    tm.claimed_session_paths.lock().insert(path_string.clone());
+                }
+                let _ = app.emit(
+                    "task-session",
+                    serde_json::json!({
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "session_path": path_string,
+                    }),
+                );
+                return;
+            }
+            thread::sleep(Duration::from_millis(1500));
+        }
+        eprintln!("[kimi] 60 秒内没在索引里找到 {project_path} 的新会话");
+    });
+}

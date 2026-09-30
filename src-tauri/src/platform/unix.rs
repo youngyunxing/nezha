@@ -80,9 +80,19 @@ fn chatgpt_bundled_codex() -> Option<String> {
 }
 
 fn bundled_binary_path(binary: &str) -> Option<String> {
-    // 目前只有 codex 是"随 App 装"的；换成别的 CLI 就在这里加分支
+    // 随 App 装的（ChatGPT 自带 codex）
     if binary == "codex" {
         return chatgpt_bundled_codex();
+    }
+    // 自己装了但未必在 GUI PATH 上：kimi 官方安装器落在 ~/.kimi-code/bin
+    if binary == "kimi" {
+        let home = crate::platform::home_dir()?;
+        for rel in [".kimi-code/bin/kimi", ".kimi/bin/kimi", ".local/bin/kimi"] {
+            let candidate = home.join(rel);
+            if candidate.is_file() {
+                return Some(candidate.to_string_lossy().to_string());
+            }
+        }
     }
     None
 }

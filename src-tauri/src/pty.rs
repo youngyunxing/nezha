@@ -42,11 +42,16 @@ fn validate_task_project_path(project_path: &str) -> Result<(), String> {
 
 fn has_task_session(app: &AppHandle, task_id: &str, is_codex: bool) -> bool {
     let tm = app.state::<TaskManager>();
+    // kimi 走索引轮询绑定的会话表；三张表任一命中即视为"曾建立过会话"
+    if tm.kimi_sessions.lock().contains_key(task_id) {
+        return true;
+    }
     if is_codex {
         tm.codex_sessions.lock().contains_key(task_id)
     } else {
         tm.claude_sessions.lock().contains_key(task_id)
     }
+
 }
 
 /// 任务结束后，等待会话注册完成，最长等待 500ms。
@@ -87,11 +92,15 @@ fn finalize_task_exit(
     {
         let tm = app.state::<TaskManager>();
         tm.remove_pty_handles(task_id);
+        let kimi_info = tm.kimi_sessions.lock().remove(task_id);
+        let kimi_path = kimi_info.map(|info| info.session_path);
         let codex_info = tm.codex_sessions.lock().remove(task_id);
         let codex_path = codex_info.map(|info| info.session_path);
         let claude_info = tm.claude_sessions.lock().remove(task_id);
         let claude_path = claude_info.as_ref().map(|info| info.session_path.clone());
-        had_agent_session = if is_codex {
+        had_agent_session = if kimi_path.is_some() {
+            true
+        } else if is_codex {
             codex_path.is_some()
         } else {
             // lazy attach 注入的占位条目不算"曾真正建立过会话"，
@@ -102,6 +111,9 @@ fn finalize_task_exit(
                 .unwrap_or(false)
         };
         let mut claimed = tm.claimed_session_paths.lock();
+        if let Some(path) = kimi_path {
+            claimed.remove(&path);
+        }
         if let Some(path) = codex_path {
             claimed.remove(&path);
         }
@@ -826,6 +838,15 @@ pub async fn run_task(
             c.arg(command);
         }
         c
+    } else if agent == "kimi" {
+        // Kimi 没有"预置会话 id"的入口（-S 只用于恢复），也没有命令行初始提示
+        // （-p/--prompt 是一次性非交互模式），所以交互式任务只带权限模式启动；
+        // 会话 id 靠 session_index.jsonl 轮询延迟绑定（见 session.rs::spawn_kimi_session_watcher）。
+        let mut c = CommandBuilder::new(&agent_bin);
+        if permission_mode == "full_access" {
+            c.arg("--auto");
+        }
+        c
     } else if is_codex {
         let mut c = build_codex_cmd(&agent_bin, &permission_mode);
         // Codex 对非 managed 的 command hook 默认要求 trust,Nezha 注入的是新 hash 会被
@@ -878,6 +899,11 @@ pub async fn run_task(
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
+
+    if agent == "kimi" {
+        // kimi 没有预置 id 的入口：spawn 后轮询索引，按 workDir 延迟绑定本次会话
+        crate::session::spawn_kimi_session_watcher(app.clone(), task_id.clone(), project_path.clone());
+    }
 
     crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
@@ -1030,7 +1056,18 @@ pub async fn resume_task(
             .await
             .unwrap_or(false));
 
-    let mut cmd = if agent == "codex" {
+    let mut cmd = if agent == "kimi" {
+        // kimi 恢复：--session <id>（id 是会话目录名 session_<uuid>，见 session.rs）。
+        // 必须在原工作目录里跑，否则 CLI 拒绝恢复（Orca 那边也踩过）。
+        let mut c = CommandBuilder::new(&agent_bin);
+        c.cwd(&project_path);
+        c.arg("--session");
+        c.arg(&session_id);
+        if permission_mode == "full_access" {
+            c.arg("--auto");
+        }
+        c
+    } else if agent == "codex" {
         let mut c = build_codex_cmd(&agent_bin, &permission_mode);
         // Nezha 注入的 hook 默认未信任会被 Codex skip;来源可信,免 trust 直接运行。
         if use_hooks {

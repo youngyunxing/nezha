@@ -13,6 +13,7 @@ import { TerminalView } from "./TerminalView";
 import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
+import { taskSessionId, taskSessionPath } from "../types";
 import { CopySession } from "./running-view/CopySession";
 import { FlowHandoff, type HandoffOptions } from "./running-view/FlowHandoff";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
@@ -162,8 +163,8 @@ export function RunningView({
   const isInterrupted = task.status === "interrupted";
   // 中断的两种情况：进程还活着（点重连接回去）、进程没了（点恢复重新拉起）
   const canReconnect = isInterrupted && Boolean(task.processAlive);
-  const sessionPath = task.claudeSessionPath ?? task.codexSessionPath;
-  const resumeSessionId = task.agent === "codex" ? task.codexSessionId : task.claudeSessionId;
+  const sessionPath = taskSessionPath(task);
+  const resumeSessionId = taskSessionId(task);
   // 纯终端没有会话 id 可 resume：恢复 = 重开一个 shell（屏幕内容由终端快照/输出缓冲带回）。
   const canResume = task.agent === "shell" || !!resumeSessionId;
   // 没有会话可续（例如 codex 这一版把会话存进 SQLite、没留 rollout）：允许重新开始
@@ -377,7 +378,7 @@ export function RunningView({
         {sessionPath && (
           <CopySession
             sessionPath={sessionPath}
-            assistantLabel={task.agent === "codex" ? "Codex" : "Claude Code"}
+            assistantLabel={task.agent === "codex" ? "Codex" : task.agent === "kimi" ? "Kimi" : "Claude Code"}
           />
         )}
         <QuickInput
@@ -591,7 +592,7 @@ export function RunningView({
       </div>
       <FlowHandoff
         open={handoffOpen}
-        sourceLabel={task.agent === "codex" ? "Codex" : "Claude Code"}
+        sourceLabel={task.agent === "codex" ? "Codex" : task.agent === "kimi" ? "Kimi" : "Claude Code"}
         defaultTarget={task.agent === "codex" ? "claude" : "codex"}
         onOpenChange={setHandoffOpen}
         onHandoff={onHandoff}

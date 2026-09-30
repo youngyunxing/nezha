@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Select from "@radix-ui/react-select";
-import { Check, ChevronDown, Plus, Terminal, X } from "lucide-react";
+import { Check, ChevronDown, Moon, Plus, Terminal, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
@@ -195,6 +195,11 @@ export function NewTaskDialog({
                     value: "codex",
                     label: "Codex",
                     icon: <img src={chatgptLogo} style={s.toolbarMenuItemIcon} />,
+                  },
+                  {
+                    value: "kimi",
+                    label: "Kimi",
+                    icon: <Moon size={14} strokeWidth={2} color="var(--text-muted)" />,
                   },
                   {
                     value: "shell",

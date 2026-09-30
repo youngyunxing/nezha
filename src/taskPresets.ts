@@ -62,7 +62,10 @@ export function makePresetId(): string {
 }
 
 /** 按钮上的悬停说明：这套参数会建出什么。 */
-export function presetSummary(preset: TaskPreset, labels: { claude: string; codex: string; shell: string; worktree: string }): string {
+export function presetSummary(
+  preset: TaskPreset,
+  labels: { claude: string; codex: string; kimi: string; shell: string; worktree: string },
+): string {
   const parts = [labels[preset.agent]];
   if (preset.agent === "shell" && preset.command) parts.push(preset.command);
   if (preset.useWorktree) parts.push(labels.worktree);

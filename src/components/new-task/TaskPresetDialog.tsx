@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Terminal, Trash2, X } from "lucide-react";
+import { Moon, Terminal, Trash2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
@@ -57,6 +57,7 @@ function PresetFields({
       icon: <img src={claudeLogo} style={{ width: 13, height: 13 }} />,
     },
     { value: "codex", label: "Codex", icon: <img src={chatgptLogo} style={{ width: 13, height: 13 }} /> },
+    { value: "kimi", label: "Kimi", icon: <Moon size={13} strokeWidth={2.2} /> },
     { value: "shell", label: t("terminal.title"), icon: <Terminal size={13} strokeWidth={2.2} /> },
   ];
 

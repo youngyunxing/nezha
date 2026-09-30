@@ -53,7 +53,7 @@ export interface GitRoot {
 }
 
 /** "shell" = 纯终端会话（不起 agent，直接开登录 shell）。 */
-export type AgentType = "claude" | "codex" | "shell";
+export type AgentType = "claude" | "codex" | "kimi" | "shell";
 export type ThemeMode = "system" | "dark" | "light" | "eyecare" | "midnight";
 export type ThemeVariant = "dark" | "light" | "eyecare" | "midnight";
 export type PermissionMode = "ask" | "auto_edit" | "full_access";
@@ -160,6 +160,10 @@ export interface Task {
   failureReason?: string;
   codexSessionId?: string;
   codexSessionPath?: string;
+  /** Kimi：没有预置 id 的入口，spawn 后按索引延迟绑定（见后端 spawn_kimi_session_watcher）*/
+  kimiSessionId?: string;
+  /** Kimi 的 wire.jsonl（会话目录里那份对话事件流）*/
+  kimiSessionPath?: string;
   claudeSessionId?: string;
   claudeSessionPath?: string;
   /** 重启归一化时的判定：进程还活着=true（点重连即可），进程没了=false（需要恢复）。
@@ -210,8 +214,22 @@ export interface LocalClaudeSession {
  *  这个格式也是自动起名的判据（见 App 里 /^(?:claude|codex)-\d+$/），所以快捷按钮
  *  建出来的任务也能在跑完第一轮后自动拿到标题。 */
 export function defaultTaskName(agent: AgentType, id: string): string {
-  const prefix = agent === "claude" ? "claude" : agent === "codex" ? "codex" : "terminal";
+  const prefix = agent === "claude" ? "claude" : agent === "codex" ? "codex" : agent === "kimi" ? "kimi" : "terminal";
   return `${prefix}-${id}`;
+}
+
+/** 任务的会话 id（按 agent 取对应字段；Claude / Codex / Kimi 各存一套）。 */
+export function taskSessionId(task: Task): string | undefined {
+  if (task.agent === "codex") return task.codexSessionId;
+  if (task.agent === "kimi") return task.kimiSessionId;
+  return task.claudeSessionId;
+}
+
+/** 任务的会话文件路径（同上）。 */
+export function taskSessionPath(task: Task): string | undefined {
+  if (task.agent === "codex") return task.codexSessionPath;
+  if (task.agent === "kimi") return task.kimiSessionPath;
+  return task.claudeSessionPath;
 }
 
 export function isActiveTaskStatus(status: TaskStatus): boolean {

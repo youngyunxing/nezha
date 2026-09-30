@@ -55,6 +55,7 @@ pub struct AppSettings {
     pub claude_path: String,
     #[serde(default)]
     pub codex_path: String,
+    pub kimi_path: String,
     #[serde(default = "default_send_shortcut")]
     pub send_shortcut: String,
     #[serde(default = "default_shift_enter_newline")]
@@ -77,6 +78,7 @@ impl Default for AppSettings {
         Self {
             claude_path: String::new(),
             codex_path: String::new(),
+            kimi_path: String::new(),
             send_shortcut: default_send_shortcut(),
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
@@ -99,6 +101,13 @@ fn get_agent_configured_path(settings: &AppSettings, agent: &str) -> String {
                 "codex".to_string()
             } else {
                 settings.codex_path.clone()
+            }
+        }
+        "kimi" => {
+            if settings.kimi_path.is_empty() {
+                "kimi".to_string()
+            } else {
+                settings.kimi_path.clone()
             }
         }
         _ => {
@@ -166,6 +175,7 @@ fn normalize_settings(settings: AppSettings) -> AppSettings {
     AppSettings {
         claude_path: resolve_agent_launch_spec_from_path("claude", &settings.claude_path).program,
         codex_path: resolve_agent_launch_spec_from_path("codex", &settings.codex_path).program,
+        kimi_path: resolve_agent_launch_spec_from_path("kimi", &settings.kimi_path).program,
         send_shortcut: normalize_send_shortcut(settings.send_shortcut),
         terminal_shift_enter_newline: settings.terminal_shift_enter_newline,
         claude_force_default_tui: settings.claude_force_default_tui,
@@ -184,6 +194,7 @@ fn load_settings_unlocked() -> AppSettings {
         let settings = normalize_settings(AppSettings {
             claude_path: detect_path("claude"),
             codex_path: detect_path("codex"),
+            kimi_path: detect_path("kimi"),
             send_shortcut: default_send_shortcut(),
             terminal_shift_enter_newline: default_shift_enter_newline(),
             claude_force_default_tui: default_claude_force_default_tui(),
@@ -361,6 +372,7 @@ pub async fn detect_agent_paths() -> Result<AppSettings, String> {
         let mut settings = load_settings_internal();
         settings.claude_path = detect_path("claude");
         settings.codex_path = detect_path("codex");
+        settings.kimi_path = detect_path("kimi");
         Ok(normalize_settings(settings))
     })
     .await
