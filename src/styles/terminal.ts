@@ -186,7 +186,7 @@ export const terminal = {
     alignItems: "center",
     gap: 6,
   },
-  quickInputEmpty: { padding: "8px 10px", fontSize: 11.5, color: "var(--text-hint)" },
+  quickInputEmpty: { padding: "8px 8px", fontSize: 11.5, color: "var(--text-hint)" },
   quickInputRow: { display: "flex", alignItems: "center", gap: 2 },
   quickInputRowMain: {
     flex: 1,
@@ -226,13 +226,26 @@ export const terminal = {
     justifyContent: "space-between",
     gap: 10,
     width: "100%",
-    padding: "6px 10px",
+    // 8 而不是 10：菜单自身 3px + 列表项 8px = 11px，这里要对齐同一条左边界
+    padding: "6px 8px",
     border: "none",
     background: "transparent",
     cursor: "pointer",
   },
-  quickInputToggleText: { display: "flex", flexDirection: "column" as const, gap: 1, minWidth: 0 },
-  quickInputToggleLabel: { fontSize: 12, color: "var(--text-secondary)" },
+  quickInputToggleText: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 1,
+    minWidth: 0,
+    // button 的 UA 默认是 text-align:center —— 不写死的话「自动回车」四个字会在整行里居中，
+    // 跟上面列表项、下面那行说明都错开。
+    textAlign: "left" as const,
+  },
+  quickInputToggleLabel: {
+    fontSize: 12,
+    color: "var(--text-secondary)",
+    textAlign: "left" as const,
+  },
   quickInputToggleHint: {
     fontSize: 10.5,
     color: "var(--text-hint)",
