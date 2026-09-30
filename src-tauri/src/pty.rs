@@ -894,7 +894,9 @@ pub async fn run_task(
     };
     cmd.cwd(&project_path);
     setup_env(&mut cmd);
-    if use_hooks {
+    // shell 任务也要带上这些变量：纯终端里手敲的 claude 靠继承它们才会上报 hook
+    // （use_hooks 对 shell 恒为 false —— shell 自己没有 hook，但它的子进程有）。
+    if use_hooks || agent == "shell" {
         setup_nezha_env(&mut cmd, &task_id, &agent);
     }
     for (key, value) in &launch.extra_env {
@@ -1128,7 +1130,9 @@ pub async fn resume_task(
     };
     cmd.cwd(&project_path);
     setup_env(&mut cmd);
-    if use_hooks {
+    // shell 任务也要带上这些变量：纯终端里手敲的 claude 靠继承它们才会上报 hook
+    // （use_hooks 对 shell 恒为 false —— shell 自己没有 hook，但它的子进程有）。
+    if use_hooks || agent == "shell" {
         setup_nezha_env(&mut cmd, &task_id, &agent);
     }
     for (key, value) in &launch.extra_env {

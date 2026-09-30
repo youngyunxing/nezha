@@ -1829,6 +1829,13 @@ function App() {
           if (task.kimiSessionId === sessionId && task.kimiSessionPath === sessionPath) return task;
           changed = true;
           return { ...task, kimiSessionId: sessionId, kimiSessionPath: sessionPath };
+        } else if (task.agent === "shell") {
+          // 纯终端任务里手动起的 claude：记到 claude 字段 —— taskSessionPath 对 shell 读的
+          // 正是 claudeSessionPath，于是回放/导出都能用（状态由 hook 直接驱动）。
+          if (task.claudeSessionId === sessionId && task.claudeSessionPath === sessionPath)
+            return task;
+          changed = true;
+          return { ...task, claudeSessionId: sessionId, claudeSessionPath: sessionPath };
         } else {
           if (task.codexSessionId === sessionId && task.codexSessionPath === sessionPath)
             return task;
