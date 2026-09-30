@@ -118,7 +118,7 @@ export const terminal = {
     cursor: "pointer",
     boxShadow: "0 2px 10px rgba(0, 0, 0, 0.16)",
   },
-  quickInputMenu: { minWidth: 260, maxWidth: 340 },
+  quickInputMenu: { minWidth: 280, maxWidth: 360 },
   copySessionMenu: { minWidth: 230 },
   handoffContextRow: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" as const },
   handoffChip: {
@@ -223,7 +223,14 @@ export const terminal = {
     background: "transparent",
     cursor: "pointer",
   },
+  quickInputToggleText: { display: "flex", flexDirection: "column" as const, gap: 1, minWidth: 0 },
   quickInputToggleLabel: { fontSize: 12, color: "var(--text-secondary)" },
+  quickInputToggleHint: {
+    fontSize: 10.5,
+    color: "var(--text-hint)",
+    lineHeight: 1.35,
+    textAlign: "left" as const,
+  },
   interruptedSessionWrap: {
     flex: 1,
     minHeight: 0,

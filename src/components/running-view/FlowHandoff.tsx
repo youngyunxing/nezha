@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n";
 import s from "../../styles";
 import type { AgentType } from "../../types";
 import { SelectField } from "../new-task/NewTaskDialog";
+import { loadHandoffCount, saveHandoffCount } from "../../quickInputs";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
@@ -19,7 +20,7 @@ export interface HandoffOptions {
   note: string;
 }
 
-const DEFAULT_CONTEXT = 20;
+
 
 /**
  * 流转：把当前会话的上下文交给另一个 agent 接着做（比如 Claude Code → Codex）。
@@ -43,7 +44,8 @@ export function FlowHandoff({
   const { t } = useI18n();
   const [agent, setAgent] = useState<AgentType>(defaultTarget);
   const [contextMode, setContextMode] = useState<HandoffContextMode>("compress");
-  const [count, setCount] = useState(String(DEFAULT_CONTEXT));
+  // N 记住上次填的
+  const [count, setCount] = useState(() => loadHandoffCount());
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -131,7 +133,11 @@ export function FlowHandoff({
                     style={s.copySessionCountInput}
                     value={count}
                     inputMode="numeric"
-                    onChange={(event) => setCount(event.target.value.replace(/[^\d]/g, ""))}
+                    onChange={(event) => {
+                      const next = event.target.value.replace(/[^\d]/g, "");
+                      setCount(next);
+                      saveHandoffCount(next);
+                    }}
                   />
                   <span style={s.copySessionRecentLabel}>{t("copySession.recentSuffix")}</span>
                 </>

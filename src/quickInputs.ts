@@ -113,3 +113,24 @@ export function quickInputsForSession(
       item.kind === kind && (item.scope === "all" || (!!projectId && item.projectId === projectId)),
   );
 }
+
+/** 流转时「最近 N 条」的 N：记用户上次填的，默认 5。 */
+const HANDOFF_COUNT_KEY = "nezha:handoff-context-count";
+export const DEFAULT_HANDOFF_COUNT = 5;
+
+export function loadHandoffCount(): string {
+  try {
+    const raw = localStorage.getItem(HANDOFF_COUNT_KEY);
+    return raw && /^\d+$/.test(raw) ? raw : String(DEFAULT_HANDOFF_COUNT);
+  } catch {
+    return String(DEFAULT_HANDOFF_COUNT);
+  }
+}
+
+export function saveHandoffCount(value: string): void {
+  try {
+    if (/^\d+$/.test(value)) localStorage.setItem(HANDOFF_COUNT_KEY, value);
+  } catch {
+    // 落盘失败就用内存里的值
+  }
+}

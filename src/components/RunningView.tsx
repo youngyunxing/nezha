@@ -46,7 +46,6 @@ interface SessionMetrics {
 }
 
 /** 超过这么久没有新输出，「当前速度」按 0 显示（指标缓存不会自己衰减，这里补上）。 */
-const TPS_IDLE_SECS = 90;
 
 function formatDuration(secs: number): string {
   const totalSeconds = Math.max(0, Math.round(secs));
@@ -646,21 +645,9 @@ export function RunningView({
                   label={t("running.tokens")}
                   value={formatTokens(metrics.total_tokens)}
                 />
-                {(metrics.tps_current > 0 || metrics.tps_5h > 0) && (
-                  <>
-                    <MetricPill
-                      label={t("running.tps")}
-                      value={formatTps(
-                        Date.now() / 1000 - metrics.last_activity_ts > TPS_IDLE_SECS
-                          ? 0
-                          : metrics.tps_current,
-                      )}
-                    />
-                    <MetricPill
-                      label={t("running.tps5h")}
-                      value={formatTps(metrics.tps_5h)}
-                    />
-                  </>
+                {/* 只看 5 小时平均：实时值抖动大、参考价值低，已去掉 */}
+                {metrics.tps_5h > 0 && (
+                  <MetricPill label={t("running.tps5h")} value={formatTps(metrics.tps_5h)} />
                 )}
                 {metrics.context_window > 0 && metrics.context_tokens > 0 && (
                   <MetricPill

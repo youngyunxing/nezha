@@ -199,12 +199,16 @@ export function TerminalView({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    // 150ms 而不是 50ms：双击标题栏缩放时窗口有 ~300ms 动画，50ms 会在动画中途 fit 一次，
+    // 那个中间宽度会被 CLI 当成真实宽度打印出来 —— 而且是**硬换行**，xterm 之后只能重排
+    // 自己标记为自动换行的行，硬换行救不回来，于是"最上面那几行永远是窄的"。
+    // 防抖在动画期间会被反复重置，所以实际只在停下来之后 fit 一次。
     const scheduleFit = () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         const s = safeFit(fitAddon, term, container);
         if (s) notifyResize(s.cols, s.rows);
-      }, 50);
+      }, 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);

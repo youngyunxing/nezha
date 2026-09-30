@@ -114,7 +114,10 @@ export function QuickInput({
               style={s.quickInputToggleRow}
               onClick={() => onAutoEnterChange(!autoEnter)}
             >
-              <span style={s.quickInputToggleLabel}>{t("quickInput.autoEnter")}</span>
+              <span style={s.quickInputToggleText}>
+                <span style={s.quickInputToggleLabel}>{t("quickInput.autoEnter")}</span>
+                <span style={s.quickInputToggleHint}>{t("quickInput.autoEnterHint")}</span>
+              </span>
               <span style={autoEnter ? s.settingToggleTrackOn : s.settingToggleTrack}>
                 <span style={autoEnter ? s.settingToggleKnobOn : s.settingToggleKnob} />
               </span>
