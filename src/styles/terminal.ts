@@ -169,6 +169,14 @@ export const terminal = {
     cursor: "pointer",
   },
   // 会话右下角：复制会话 + 快捷输入，并排靠右
+  /** 会话记录（SessionView）那一屏：相对定位的容器，好让右下角那排按钮挂上去。 */
+  sessionPaneWrap: {
+    position: "relative" as const,
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column" as const,
+  },
   sessionCornerActions: {
     position: "absolute" as const,
     right: 14,

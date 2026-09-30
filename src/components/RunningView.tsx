@@ -203,8 +203,9 @@ export function RunningView({
   const canDiscardWorktree =
     !isActive && Boolean(task.worktreePath) && Boolean(task.worktreeBranch) && !task.worktreeDiscarded &&
     Boolean(onDiscardWorktree);
-  const showHeaderActions =
-    canFork || canExport || canResumeHere || canMergeWorktree || canDiscardWorktree;
+  // fork / 导出搬到右下角那一排之后，头部只剩工作树这三个按钮 —— 跑着的任务（isActive）
+  // 一个按钮都没有，于是头部整行不出现，指标行直接贴着标签条。
+  const showHeaderActions = canResumeHere || canMergeWorktree || canDiscardWorktree;
 
   const handleExport = async () => {
     if (exporting || !sessionPath) return;
@@ -347,13 +348,73 @@ export function RunningView({
     };
   }, [sessionPath, isActive, projectActive]);
 
+  // 会话右下角一排（顺序：快捷输入 / fork / 流转 / 复制 / 导出）。
+  // 抽成变量是因为「终端」和「会话记录」两种模式都要挂它 —— 结束的任务是后者，
+  // 而 fork / 导出 恰恰在那种时候最有用。样式跟这一排的其它按钮一致。
+  const cornerActions = (
+    <div style={s.sessionCornerActions}>
+      <QuickInput
+        items={quickInputs}
+        sessionKind={task.agent === "shell" ? "command" : "prompt"}
+        projectId={task.projectId}
+        autoEnter={quickAutoEnter}
+        onAutoEnterChange={onQuickAutoEnterChange}
+        onInsert={onInput}
+        onSave={onSaveQuickInput}
+        onDelete={onDeleteQuickInput}
+      />
+      {canFork && (
+        <button
+          type="button"
+          className="quick-input-trigger"
+          style={s.quickInputTrigger}
+          title={t("running.forkSession")}
+          onClick={() => setForkDialogOpen(true)}
+        >
+          <GitFork size={12} strokeWidth={2.3} />
+          <span>{t("running.forkSession")}</span>
+        </button>
+      )}
+      {sessionPath && (
+        <button
+          type="button"
+          className="quick-input-trigger"
+          style={s.quickInputTrigger}
+          title={t("handoff.button")}
+          onClick={() => setHandoffOpen(true)}
+        >
+          <ArrowRightLeft size={12} strokeWidth={2.3} />
+          <span>{t("handoff.button")}</span>
+        </button>
+      )}
+      {sessionPath && <CopySession sessionPath={sessionPath} assistantLabel={agentLabel(task.agent)} />}
+      {canExport && (
+        <button
+          type="button"
+          className="quick-input-trigger"
+          style={{
+            ...s.quickInputTrigger,
+            opacity: exporting ? 0.6 : undefined,
+            cursor: exporting ? "wait" : "pointer",
+          }}
+          title={t("running.exportMarkdown")}
+          disabled={exporting}
+          onClick={handleExport}
+        >
+          <Download size={12} strokeWidth={2.3} className={exporting ? "spin" : ""} />
+          <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
+        </button>
+      )}
+    </div>
+  );
+
   // 终端面板抽成变量：正常运行要用，纯终端任务在「异常中断」态也要用它显示上次屏幕
   // （否则重启后只剩一条横幅 +「没有会话记录」，看不到记录）。
   const terminalPane = (
     <div style={s.terminalContainer}>
       <TerminalView
-                shellOwned={task.agent === "shell"}
         key={`${task.id}-${runCount}`}
+        shellOwned={task.agent === "shell"}
         onInput={onInput}
         onResize={onResize}
         onRegisterTerminal={onRegisterTerminal}
@@ -367,37 +428,7 @@ export function RunningView({
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
-      {/* 会话右下角：流转 + 复制会话 + 快捷输入 */}
-      <div style={s.sessionCornerActions}>
-        {sessionPath && (
-          <button
-            type="button"
-            className="quick-input-trigger"
-            style={s.quickInputTrigger}
-            title={t("handoff.button")}
-            onClick={() => setHandoffOpen(true)}
-          >
-            <ArrowRightLeft size={12} strokeWidth={2.3} />
-            <span>{t("handoff.button")}</span>
-          </button>
-        )}
-        {sessionPath && (
-          <CopySession
-            sessionPath={sessionPath}
-            assistantLabel={agentLabel(task.agent)}
-          />
-        )}
-        <QuickInput
-          items={quickInputs}
-          sessionKind={task.agent === "shell" ? "command" : "prompt"}
-          projectId={task.projectId}
-          autoEnter={quickAutoEnter}
-          onAutoEnterChange={onQuickAutoEnterChange}
-          onInsert={onInput}
-          onSave={onSaveQuickInput}
-          onDelete={onDeleteQuickInput}
-        />
-      </div>
+      {cornerActions}
     </div>
   );
 
@@ -482,29 +513,6 @@ export function RunningView({
                 </span>
               </button>
             )}
-          {canFork && (
-            <button
-              type="button"
-              style={s.resumeBtn}
-              title={t("running.forkSession")}
-              onClick={() => setForkDialogOpen(true)}
-            >
-              <GitFork size={12} strokeWidth={2.4} />
-              <span>{t("running.forkSession")}</span>
-            </button>
-          )}
-          {canExport && (
-            <button
-              type="button"
-              style={{ ...s.resumeBtn, opacity: exporting ? 0.6 : 1, cursor: exporting ? "wait" : "pointer" }}
-              title={t("running.exportMarkdown")}
-              disabled={exporting}
-              onClick={handleExport}
-            >
-              <Download size={12} strokeWidth={2.4} className={exporting ? "spin" : ""} />
-              <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
-            </button>
-          )}
         </div>
       )}
       <FlowHandoff
@@ -523,9 +531,9 @@ export function RunningView({
       {(metrics || sessionPath) && (
         <div
           style={{
-            // 上面那行动作按钮是 36px 高、内容居中，按钮下方本来就空着 ~8px；所以这里顶部
-            // 不给内边距，视觉上到按钮的距离才等于到底部分割线的 8px。
-            padding: "0 20px 8px",
+            // 头部在时它自己是 36px 高、内容居中，按钮下方本来就空着 ~8px，所以这里顶部不用再给；
+            // 头部不在时（跑着的任务）直接把上边距补上，别让指标贴到标签条上。
+            padding: showHeaderActions ? "0 20px 8px" : "8px 20px 8px",
             borderBottom: "1px solid var(--border-dim)",
             flexShrink: 0,
           }}
@@ -626,7 +634,10 @@ export function RunningView({
             </div>
           </div>
           {sessionPath ? (
-            <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+            <div style={s.sessionPaneWrap}>
+              <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+              {cornerActions}
+            </div>
           ) : task.agent === "shell" ? (
             terminalPane
           ) : (
@@ -638,7 +649,10 @@ export function RunningView({
       ) : isActive || !sessionPath ? (
         terminalPane
       ) : (
-        <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+        <div style={s.sessionPaneWrap}>
+          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          {cornerActions}
+        </div>
       )}
 
       {/* Status bar when task is done and no session path (terminal fallback) */}
