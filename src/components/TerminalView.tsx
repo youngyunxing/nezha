@@ -3,6 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
+
+/** 重画整屏的代价随缓冲行数线性上升：超过这个行数宁可不重画（留着碎片），
+ *  也不要让切任务时卡一下。两万行覆盖日常会话，真的超了说明会话很长。 */
+const REPAINT_MAX_LINES = 20000;
 import { attachCopyOnSelect, attachSmartCopy } from "./terminalCopyHelper";
 import { useTerminalPathDrop } from "./useTerminalPathDrop";
 import {
@@ -70,6 +74,7 @@ export function TerminalView({
   isActiveRef.current = isActive;
   /** 最近一次真正告诉 PTY 的尺寸：用来区分"变大"和"变小" */
   const notifiedSizeRef = useRef<{ cols: number; rows: number } | null>(null);
+  const serializeAddonRef = useRef<SerializeAddon | null>(null);
 
   const onReadyRef = useRef(onReady);
   const onSnapshotRef = useRef(onSnapshot);
@@ -120,6 +125,7 @@ export function TerminalView({
     let disposed = false;
 
     const serializeAddon = new SerializeAddon();
+    serializeAddonRef.current = serializeAddon;
     term.loadAddon(serializeAddon);
     term.open(container);
     // 必须在 term.open() 之后挂：_charSizeService 在 open 时才实例化。
@@ -302,14 +308,48 @@ export function TerminalView({
   useEffect(() => {
     if (!isActive) return;
     window.requestAnimationFrame(() => {
-      if (!fitAddonRef.current || !terminalRef.current || !containerRef.current) return;
-      const s = safeFit(fitAddonRef.current, terminalRef.current, containerRef.current);
+      const fitAddon = fitAddonRef.current;
+      const term = terminalRef.current;
+      const container = containerRef.current;
+      if (!fitAddon || !term || !container) return;
+
+      // 重新可见时按当前网格重画一遍（对齐 Orca 的 hidden-restore paint）。
+      // 隐藏期间容器尺寸变过的话，缓冲区里按旧宽度硬换行过的历史会留下窄行碎片；
+      // serialize 出来的是**逻辑行**，重新写回并 fit 时会按当前宽度重新换行，碎片就没了。
+      // 顺序是先重画再 fit：这样 fit 的 reflow 作用在刚归一化过的内容上（换行标记完整），
+      // 反过来先 fit 会把已经断开的硬行一起 serialize 进去，越弄越碎。
+      // 全屏 TUI（备用屏）跳过：它自己在 SIGWINCH 时会重画，硬灌回去会打乱它的界面状态。
+      const dims = fitAddon.proposeDimensions?.();
+      const sizeChanged =
+        !!dims &&
+        Number.isFinite(dims.cols) &&
+        (dims.cols !== term.cols || dims.rows !== term.rows);
+      const lineCount = term.buffer.active.length;
+      if (
+        sizeChanged &&
+        lineCount > 0 &&
+        lineCount <= REPAINT_MAX_LINES &&
+        term.buffer.active.type === "normal" &&
+        serializeAddonRef.current
+      ) {
+        try {
+          const snapshot = serializeAddonRef.current.serialize();
+          if (snapshot) {
+            term.reset();
+            term.write(snapshot);
+          }
+        } catch {
+          /* 重画失败不影响后面的 fit */
+        }
+      }
+
+      const s = safeFit(fitAddon, term, container);
       if (s) {
         notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
         notifyResize(s.cols, s.rows);
       }
-      refreshTerminalDisplay(terminalRef.current);
-      terminalRef.current.focus();
+      refreshTerminalDisplay(term);
+      term.focus();
     });
   }, [isActive, notifyResize]);
 
