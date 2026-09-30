@@ -42,9 +42,9 @@ function renderItem(over: Partial<Parameters<typeof TaskListItem>[0]> = {}) {
 describe("任务列表行：收藏 / 删除改走右键菜单", () => {
   it("行内不再有收藏和删除按钮", () => {
     renderItem({ task: makeTask({ starred: true }) });
-    expect(screen.queryByLabelText("收藏任务")).toBeNull();
-    expect(screen.queryByLabelText("取消收藏任务")).toBeNull();
-    expect(screen.queryByLabelText("删除任务")).toBeNull();
+    expect(screen.queryByLabelText("收藏")).toBeNull();
+    expect(screen.queryByLabelText("取消收藏")).toBeNull();
+    expect(screen.queryByLabelText("删除")).toBeNull();
   });
 
   it("右键交给外部处理（由它决定弹菜单）", () => {
@@ -127,20 +127,26 @@ describe("任务右键菜单", () => {
 
   it("三个操作都在，各自回调自己的 handler", () => {
     const handlers = renderMenu(makeTask());
-    fireEvent.click(screen.getByText("重命名任务"));
+    fireEvent.click(screen.getByText("重命名"));
     expect(handlers.onRename).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText("收藏任务"));
+    fireEvent.click(screen.getByText("收藏"));
     expect(handlers.onToggleStar).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText("删除任务"));
+    fireEvent.click(screen.getByText("删除"));
     expect(handlers.onDelete).toHaveBeenCalledTimes(1);
   });
 
   it("已收藏的任务显示「取消收藏任务」", () => {
     renderMenu(makeTask({ starred: true }));
-    expect(screen.getByText("取消收藏任务")).toBeTruthy();
-    expect(screen.queryByText("收藏任务")).toBeNull();
+    expect(screen.getByText("取消收藏")).toBeTruthy();
+    expect(screen.queryByText("收藏")).toBeNull();
+  });
+
+  it("菜单比文件树那个窄一截（条目只有两三个字）", () => {
+    renderMenu(makeTask());
+    const menu = screen.getByText("重命名").parentElement as HTMLElement;
+    expect(menu.style.minWidth).toBe("108px");
   });
 
   it("点空白背景关掉菜单", () => {

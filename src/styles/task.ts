@@ -407,6 +407,11 @@ export const task = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  /** 任务右键菜单：条目短（重命名 / 收藏 / 取消收藏 / 删除），比文件树那个窄一截。
+   *  基座是 panels.ts 的 ctxMenu，这里只覆盖宽度。 */
+  taskCtxMenu: {
+    minWidth: 108,
+  },
   /** 任务列表里就地改名的输入框（右键菜单的「重命名」进入）。 */
   taskItemRenameInput: {
     width: "100%",

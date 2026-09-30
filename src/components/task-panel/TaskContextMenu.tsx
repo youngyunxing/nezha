@@ -76,7 +76,7 @@ export function TaskContextMenu({
       />
       <div
         ref={menuRef}
-        style={{ ...s.ctxMenu, left: position.x, top: position.y }}
+        style={{ ...s.ctxMenu, ...s.taskCtxMenu, left: position.x, top: position.y }}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
           e.preventDefault();
