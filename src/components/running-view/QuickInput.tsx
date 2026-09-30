@@ -4,7 +4,12 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Pencil, Plus, Trash2, X, Zap } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
-import { makeQuickInputId, type QuickInput as QuickInputItem } from "../../quickInputs";
+import {
+  makeQuickInputId,
+  quickInputsForKind,
+  type QuickInput as QuickInputItem,
+  type QuickInputKind,
+} from "../../quickInputs";
 
 /**
  * 会话右下角的快捷输入：点开选一条预设文本，填进当前会话的输入框。
@@ -12,11 +17,19 @@ import { makeQuickInputId, type QuickInput as QuickInputItem } from "../../quick
  */
 export function QuickInput({
   items,
+  sessionKind,
+  autoEnter,
+  onAutoEnterChange,
   onInsert,
   onSave,
   onDelete,
 }: {
   items: QuickInputItem[];
+  /** 当前会话是 agent（提示词）还是终端（命令）——只显示对应类型，免得提示词在终端里被执行 */
+  sessionKind: QuickInputKind;
+  /** 开启后点一条 = 输入并直接发送（替你按回车） */
+  autoEnter: boolean;
+  onAutoEnterChange: (value: boolean) => void;
   /** 把文本写进当前会话（终端 / agent 的输入框都走这条 PTY 通道） */
   onInsert: (text: string) => void;
   onSave: (item: QuickInputItem) => void;
@@ -26,6 +39,9 @@ export function QuickInput({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<QuickInputItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // 只列当前会话类型对得上的那些
+  const visibleItems = quickInputsForKind(items, sessionKind);
 
   return (
     <>
@@ -49,8 +65,12 @@ export function QuickInput({
             align="end"
             sideOffset={6}
           >
-            {items.length === 0 && <div style={s.quickInputEmpty}>{t("quickInput.empty")}</div>}
-            {items.map((item) => (
+            {visibleItems.length === 0 && (
+              <div style={s.quickInputEmpty}>
+                {sessionKind === "command" ? t("quickInput.emptyCommand") : t("quickInput.emptyPrompt")}
+              </div>
+            )}
+            {visibleItems.map((item) => (
               <div key={item.id} style={s.quickInputRow}>
                 <button
                   type="button"
@@ -58,7 +78,9 @@ export function QuickInput({
                   style={s.quickInputRowMain}
                   title={item.text}
                   onClick={() => {
-                    onInsert(item.text);
+                    // 自动回车 = 输入并确认；
+                    // 自动回车 = 输入并确认（回车符就是终端里的回车）
+                    onInsert(autoEnter ? `${item.text}\r` : item.text);
                     setOpen(false);
                   }}
                 >
@@ -83,6 +105,18 @@ export function QuickInput({
             <div className="radix-select-separator" />
             <button
               type="button"
+              role="switch"
+              aria-checked={autoEnter}
+              style={s.quickInputToggleRow}
+              onClick={() => onAutoEnterChange(!autoEnter)}
+            >
+              <span style={s.quickInputToggleLabel}>{t("quickInput.autoEnter")}</span>
+              <span style={autoEnter ? s.settingToggleTrackOn : s.settingToggleTrack}>
+                <span style={autoEnter ? s.settingToggleKnobOn : s.settingToggleKnob} />
+              </span>
+            </button>
+            <button
+              type="button"
               className="file-viewer-tab-menu-item"
               style={s.quickInputAddRow}
               onClick={() => {
@@ -101,6 +135,7 @@ export function QuickInput({
       <QuickInputDialog
         open={dialogOpen}
         editing={editing}
+        defaultKind={sessionKind}
         onOpenChange={setDialogOpen}
         onSave={onSave}
         onDelete={onDelete}
@@ -113,12 +148,15 @@ export function QuickInput({
 function QuickInputDialog({
   open,
   editing,
+  defaultKind,
   onOpenChange,
   onSave,
   onDelete,
 }: {
   open: boolean;
   editing: QuickInputItem | null;
+  /** 新建时的默认类型：跟着当前会话走 */
+  defaultKind: QuickInputKind;
   onOpenChange: (open: boolean) => void;
   onSave: (item: QuickInputItem) => void;
   onDelete: (id: string) => void;
@@ -126,6 +164,7 @@ function QuickInputDialog({
   const { t } = useI18n();
   const [label, setLabel] = useState("");
   const [text, setText] = useState("");
+  const [kind, setKind] = useState<QuickInputKind>(defaultKind);
 
   // 每次打开把当前要改的那条灌进表单（新增就是空的）
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -135,6 +174,7 @@ function QuickInputDialog({
     if (key) {
       setLabel(editing?.label ?? "");
       setText(editing?.text ?? "");
+      setKind(editing?.kind ?? defaultKind);
     }
   }
 
@@ -156,6 +196,27 @@ function QuickInputDialog({
           <Dialog.Description style={s.forkDialogDescription}>
             {t("quickInput.hint")}
           </Dialog.Description>
+
+          <div style={s.presetFieldRow}>
+            <label style={s.forkDialogLabel}>{t("quickInput.kind")}</label>
+            <div style={s.handoffContextRow}>
+              <button
+                type="button"
+                style={kind === "prompt" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setKind("prompt")}
+              >
+                {t("quickInput.kindPrompt")}
+              </button>
+              <button
+                type="button"
+                style={kind === "command" ? s.handoffChipActive : s.handoffChip}
+                onClick={() => setKind("command")}
+              >
+                {t("quickInput.kindCommand")}
+              </button>
+            </div>
+            <span style={s.newTaskDialogHint}>{t("quickInput.kindHint")}</span>
+          </div>
 
           <div style={s.presetFieldRow}>
             <label style={s.forkDialogLabel} htmlFor="quick-input-label">
@@ -180,7 +241,11 @@ function QuickInputDialog({
               style={s.forkDialogInput}
               value={text}
               maxLength={500}
-              placeholder={t("quickInput.textPlaceholder")}
+              placeholder={
+                kind === "command"
+                  ? t("quickInput.commandPlaceholder")
+                  : t("quickInput.textPlaceholder")
+              }
               onChange={(event) => setText(event.target.value)}
             />
           </div>
@@ -210,6 +275,7 @@ function QuickInputDialog({
                   id: editing?.id ?? makeQuickInputId(),
                   label: label.trim() || trimmedText,
                   text: trimmedText,
+                  kind,
                 });
                 onOpenChange(false);
               }}

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
@@ -44,6 +45,36 @@ pub(crate) fn default_shell_command() -> ShellCommand {
     }
 }
 
+/// 随桌面 App 一起装的 CLI：不在 PATH 上，但可以直接执行。
+/// ChatGPT 桌面版自带 codex（实测 /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex
+/// 能跑出 `codex-cli 0.159.0`），而用户往往以为"装了 ChatGPT 就等于装了 codex"。
+const APP_BUNDLED_BINARIES: &[(&str, &[&str])] = &[(
+    "codex",
+    &[
+        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+        "/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex",
+    ],
+)];
+
+fn bundled_binary_path(binary: &str) -> Option<String> {
+    let (_, candidates) = APP_BUNDLED_BINARIES.iter().find(|(name, _)| *name == binary)?;
+    let home_apps = crate::platform::home_dir().map(|home| home.join("Applications"));
+    for candidate in *candidates {
+        if Path::new(candidate).is_file() {
+            return Some((*candidate).to_string());
+        }
+    }
+    // ~/Applications 下也装一份的情况
+    if let Some(apps) = home_apps {
+        let tail = candidates[0].trim_start_matches("/Applications/");
+        let p = apps.join(tail);
+        if p.is_file() {
+            return Some(p.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
 pub(crate) fn detect_path(binary: &str) -> String {
     let output = Command::new("which")
         .arg(binary)
@@ -59,7 +90,8 @@ pub(crate) fn detect_path(binary: &str) -> String {
         }
     }
 
-    String::new()
+    // PATH 上没有：看看是不是随 App 装的
+    bundled_binary_path(binary).unwrap_or_default()
 }
 
 fn resolve_login_shell_env() -> Vec<(String, String)> {

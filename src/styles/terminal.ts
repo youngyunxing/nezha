@@ -212,6 +212,18 @@ export const terminal = {
     cursor: "pointer",
   },
   quickInputAddRow: { gap: 8, minHeight: 30 },
+  quickInputToggleRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    width: "100%",
+    padding: "6px 10px",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+  },
+  quickInputToggleLabel: { fontSize: 12, color: "var(--text-secondary)" },
   interruptedSessionWrap: {
     flex: 1,
     minHeight: 0,

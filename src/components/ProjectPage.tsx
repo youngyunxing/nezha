@@ -64,6 +64,8 @@ export function ProjectPage({
   onRunPreset,
   onHandoffTask,
   quickInputs,
+  quickAutoEnter,
+  onQuickAutoEnterChange,
   onSaveQuickInput,
   onDeleteQuickInput,
   onAddPreset,
@@ -141,6 +143,8 @@ export function ProjectPage({
   onHandoffTask: (taskId: string, options: HandoffOptions) => void;
   /** 快捷输入（会话右下角） */
   quickInputs: QuickInputItem[];
+  quickAutoEnter: boolean;
+  onQuickAutoEnterChange: (value: boolean) => void;
   onSaveQuickInput: (item: QuickInputItem) => void;
   onDeleteQuickInput: (id: string) => void;
   onAddPreset: () => void;
@@ -443,6 +447,8 @@ export function ProjectPage({
                   onMarkRead={() => onMarkTaskRead(task.id)}
                   onHandoff={(options) => onHandoffTask(task.id, options)}
                   quickInputs={quickInputs}
+                  quickAutoEnter={quickAutoEnter}
+                  onQuickAutoEnterChange={onQuickAutoEnterChange}
                   onSaveQuickInput={onSaveQuickInput}
                   onDeleteQuickInput={onDeleteQuickInput}
                   onInput={(data) => onInput(task.id, data)}

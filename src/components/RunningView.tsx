@@ -100,6 +100,8 @@ export function RunningView({
   onMarkRead,
   onHandoff,
   quickInputs,
+  quickAutoEnter,
+  onQuickAutoEnterChange,
   onSaveQuickInput,
   onDeleteQuickInput,
   onInput,
@@ -130,6 +132,9 @@ export function RunningView({
   onHandoff: (options: HandoffOptions) => void;
   /** 会话右下角的快捷输入 */
   quickInputs: QuickInputItem[];
+  /** 快捷输入：输入后是否自动回车 */
+  quickAutoEnter: boolean;
+  onQuickAutoEnterChange: (value: boolean) => void;
   onSaveQuickInput: (item: QuickInputItem) => void;
   onDeleteQuickInput: (id: string) => void;
   onInput: (data: string) => void;
@@ -373,6 +378,9 @@ export function RunningView({
         )}
         <QuickInput
           items={quickInputs}
+          sessionKind={task.agent === "shell" ? "command" : "prompt"}
+          autoEnter={quickAutoEnter}
+          onAutoEnterChange={onQuickAutoEnterChange}
           onInsert={onInput}
           onSave={onSaveQuickInput}
           onDelete={onDeleteQuickInput}

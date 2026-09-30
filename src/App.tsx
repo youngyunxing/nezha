@@ -47,7 +47,13 @@ import {
   TaskPresetAddDialog,
   TaskPresetEditDialog,
 } from "./components/new-task/TaskPresetDialog";
-import { loadQuickInputs, saveQuickInputs, type QuickInput as QuickInputItem } from "./quickInputs";
+import {
+  loadQuickAutoEnter,
+  loadQuickInputs,
+  saveQuickAutoEnter,
+  saveQuickInputs,
+  type QuickInput as QuickInputItem,
+} from "./quickInputs";
 import { buildHandoffPrompt, sessionMessagesToText, type CopyableMessage } from "./sessionText";
 import type { HandoffOptions } from "./components/running-view/FlowHandoff";
 import { useWorktreeDiffStats } from "./hooks/useWorktreeDiffStats";
@@ -314,6 +320,7 @@ function App() {
   // 快捷命令的两个弹窗：添加（一张表单）/ 编辑（左列表 + 右面板）
   // 快捷输入（会话右下角）：预设文本，点一下填进当前会话的输入框
   const [quickInputs, setQuickInputs] = useState<QuickInputItem[]>(() => loadQuickInputs());
+  const [quickAutoEnter, setQuickAutoEnter] = useState(() => loadQuickAutoEnter());
   const [presetDialog, setPresetDialog] = useState<
     { mode: "add" } | { mode: "edit"; focusId?: string } | null
   >(null);
@@ -521,6 +528,10 @@ function App() {
   useEffect(() => {
     saveQuickInputs(quickInputs);
   }, [quickInputs]);
+
+  useEffect(() => {
+    saveQuickAutoEnter(quickAutoEnter);
+  }, [quickAutoEnter]);
 
   /** 把当前会话的上下文交给另一个 agent：跨 agent 没法恢复对方的会话记录，所以是把
    *  上下文原样写进新任务的提示词。新任务用占位名，跑完第一轮会自动起标题。 */
@@ -1840,6 +1851,8 @@ function App() {
               presets={presets}
               onHandoffTask={handleHandoff}
               quickInputs={quickInputs}
+              quickAutoEnter={quickAutoEnter}
+              onQuickAutoEnterChange={setQuickAutoEnter}
               onSaveQuickInput={handleSaveQuickInput}
               onDeleteQuickInput={handleDeleteQuickInput}
               onRunPreset={(preset, repoPath) => handleRunPreset(project, preset, repoPath)}
