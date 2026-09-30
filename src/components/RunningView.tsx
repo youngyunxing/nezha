@@ -533,7 +533,8 @@ export function RunningView({
           style={{
             // 头部在时它自己是 36px 高、内容居中，按钮下方本来就空着 ~8px，所以这里顶部不用再给；
             // 头部不在时（跑着的任务）直接把上边距补上，别让指标贴到标签条上。
-            padding: showHeaderActions ? "0 20px 8px" : "8px 20px 8px",
+            // 左边距 10 = 终端容器自己的左内边距，指标和终端正文左边对齐。
+            padding: showHeaderActions ? "0 20px 8px 10px" : "8px 20px 8px 10px",
             borderBottom: "1px solid var(--border-dim)",
             flexShrink: 0,
           }}

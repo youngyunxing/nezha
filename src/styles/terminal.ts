@@ -14,7 +14,7 @@ export const terminal = {
   runMetricsRow: {
     marginTop: 0,
     display: "flex",
-    gap: 12,
+    gap: 8,
     flexWrap: "wrap" as const,
   },
   runMetricPill: {
