@@ -8,10 +8,7 @@
 
 本仓库是 [hanshuaikang/nezha](https://github.com/hanshuaikang/nezha) 的 fork，同样以 GPL-3.0 分发。
 
-版本号三位 `大.小.微`：大 = 破坏性 / 架构级改动，小 = 新增功能模块，微 = 修 bug 与体验微调。
-`main` 是主线，各版本分支（`dev` 即 1.0.0）开发完合入 `main`。
-
-### 与原版的差异
+### 新增与改动
 
 **智能体**
 
