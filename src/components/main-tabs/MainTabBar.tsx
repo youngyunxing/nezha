@@ -30,6 +30,7 @@ export function MainTabBar({
   diffLabel,
   onCloseDiff,
   markdown,
+  onSessionContextMenu,
 }: {
   /** null = 这个项目当前没有会话可显示（没任务、没本地会话），不渲染会话标签。 */
   sessionLabel: string | null;
@@ -46,6 +47,8 @@ export function MainTabBar({
   onCloseDiff: () => void;
   /** 当前文件是 markdown 时，右侧给一个编辑 / 预览开关。 */
   markdown: { previewOn: boolean; onToggle: () => void } | null;
+  /** 会话标签上的右键：弹任务操作（重命名 / 收藏 / 删除）。没有会话时不传。 */
+  onSessionContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -110,6 +113,7 @@ export function MainTabBar({
             active={activeKey === "session"}
             title={sessionLabel}
             onSelect={onSelectSession}
+            onContextMenu={onSessionContextMenu}
           >
             <SquareTerminal size={13} className="main-tab-icon" />
             <TabLabel>{sessionLabel}</TabLabel>

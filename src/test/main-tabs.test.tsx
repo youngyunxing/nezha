@@ -167,6 +167,13 @@ describe("MainTabBar", () => {
     expect(handlers.onCloseDiff).toHaveBeenCalledTimes(1);
   });
 
+  it("会话标签右键交给外部（弹任务操作菜单）", () => {
+    const onSessionContextMenu = vi.fn();
+    renderBar({ onSessionContextMenu });
+    fireEvent.contextMenu(screen.getByTitle("跑个任务"));
+    expect(onSessionContextMenu).toHaveBeenCalledTimes(1);
+  });
+
   it("没有会话可显示时只渲染文件标签", () => {
     renderBar({ sessionLabel: null, activeKey: fileTabKey("/p/a.ts") });
     expect(screen.queryByTitle("跑个任务")).toBeNull();

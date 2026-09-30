@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
@@ -46,6 +46,8 @@ export function TaskList({
   onDeleteTask,
   onToggleTaskStar,
   onRenameTask,
+  renamingTaskId,
+  onRenamingTaskIdChange,
 }: {
   tasks: Task[];
   taskDisplayWindow: TaskDisplayWindow;
@@ -59,14 +61,16 @@ export function TaskList({
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
+  /** 正在改名的任务 id（提到项目层：主区域标签上右键也能进改名） */
+  renamingTaskId: string | null;
+  onRenamingTaskIdChange: (id: string | null) => void;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
-  // 右键菜单挂在哪条任务上；改名中的那条任务 id
+  // 右键菜单挂在哪条任务上（改名态在项目层，见 renamingTaskId）
   const [ctxMenu, setCtxMenu] = useState<TaskContextMenuState | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -218,6 +222,20 @@ export function TaskList({
     return nextOffsets;
   }, [rows]);
 
+  // 改名输入框在列表行里：从主区域标签右键进来时那一行可能在视野外 —— 先滚过去，
+  // 否则点了「重命名」屏幕上什么都没发生。
+  useEffect(() => {
+    if (!renamingTaskId) return;
+    const index = rows.findIndex((row) => row.type === "task" && row.task.id === renamingTaskId);
+    const el = scrollRef.current;
+    if (index === -1 || !el) return;
+    const top = offsets[index] ?? 0;
+    const bottom = offsets[index + 1] ?? top;
+    if (top < el.scrollTop || bottom > el.scrollTop + el.clientHeight) {
+      el.scrollTop = Math.max(0, top - 8);
+    }
+  }, [renamingTaskId, rows, offsets]);
+
   const totalHeight = offsets[offsets.length - 1] ?? 0;
   const startIndex = Math.max(0, findRowIndex(offsets, scrollTop) - OVERSCAN_ROWS);
   const endIndex = Math.min(
@@ -268,12 +286,12 @@ export function TaskList({
                       event.stopPropagation();
                       setCtxMenu({ x: event.clientX, y: event.clientY, task: row.task });
                     }}
-                    renaming={renamingId === row.task.id}
+                    renaming={renamingTaskId === row.task.id}
                     onRenameSubmit={(name) => {
                       onRenameTask(row.task.id, name);
-                      setRenamingId(null);
+                      onRenamingTaskIdChange(null);
                     }}
-                    onRenameCancel={() => setRenamingId(null)}
+                    onRenameCancel={() => onRenamingTaskIdChange(null)}
                   />
                 )}
               </div>
@@ -286,7 +304,7 @@ export function TaskList({
         ctxMenu={ctxMenu}
         onClose={() => setCtxMenu(null)}
         onRename={() => {
-          setRenamingId(ctxMenu.task.id);
+          onRenamingTaskIdChange(ctxMenu.task.id);
           setCtxMenu(null);
         }}
         onToggleStar={() => {

@@ -30,6 +30,7 @@ import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { MainTabBar, fileTabKey, type MainTabKey } from "./main-tabs/MainTabBar";
+import { TaskContextMenu } from "./task-panel/TaskContextMenu";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -211,6 +212,9 @@ export function ProjectPage({
   } = useProjectPanels();
 
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
+  // 改名中的任务（列表行里就地出输入框）与「会话标签上右键」的菜单坐标
+  const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
+  const [sessionTabMenu, setSessionTabMenu] = useState<{ x: number; y: number } | null>(null);
 
   const projectTasks = useMemo(
     () => tasks.filter((t) => t.projectId === project.id),
@@ -371,6 +375,8 @@ export function ProjectPage({
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
+        renamingTaskId={renamingTaskId}
+        onRenamingTaskIdChange={setRenamingTaskId}
         taskDisplayWindow={taskDisplayWindow}
       />
       <div style={s.mainContent}>
@@ -395,6 +401,15 @@ export function ProjectPage({
                     onToggle: () => togglePreviewMode(activeFileTab.path),
                   }
                 : null
+            }
+            onSessionContextMenu={
+              selectedTask
+                ? (event) => {
+                    // 标签上右键 = 对这条任务右键：同样的重命名 / 收藏 / 删除
+                    event.preventDefault();
+                    setSessionTabMenu({ x: event.clientX, y: event.clientY });
+                  }
+                : undefined
             }
           />
         )}
@@ -587,6 +602,25 @@ export function ProjectPage({
               texts: [],
               repoPath: subRepoPath,
             });
+          }}
+        />
+      )}
+
+      {sessionTabMenu && selectedTask && (
+        <TaskContextMenu
+          ctxMenu={{ ...sessionTabMenu, task: selectedTask }}
+          onClose={() => setSessionTabMenu(null)}
+          onRename={() => {
+            setRenamingTaskId(selectedTask.id);
+            setSessionTabMenu(null);
+          }}
+          onToggleStar={() => {
+            onToggleTaskStar(selectedTask.id);
+            setSessionTabMenu(null);
+          }}
+          onDelete={() => {
+            onDeleteTask(selectedTask.id);
+            setSessionTabMenu(null);
           }}
         />
       )}
