@@ -66,6 +66,10 @@ export function TerminalView({
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
   const onRegisterRef = useRef(onRegisterTerminal);
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+  /** 最近一次真正告诉 PTY 的尺寸：用来区分"变大"和"变小" */
+  const notifiedSizeRef = useRef<{ cols: number; rows: number } | null>(null);
 
   const onReadyRef = useRef(onReady);
   const onSnapshotRef = useRef(onSnapshot);
@@ -125,7 +129,10 @@ export function TerminalView({
     const webglHandle = loadWebglAddon(term);
 
     const size = safeFit(fitAddon, term, container);
-    if (size) notifyResize(size.cols, size.rows);
+    if (size) {
+      notifiedSizeRef.current = { cols: size.cols, rows: size.rows };
+      notifyResize(size.cols, size.rows);
+    }
 
     // 字体 ready 后真实 cell 宽度可能变化，再 fit 一次让 cols/rows 跟上。
     whenFontsReady.then(() => {
@@ -199,16 +206,39 @@ export function TerminalView({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    // 150ms 而不是 50ms：双击标题栏缩放时窗口有 ~300ms 动画，50ms 会在动画中途 fit 一次，
-    // 那个中间宽度会被 CLI 当成真实宽度打印出来 —— 而且是**硬换行**，xterm 之后只能重排
-    // 自己标记为自动换行的行，硬换行救不回来，于是"最上面那几行永远是窄的"。
-    // 防抖在动画期间会被反复重置，所以实际只在停下来之后 fit 一次。
+    // 尺寸变化分两种情况处理（实测：双击标题栏把窗口变小再放大，任务会被推进 39 列的
+    // 窄宽度，TUI 按那个宽度打印出来的行是**硬换行**，xterm 之后重排不回来 —— 于是那几行
+    // 永远是窄的）：
+    //   - 变大：立刻生效（150ms 防抖只是躲开缩放动画的中间帧）；
+    //   - 变小：先不告诉 PTY，只有小尺寸持续 SHRINK_DELAY_MS 之后才真的缩。
+    // 于是"双击缩放"这种短暂变小不会污染 TUI 的输出，而真的把窗口拖小住手不动，终端照旧会缩。
+    let shrinkTimer: ReturnType<typeof setTimeout> | null = null;
+    const applySize = (cols: number, rows: number) => {
+      notifiedSizeRef.current = { cols, rows };
+      notifyResize(cols, rows);
+    };
     const scheduleFit = () => {
+      // 只有正在显示的那个终端才能决定 PTY 尺寸：隐藏的后台面板（同项目其它任务、
+      // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
+      if (!isActiveRef.current) return;
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const s = safeFit(fitAddon, term, container);
-        if (s) notifyResize(s.cols, s.rows);
-      }, 150);
+      // 本地 fit 先做：显示要跟着窗口走，哪怕这次不告诉 PTY
+      const s = safeFit(fitAddon, term, container);
+      if (!s) return;
+      const prev = notifiedSizeRef.current;
+      if (prev && s.cols < prev.cols) {
+        if (shrinkTimer) clearTimeout(shrinkTimer);
+        shrinkTimer = setTimeout(() => {
+          shrinkTimer = null;
+          applySize(s.cols, s.rows);
+        }, 800);
+        return;
+      }
+      if (shrinkTimer) {
+        clearTimeout(shrinkTimer);
+        shrinkTimer = null;
+      }
+      resizeTimer = setTimeout(() => applySize(s.cols, s.rows), 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
@@ -217,6 +247,10 @@ export function TerminalView({
 
     return () => {
       disposed = true;
+      // 未触发的 fit/缩容定时器要清掉：否则卸载后还会 invoke resize_pty，
+      // 给已经换过面板的任务发一个过期尺寸
+      if (resizeTimer) clearTimeout(resizeTimer);
+      if (shrinkTimer) clearTimeout(shrinkTimer);
       // 必须最先 unregister:后续任一 dispose 调用抛错会中断 cleanup,
       // 让 term 永久滞留 activeTerminals,下次 sibling 广播命中 zombie。
       unregisterActiveTerminal(term);
@@ -270,7 +304,10 @@ export function TerminalView({
     window.requestAnimationFrame(() => {
       if (!fitAddonRef.current || !terminalRef.current || !containerRef.current) return;
       const s = safeFit(fitAddonRef.current, terminalRef.current, containerRef.current);
-      if (s) notifyResize(s.cols, s.rows);
+      if (s) {
+        notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
+        notifyResize(s.cols, s.rows);
+      }
       refreshTerminalDisplay(terminalRef.current);
       terminalRef.current.focus();
     });
