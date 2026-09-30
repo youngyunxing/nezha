@@ -16,7 +16,7 @@ import {
 import { shortenPath } from "../../utils";
 import { useI18n } from "../../i18n";
 
-type IconMode = "label" | "emoji";
+type IconMode = "label" | "emoji" | "image";
 
 // 系统 emoji 键盘快捷键提示。
 const EMOJI_KEYBOARD_SHORTCUT = "⌃ ⌘ Space";
@@ -35,7 +35,9 @@ export function ProjectAppearanceEditor({
   const { t } = useI18n();
   const appearance = useProjectAppearance(project);
   const avatar = project.avatar;
-  const [mode, setMode] = useState<IconMode>(avatar?.emoji ? "emoji" : "label");
+  const [mode, setMode] = useState<IconMode>(
+    avatar?.image ? "image" : avatar?.emoji ? "emoji" : "label",
+  );
   const [labelDraft, setLabelDraft] = useState(avatar?.label ?? "");
   const [emojiDraft, setEmojiDraft] = useState(avatar?.emoji ?? "");
 
@@ -85,13 +87,23 @@ export function ProjectAppearanceEditor({
     handleEmojiPick(value);
   };
 
-  // 两种图标互斥显示:切回「缩写」即放弃 emoji,否则头像仍显示 emoji、缩写输入看不到效果。
-  // 切到「Emoji」不立刻改动,选中一个才生效。
+  // 三选一互斥:头像的优先级是 图片 > emoji > 缩写,切到哪一档就得把更高优先级的清掉,
+  // 否则头像还显示着上一个,那一档的输入看不到效果。
+  // 注意必须**在一次 commit 里清完** —— 分两次 commit 时第二次仍用渲染时的旧 avatar,
+  // 会把前一次清掉的字段又写回来。
+  // 切到「Emoji」/「图片」不立刻改动,选中一个才生效。
   const switchMode = (next: IconMode) => {
     setMode(next);
-    if (next === "label" && avatar?.emoji) {
-      setEmojiDraft("");
-      commit({ emoji: undefined });
+    if (next === "label") {
+      const patch: ProjectAvatarStyle = {};
+      if (avatar?.emoji) {
+        setEmojiDraft("");
+        patch.emoji = undefined;
+      }
+      if (avatar?.image) patch.image = undefined;
+      if (Object.keys(patch).length > 0) commit(patch);
+    } else if (next === "emoji" && avatar?.image) {
+      commit({ image: undefined });
     }
   };
 
@@ -153,6 +165,16 @@ export function ProjectAppearanceEditor({
             >
               {t("project.appearance.modeEmoji")}
             </button>
+            <button
+              type="button"
+              role="tab"
+              className="avatar-editor-mode"
+              aria-selected={mode === "image"}
+              data-selected={mode === "image"}
+              onClick={() => switchMode("image")}
+            >
+              {t("project.appearance.modeImage")}
+            </button>
           </div>
         </div>
 
@@ -178,7 +200,7 @@ export function ProjectAppearanceEditor({
             />
             <div className="avatar-editor-hint">{t("project.appearance.labelHint")}</div>
           </>
-        ) : (
+        ) : mode === "image" ? null : (
           <>
             <div className="avatar-editor-emoji-row">
               <input
@@ -270,8 +292,8 @@ export function ProjectAppearanceEditor({
         </div>
       </div>
 
-      <div className="avatar-editor-section">
-        <span className="avatar-editor-label">{t("project.appearance.image")}</span>
+      {mode === "image" ? (
+        <div className="avatar-editor-section">
         <div className="avatar-editor-image-row">
           {avatar?.image ? (
             <>
@@ -296,7 +318,8 @@ export function ProjectAppearanceEditor({
           )}
         </div>
         <span className="avatar-editor-hint">{t("project.appearance.imageHint")}</span>
-      </div>
+        </div>
+      ) : null}
 
       <div className="avatar-editor-footer">
         <button

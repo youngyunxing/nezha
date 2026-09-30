@@ -158,6 +158,7 @@ const translations: Record<string, string> = {
   "project.appearance.imageHint": "支持 png / jpg / webp / gif，4MB 以内；图片会内联保存，原图挪走也不受影响",
   "project.appearance.icon": "图标",
   "project.appearance.modeInitials": "缩写",
+  "project.appearance.modeImage": "图片",
   "project.appearance.modeEmoji": "Emoji",
   "project.appearance.labelPlaceholder": "自动：{label}",
   "project.appearance.labelHint": "最多 3 个字母或 2 个汉字，留空则使用自动缩写。",
