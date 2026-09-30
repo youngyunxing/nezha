@@ -4,7 +4,8 @@ import type { Project, ProjectAvatarStyle, Task } from "../types";
 import type { AttentionSeenMap } from "../attentionSeen";
 import { ProjectAvatar } from "./ProjectAvatar";
 import { useI18n } from "../i18n";
-import { Moon, Settings, Sun } from "lucide-react";
+import { Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun } from "lucide-react";
+import { load, save } from "../utils";
 import { AppSettingsDialog } from "./AppSettingsDialog";
 import type {
   FontFamily,
@@ -33,6 +34,9 @@ import {
 } from "./project-rail/drag";
 
 export { projectMatchesRailSearch } from "./project-rail/search";
+
+/** 项目栏（最左那条项目列表）的收起状态。 */
+const RAIL_COLLAPSED_KEY = "nezha:rail-collapsed";
 
 export function ProjectDrawer({
   projects,
@@ -91,6 +95,15 @@ export function ProjectDrawer({
   const [query, setQuery] = useState("");
   const [showAppSettings, setShowAppSettings] = useState(false);
   // 右键菜单 / 外观编辑器:同一时刻只允许一个 rail 项打开,由这里统一持有。
+  // 项目栏收起/展开：收起后只留一列头像（宽度让给终端），状态自己记在 localStorage。
+  const [collapsed, setCollapsed] = useState(() => load(RAIL_COLLAPSED_KEY, false));
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((prev) => {
+      save(RAIL_COLLAPSED_KEY, !prev);
+      return !prev;
+    });
+  }, []);
+
   const [openPanel, setOpenPanel] = useState<{ projectId: string; panel: RailItemPanel } | null>(
     null,
   );
@@ -370,7 +383,7 @@ export function ProjectDrawer({
   const isDark = themeVariant === "dark" || themeVariant === "midnight";
 
   return (
-    <div className="rail-drawer">
+    <div className="rail-drawer" data-collapsed={collapsed ? "true" : undefined}>
       <div className="rail-drawer-header">
         <button type="button" className="rail-drawer-add" onClick={onOpen}>
           <Plus size={14} strokeWidth={2.4} />
@@ -448,6 +461,19 @@ export function ProjectDrawer({
           onClick={onToggleTheme}
         >
           {isDark ? <Sun size={14} strokeWidth={1.8} /> : <Moon size={14} strokeWidth={1.8} />}
+        </button>
+        <button
+          type="button"
+          className="rail-drawer-footer-btn rail-drawer-collapse"
+          title={collapsed ? t("rail.expand") : t("rail.collapse")}
+          aria-expanded={!collapsed}
+          onClick={toggleCollapsed}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={14} strokeWidth={1.7} />
+          ) : (
+            <PanelLeftClose size={14} strokeWidth={1.7} />
+          )}
         </button>
       </div>
 

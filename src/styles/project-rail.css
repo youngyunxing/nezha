@@ -161,6 +161,47 @@
   overflow: hidden;
 }
 
+/* 收起态（data-collapsed）：只留一列头像，把宽度让给终端。
+   宽度 48 = 头像 28 + 左右各 10，与展开态的 220 是同一个盒模型。
+   项目名/搜索/「添加项目」/底部按钮都藏起来，只留收起按钮自己。 */
+.rail-drawer[data-collapsed="true"] {
+  width: 48px;
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-add,
+.rail-drawer[data-collapsed="true"] .rail-drawer-search,
+.rail-drawer[data-collapsed="true"] .rail-drawer-item-name,
+.rail-drawer[data-collapsed="true"] .rail-drawer-footer-btn:not(.rail-drawer-collapse) {
+  display: none;
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-header {
+  padding: 2px 12px 9px;
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-list {
+  align-items: center;
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-item {
+  width: 32px;
+  padding: 8px 2px;
+  justify-content: center;
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-footer {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.rail-drawer-collapse {
+  margin-left: auto; /* 展开态：贴在页脚最右侧，别和主题/设置挤在一起 */
+}
+
+.rail-drawer[data-collapsed="true"] .rail-drawer-collapse {
+  margin-left: 0;
+}
+
 .rail-drawer-header {
   /* 四条约束联立后的解（右侧头部 H=36）：
        ① 按钮↔搜索 = 搜索↔分割线 = S = 9px（下内边距同值）

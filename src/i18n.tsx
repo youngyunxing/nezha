@@ -136,6 +136,8 @@ const translations: Record<string, string> = {
   "status.failed": "失败",
   "status.cancelled": "已取消",
   "welcome.noMatchingProjects": "没有匹配的项目",
+  "rail.collapse": "收起项目栏",
+  "rail.expand": "展开项目栏",
   "welcome.searchProjects": "搜索项目",
   "welcome.addProject": "添加项目",
   "welcome.deleteProject": "删除项目",

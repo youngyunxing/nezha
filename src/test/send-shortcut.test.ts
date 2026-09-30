@@ -110,7 +110,7 @@ describe("scrollJumpForKey（终端跳到顶/底）", () => {
     ...mods,
   });
 
-  it("Cmd/Ctrl + 上下键 / Home / End 命中", () => {
+  test("Cmd/Ctrl + 上下键 / Home / End 命中", () => {
     expect(scrollJumpForKey(ev("ArrowUp", { metaKey: true }))).toBe("top");
     expect(scrollJumpForKey(ev("ArrowDown", { metaKey: true }))).toBe("bottom");
     expect(scrollJumpForKey(ev("Home", { metaKey: true }))).toBe("top");
@@ -118,13 +118,13 @@ describe("scrollJumpForKey（终端跳到顶/底）", () => {
     expect(scrollJumpForKey(ev("ArrowUp", { ctrlKey: true }))).toBe("top");
   });
 
-  it("不按修饰键就不接管 —— TUI 自己要用上下键", () => {
+  test("不按修饰键就不接管 —— TUI 自己要用上下键", () => {
     expect(scrollJumpForKey(ev("ArrowUp"))).toBeNull();
     expect(scrollJumpForKey(ev("Home"))).toBeNull();
     expect(scrollJumpForKey(ev("End"))).toBeNull();
   });
 
-  it("带 Shift / Alt 的组合不抢（可能是选中或输入法）", () => {
+  test("带 Shift / Alt 的组合不抢（可能是选中或输入法）", () => {
     expect(scrollJumpForKey(ev("ArrowUp", { metaKey: true, shiftKey: true }))).toBeNull();
     expect(scrollJumpForKey(ev("ArrowUp", { metaKey: true, altKey: true }))).toBeNull();
     expect(scrollJumpForKey(ev("a", { metaKey: true }))).toBeNull();
