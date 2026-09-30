@@ -34,6 +34,8 @@ pub const CLAUDE_TUI_MIN_VERSION: &str = "2.1.110";
 const HOOK_SCRIPT: &str = include_str!("nezha-hook.mjs");
 
 const NEZHA_MARKER_FIELD: &str = "_nezha_managed";
+/// marker 的值（uninject 只要求它是字符串；带上值便于将来区分版本）
+const NEZHA_MARKER_VERSION: &str = "1";
 
 const CODEX_BEGIN: &str = "# >>> nezha-managed-begin (do not edit; managed by Nezha) >>>";
 const CODEX_END: &str = "# <<< nezha-managed-end <<<";
@@ -270,6 +272,59 @@ fn is_nezha_managed(value: &Value) -> bool {
 }
 
 /// 从 settings JSON 对象上移除 Nezha hooks。
+/// 把 Nezha 的 hook 合并进用户全局 claude settings（每项带 marker，`uninject_claude_value`
+/// 能精确剥掉）。**为什么要动全局文件**：手动在 Nezha 的终端里敲 `claude` 也要上报 ——
+/// 只靠命令行 `--settings` 的话，只有 Nezha 自己起的任务才有 hook。Orca 也是改全局
+/// `~/.claude/settings.json`，它靠面板级 `ORCA_PANE_KEY` 归属事件。
+fn inject_claude_value(mut root: Value, script: &str) -> Value {
+    if !root.is_object() {
+        root = Value::Object(Map::new());
+    }
+    let entry = serde_json::json!({
+        NEZHA_MARKER_FIELD: NEZHA_MARKER_VERSION,
+        "hooks": [{ "type": "command", "command": hook_command(script) }],
+    });
+    let root_obj = root.as_object_mut().expect("just ensured object");
+    let hooks = root_obj
+        .entry("hooks".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !hooks.is_object() {
+        *hooks = Value::Object(Map::new());
+    }
+    let hooks_obj = hooks.as_object_mut().expect("just ensured object");
+    for event in CLAUDE_EVENTS {
+        let arr = hooks_obj
+            .entry((*event).to_string())
+            .or_insert_with(|| Value::Array(Vec::new()));
+        if !arr.is_array() {
+            *arr = Value::Array(Vec::new());
+        }
+        let arr = arr.as_array_mut().expect("just ensured array");
+        // 先去掉旧的 Nezha 项（脚本路径可能变过），再追加，避免重复累积
+        arr.retain(|item| !is_nezha_managed(item));
+        arr.push(entry.clone());
+    }
+    root
+}
+
+fn inject_claude_settings_at(path: &Path, script: &str) -> Result<(), String> {
+    let existing = if path.exists() {
+        fs::read_to_string(path).map_err(|e| e.to_string())?
+    } else {
+        String::new()
+    };
+    // 用户文件解析不了就**不要动**：宁可让手动 claude 没 hook，也不能把人家配置写坏
+    let root: Value = if existing.trim().is_empty() {
+        Value::Object(Map::new())
+    } else {
+        serde_json::from_str(&existing)
+            .map_err(|e| format!("{} 不是合法 JSON，拒绝写入: {}", path.display(), e))?
+    };
+    let merged = inject_claude_value(root, script);
+    let raw = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
+    atomic_write(path, &raw)
+}
+
 fn uninject_claude_value(mut root: Value) -> Value {
     let Some(root_obj) = root.as_object_mut() else {
         return root;
@@ -640,10 +695,22 @@ pub fn ensure_installed() -> HookInstallStatus {
         Ok(_) => status.claude_installed = true,
         Err(e) => status.error = format!("claude settings: {}", e),
     }
-    // 迁移清理:移除旧版本曾注入用户 ~/.claude/settings.json 的 nezha 条目(best-effort,
-    // 失败不影响命令行模式)。
+    // 全局 claude settings：注入带 marker 的 hook 块 —— 这样**手动**在 Nezha 终端里起的
+    // claude 也上报（命令行 `--settings` 只覆盖 Nezha 自己起的任务）。用户文件解析不了就
+    // 不动它（inject_claude_settings_at 里会拒绝），宁可没 hook 也不写坏配置。
+    // 注意：任务那边仍然走 `--settings`，于是任务的 hook 会触发两次 —— 下游
+    // （handle_session_start 的 already 判断、note_status 的去重）本来就会吃重，不影响。
     if let Ok(p) = claude_settings_path() {
-        let _ = uninject_claude_settings_at(&p);
+        match inject_claude_settings_at(&p, &script) {
+            Ok(_) => status.claude_installed = true,
+            Err(e) => {
+                if status.error.is_empty() {
+                    status.error = format!("claude global settings: {}", e);
+                } else {
+                    status.error = format!("{}; claude global settings: {}", status.error, e);
+                }
+            }
+        }
     }
 
     match codex_config_path().and_then(|p| inject_codex_config_at(&p, &node, &script)) {
