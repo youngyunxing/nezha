@@ -253,7 +253,8 @@ export function ProjectAppearanceEditor({
         )}
       </div>
 
-      <div className="avatar-editor-section">
+      {mode === "image" ? null : (
+        <div className="avatar-editor-section">
         <div className="avatar-editor-section-head">
           <span className="avatar-editor-label">{t("project.appearance.color")}</span>
         </div>
@@ -291,6 +292,7 @@ export function ProjectAppearanceEditor({
           })}
         </div>
       </div>
+      )}
 
       {mode === "image" ? (
         <div className="avatar-editor-section">

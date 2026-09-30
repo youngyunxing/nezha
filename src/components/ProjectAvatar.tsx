@@ -25,7 +25,9 @@ export function ProjectAvatar({
   return (
     <div
       className={className ? `project-avatar ${className}` : "project-avatar"}
-      data-avatar-color={appearance.color}
+      // 有图就不给颜色属性：色板整套 CSS 变量（--avatar-from/to）随之不生效，
+      // 免得图片透明处透出底色 —— 图片档根本不该有"底色"这个概念。
+      data-avatar-color={showImage ? undefined : appearance.color}
       data-avatar-kind={showImage ? "image" : showEmoji ? "emoji" : "label"}
       data-avatar-len={showImage || showEmoji ? undefined : appearance.label.length}
       style={sizeVar}
