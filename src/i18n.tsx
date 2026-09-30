@@ -236,7 +236,7 @@ const translations: Record<string, string> = {
   "copySession.failed": "复制失败：{error}",
   "quickInput.button": "快捷输入",
   "quickInput.autoEnter": "自动回车",
-  "quickInput.autoEnterHint": "开启后点一条会直接发送（相当于替你按了回车）；关掉只填进输入框，改完再发。",
+  "quickInput.autoEnterHint": "开启后自动回车发送",
   "quickInput.kind": "类型",
   "quickInput.scope": "适用范围",
   "quickInput.scopeAll": "所有项目",
