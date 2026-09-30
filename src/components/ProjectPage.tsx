@@ -29,7 +29,13 @@ import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
-import { MainTabBar, fileTabKey, type MainTabKey } from "./main-tabs/MainTabBar";
+import { MainTabBar } from "./main-tabs/MainTabBar";
+import {
+  fileTabKey,
+  localSessionTabColorKey,
+  taskTabColorKey,
+  type MainTabKey,
+} from "../mainTabs";
 import { TaskContextMenu } from "./task-panel/TaskContextMenu";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
@@ -186,6 +192,13 @@ export function ProjectPage({
   monoFontFamily: FontFamily;
   onMonoFontFamilyChange: (family: FontFamily) => void;
 }) {
+  // 会话标签的配色键：按任务 / 本地会话记（见 mainTabs.ts）
+  const sessionColorKey = selectedTaskId
+    ? taskTabColorKey(selectedTaskId)
+    : localSession
+      ? localSessionTabColorKey(localSession.sessionId)
+      : null;
+
   const {
     rightPanel,
     openFiles,
@@ -208,8 +221,10 @@ export function ProjectPage({
     handleCommitFileClick,
     showSessionView,
     togglePreviewMode,
+    tabColors,
+    setTabColor,
     handleRightResizeStart,
-  } = useProjectPanels();
+  } = useProjectPanels({ sessionColorKey });
 
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
   // 改名中的任务（列表行里就地出输入框）与「会话标签上右键」的菜单坐标
@@ -402,6 +417,9 @@ export function ProjectPage({
                   }
                 : null
             }
+            colors={tabColors}
+            sessionColorKey={sessionColorKey}
+            onPickColor={setTabColor}
             onSessionContextMenu={
               selectedTask
                 ? (event) => {
@@ -622,6 +640,14 @@ export function ProjectPage({
             onDeleteTask(selectedTask.id);
             setSessionTabMenu(null);
           }}
+          colorPicker={
+            sessionColorKey
+              ? {
+                  current: tabColors[sessionColorKey] ?? null,
+                  onPick: (color) => setTabColor(sessionColorKey, color),
+                }
+              : undefined
+          }
         />
       )}
 

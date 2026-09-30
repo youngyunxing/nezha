@@ -3,16 +3,12 @@ import type React from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Eye, FileDiff, MoreHorizontal, PencilLine, SquareTerminal, X } from "lucide-react";
 import type { OpenFileTab } from "../../hooks/useProjectPanels";
+import type { ProjectAvatarColor } from "../../types";
+import { fileTabKey, type MainTabKey } from "../../mainTabs";
 import { getFileColor } from "../../utils";
 import { useI18n } from "../../i18n";
+import { TabColorPicker } from "./TabColorPicker";
 import s from "../../styles";
-
-/** 主区域标签的标识：会话 / 某个文件 / 当前打开的 diff。 */
-export type MainTabKey = "session" | "diff" | `file:${string}`;
-
-export function fileTabKey(path: string): MainTabKey {
-  return `file:${path}`;
-}
 
 /** 主区域顶部的标签条：会话是一号标签，打开的文件挨着它往后排（不覆盖会话），
  *  git 的 diff 作为覆盖层也占一个标签。文件相关的右键 / ⋮ 菜单都收在这里。 */
@@ -31,6 +27,9 @@ export function MainTabBar({
   onCloseDiff,
   markdown,
   onSessionContextMenu,
+  colors,
+  sessionColorKey,
+  onPickColor,
 }: {
   /** null = 这个项目当前没有会话可显示（没任务、没本地会话），不渲染会话标签。 */
   sessionLabel: string | null;
@@ -49,6 +48,11 @@ export function MainTabBar({
   markdown: { previewOn: boolean; onToggle: () => void } | null;
   /** 会话标签上的右键：弹任务操作（重命名 / 收藏 / 删除）。没有会话时不传。 */
   onSessionContextMenu?: (event: React.MouseEvent) => void;
+  /** 配色键 → 色板 key（见 mainTabs.ts 的 resolveTabColors） */
+  colors: Record<string, ProjectAvatarColor>;
+  /** 会话标签的配色键（按任务记）；没有会话时 null */
+  sessionColorKey: string | null;
+  onPickColor: (colorKey: string, color: ProjectAvatarColor) => void;
 }) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -112,6 +116,7 @@ export function MainTabBar({
           <TabButton
             active={activeKey === "session"}
             title={sessionLabel}
+            color={sessionColorKey ? colors[sessionColorKey] : undefined}
             onSelect={onSelectSession}
             onContextMenu={onSessionContextMenu}
           >
@@ -125,6 +130,7 @@ export function MainTabBar({
             key={tab.path}
             active={activeKey === fileTabKey(tab.path)}
             title={tab.path}
+            color={colors[fileTabKey(tab.path)]}
             onSelect={() => onSelectFile(tab.path)}
             onContextMenu={(event) => {
               // 顶掉 webview 自带的右键菜单（重新加载 / 存储为 / 打印），换成标签操作。
@@ -146,6 +152,7 @@ export function MainTabBar({
           <TabButton
             active={activeKey === "diff"}
             title={diffLabel}
+            color={colors.diff}
             onSelect={() => {}}
             onClose={onCloseDiff}
             closeLabel={t("file.closeTab", { name: diffLabel })}
@@ -279,6 +286,11 @@ export function MainTabBar({
           >
             {t("file.closeAllTabs")}
           </MenuItem>
+          <div style={s.ctxMenuSeparator} />
+          <TabColorPicker
+            current={colors[fileTabKey(tabMenu.path)] ?? null}
+            onPick={(color) => onPickColor(fileTabKey(tabMenu.path), color)}
+          />
         </div>
       )}
     </div>
@@ -288,6 +300,7 @@ export function MainTabBar({
 function TabButton({
   active,
   title,
+  color,
   onSelect,
   onContextMenu,
   onClose,
@@ -296,6 +309,8 @@ function TabButton({
 }: {
   active: boolean;
   title: string;
+  /** 标签上沿色条的色板 key（data-tab-color → --tab-color，映射见 App.css） */
+  color?: ProjectAvatarColor;
   onSelect: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   onClose?: () => void;
@@ -306,6 +321,7 @@ function TabButton({
     <button
       className="main-tab"
       data-active={active ? "true" : "false"}
+      data-tab-color={color}
       onClick={onSelect}
       onContextMenu={onContextMenu}
       title={title}

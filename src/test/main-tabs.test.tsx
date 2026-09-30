@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
 import { useProjectPanels } from "../hooks/useProjectPanels";
-import { MainTabBar, fileTabKey } from "../components/main-tabs/MainTabBar";
+import { MainTabBar } from "../components/main-tabs/MainTabBar";
+import { fileTabKey } from "../mainTabs";
 
 afterEach(cleanup);
 
@@ -116,6 +117,9 @@ describe("MainTabBar", () => {
       activeKey: "session" as const,
       diffLabel: null,
       markdown: null,
+      colors: {} as Record<string, never>,
+      sessionColorKey: null,
+      onPickColor: vi.fn(),
       ...handlers,
       ...overrides,
     };
@@ -174,6 +178,31 @@ describe("MainTabBar", () => {
     expect(onSessionContextMenu).toHaveBeenCalledTimes(1);
   });
 
+  it("每个标签上沿的颜色来自配色表（会话按任务键取）", () => {
+    renderBar({
+      colors: { "task:t9": "teal", "file:/p/a.ts": "red", "file:/p/b.md": "sky" },
+      sessionColorKey: "task:t9",
+    });
+    expect(screen.getByTitle("跑个任务").dataset.tabColor).toBe("teal");
+    expect(screen.getByTitle("/p/a.ts").dataset.tabColor).toBe("red");
+    expect(screen.getByTitle("/p/b.md").dataset.tabColor).toBe("sky");
+  });
+
+  it("文件标签右键能改色，挑色后菜单不关（可以连着试）", () => {
+    const onPickColor = vi.fn();
+    renderBar({ colors: { "file:/p/a.ts": "red" }, onPickColor });
+
+    fireEvent.contextMenu(screen.getByTitle("/p/a.ts"));
+    expect(screen.getByText("标签颜色")).toBeTruthy();
+    // 当前色带选中标记
+    expect(screen.getAllByLabelText("red")[0].dataset.selected).toBe("true");
+
+    fireEvent.click(screen.getByLabelText("teal"));
+    expect(onPickColor).toHaveBeenCalledWith("file:/p/a.ts", "teal");
+    // 菜单还在
+    expect(screen.getByText("标签颜色")).toBeTruthy();
+  });
+
   it("没有会话可显示时只渲染文件标签", () => {
     renderBar({ sessionLabel: null, activeKey: fileTabKey("/p/a.ts") });
     expect(screen.queryByTitle("跑个任务")).toBeNull();
@@ -198,6 +227,9 @@ describe("MainTabBar", () => {
           diffLabel={null}
           onCloseDiff={vi.fn()}
           markdown={null}
+          colors={{}}
+          sessionColorKey={null}
+          onPickColor={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -219,6 +251,9 @@ describe("MainTabBar", () => {
           diffLabel={null}
           onCloseDiff={vi.fn()}
           markdown={{ previewOn: true, onToggle }}
+          colors={{}}
+          sessionColorKey={null}
+          onPickColor={vi.fn()}
         />
       </I18nProvider>,
     );

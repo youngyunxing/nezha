@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { Task } from "../../types";
+import type { ProjectAvatarColor, Task } from "../../types";
 import { useI18n } from "../../i18n";
+import { TabColorPicker } from "../main-tabs/TabColorPicker";
 import s from "../../styles";
 
 /** 右键点在哪条任务上（坐标 + 那条任务）。 */
@@ -16,12 +17,15 @@ export function TaskContextMenu({
   onRename,
   onToggleStar,
   onDelete,
+  colorPicker,
 }: {
   ctxMenu: TaskContextMenuState;
   onClose: () => void;
   onRename: () => void;
   onToggleStar: () => void;
   onDelete: () => void;
+  /** 会话标签右键时才给：改这个标签的颜色（任务列表里的右键不需要） */
+  colorPicker?: { current: ProjectAvatarColor | null; onPick: (color: ProjectAvatarColor) => void };
 }) {
   const { t } = useI18n();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -115,6 +119,12 @@ export function TaskContextMenu({
             </button>
           );
         })}
+        {colorPicker && (
+          <>
+            <div style={s.ctxMenuSeparator} />
+            <TabColorPicker current={colorPicker.current} onPick={colorPicker.onPick} />
+          </>
+        )}
       </div>
     </>
   );

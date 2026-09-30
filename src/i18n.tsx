@@ -322,6 +322,7 @@ const translations: Record<string, string> = {
   "file.tabActions": "标签页操作",
   // 主区域标签条（会话是一号标签，文件挨着它往后排）
   "mainTabs.session": "会话",
+  "mainTabs.color": "标签颜色",
   "mainTabs.localSession": "本地会话",
   "file.outline": "目录",
   "file.closeTab": "关闭 {name}",

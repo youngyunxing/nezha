@@ -108,6 +108,22 @@ export const layout = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  /** 标签配色选择（右键菜单里那一块）：一排色块。 */
+  tabColorSection: {
+    padding: "6px 8px 4px",
+  },
+  tabColorLabel: {
+    display: "block",
+    fontSize: 10.5,
+    color: "var(--text-hint)",
+    marginBottom: 5,
+  },
+  tabColorGrid: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 4,
+    width: 140,
+  },
   /** 右键菜单本体在 .file-viewer-tab-menu（App.css）里，这里只给定位方式。 */
   mainTabContextMenu: {
     position: "fixed" as const,

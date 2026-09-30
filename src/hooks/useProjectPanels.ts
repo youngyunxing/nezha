@@ -1,4 +1,11 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import type { ProjectAvatarColor } from "../types";
+import {
+  fileTabKey,
+  loadTabColorOverrides,
+  resolveTabColors,
+  saveTabColorOverrides,
+} from "../mainTabs";
 
 type RightPanel = "files" | "git-changes" | "git-history" | null;
 type OpenFileTab = { path: string; name: string };
@@ -14,7 +21,11 @@ type OpenDiff =
   | { kind: "commit"; hash: string; message: string }
   | { kind: "commit-file"; hash: string; filePath: string; label: string };
 
-export function useProjectPanels() {
+export function useProjectPanels(options?: {
+  /** 会话标签的配色键（按任务记，见 mainTabs.ts）；没有选中任务时传 null。 */
+  sessionColorKey?: string | null;
+}) {
+  const sessionColorKey = options?.sessionColorKey ?? null;
   // 默认展开文件浏览器；点同一图标可收起，点其他图标切到对应面板。
   const [rightPanel, setRightPanel] = useState<RightPanel>("files");
   const [openFilesState, setOpenFilesState] = useState<{
@@ -28,6 +39,9 @@ export function useProjectPanels() {
   const [mainView, setMainView] = useState<MainView>("session");
   // 每个文件自己的 markdown 预览开关（缺省按文件类型走：md 默认预览）。
   const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});
+  // 标签颜色：只存用户手挑过的，自动配色按 key 现算（见 mainTabs.ts）
+  const [colorOverrides, setColorOverrides] =
+    useState<Record<string, ProjectAvatarColor>>(loadTabColorOverrides);
   const [rightPanelWidth, setRightPanelWidth] = useState(280);
   const rightPanelWidthRef = useRef(rightPanelWidth);
   rightPanelWidthRef.current = rightPanelWidth;
@@ -139,6 +153,10 @@ export function useProjectPanels() {
     setOpenDiff({ kind: "commit-file", hash, filePath, label });
   }, []);
 
+  const setTabColor = useCallback((key: string, color: ProjectAvatarColor) => {
+    setColorOverrides((prev) => ({ ...prev, [key]: color }));
+  }, []);
+
   const handleRightResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -159,6 +177,23 @@ export function useProjectPanels() {
     document.addEventListener("mouseup", onMouseUp);
   }, []);
 
+  // 手挑的颜色落盘（颜色是显示偏好，写盘失败不影响使用）
+  useEffect(() => {
+    saveTabColorOverrides(colorOverrides);
+  }, [colorOverrides]);
+
+  const colorKeys = useMemo(() => {
+    const keys: string[] = [];
+    if (sessionColorKey) keys.push(sessionColorKey);
+    for (const tab of openFilesState.tabs) keys.push(fileTabKey(tab.path));
+    if (openDiff) keys.push("diff");
+    return keys;
+  }, [sessionColorKey, openFilesState.tabs, openDiff]);
+  const tabColors = useMemo(
+    () => resolveTabColors(colorKeys, colorOverrides),
+    [colorKeys, colorOverrides],
+  );
+
   const activeFilePath = openFilesState.activePath;
   /** 主区域是不是正在显示文件（session 态下显示的是会话 / 终端）。
    *  带一次「标签还在不在」的校验：文件态下必须真有那个标签，否则落回会话。 */
@@ -175,6 +210,8 @@ export function useProjectPanels() {
     mainView,
     showingFile,
     previewModes,
+    tabColors,
+    setTabColor,
     rightPanelWidth,
     setOpenDiff,
     handleTogglePanel,

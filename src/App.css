@@ -336,6 +336,7 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
+  position: relative;
 }
 
 .main-tab:hover {
@@ -344,10 +345,98 @@ body {
 
 /* 放在 :hover 之后：激活态要压过悬停态 */
 .main-tab[data-active="true"] {
-  border-top-color: var(--accent);
   background: var(--bg-panel);
   font-weight: 500;
   color: var(--text-primary);
+}
+
+/* 标签上沿那条色条：每个标签一个色（--tab-color 由 data-tab-color 映射，见下）。
+   用伪元素而不是 border-top —— 未激活时要能单独把色条调暗，而不影响文字。 */
+.main-tab::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--tab-color, transparent);
+  opacity: 0.5;
+}
+
+.main-tab[data-active="true"]::after {
+  opacity: 1;
+}
+
+/* 色板 key → 色值。变量在 project-rail.css 的 :root（和项目头像同一套 16 色，
+   四套主题下都保证白字对比度），这里只做映射。 */
+[data-tab-color="red"] {
+  --tab-color: var(--avatar-red-from);
+}
+[data-tab-color="orange"] {
+  --tab-color: var(--avatar-orange-from);
+}
+[data-tab-color="amber"] {
+  --tab-color: var(--avatar-amber-from);
+}
+[data-tab-color="lime"] {
+  --tab-color: var(--avatar-lime-from);
+}
+[data-tab-color="green"] {
+  --tab-color: var(--avatar-green-from);
+}
+[data-tab-color="teal"] {
+  --tab-color: var(--avatar-teal-from);
+}
+[data-tab-color="cyan"] {
+  --tab-color: var(--avatar-cyan-from);
+}
+[data-tab-color="sky"] {
+  --tab-color: var(--avatar-sky-from);
+}
+[data-tab-color="blue"] {
+  --tab-color: var(--avatar-blue-from);
+}
+[data-tab-color="violet"] {
+  --tab-color: var(--avatar-violet-from);
+}
+[data-tab-color="purple"] {
+  --tab-color: var(--avatar-purple-from);
+}
+[data-tab-color="fuchsia"] {
+  --tab-color: var(--avatar-fuchsia-from);
+}
+[data-tab-color="pink"] {
+  --tab-color: var(--avatar-pink-from);
+}
+[data-tab-color="wine"] {
+  --tab-color: var(--avatar-wine-from);
+}
+[data-tab-color="brown"] {
+  --tab-color: var(--avatar-brown-from);
+}
+[data-tab-color="slate"] {
+  --tab-color: var(--avatar-slate-from);
+}
+
+.tab-color-swatch {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: var(--tab-color);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.tab-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.tab-color-swatch[data-selected="true"] {
+  box-shadow:
+    0 0 0 2px var(--bg-card),
+    0 0 0 3.5px var(--tab-color);
 }
 
 .main-tab-icon {
