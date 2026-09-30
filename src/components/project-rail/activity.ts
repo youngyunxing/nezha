@@ -23,6 +23,8 @@ export function buildProjectActivityMap(
 ): Map<string, ProjectActivity> {
   const activityByProjectId = new Map<string, ProjectActivity>();
   for (const task of tasks) {
+    // 归档的任务是「收起来的」：等待 / 中断 / 运行都不该再让小标亮起来
+    if (task.archived) continue;
     let activity = activityByProjectId.get(task.projectId);
     if (!activity) {
       activity = { status: null, attentionCount: 0 };

@@ -33,6 +33,8 @@ function renderList(
     onToggleTaskStar: vi.fn(),
     onRenameTask: vi.fn(),
     onRenamingTaskIdChange: vi.fn(),
+    onArchiveTask: vi.fn(),
+    onUnarchiveTask: vi.fn(),
   };
   const { renamingTaskId: initialRenaming = null, ...rest } = over;
   const props = {
@@ -104,6 +106,20 @@ describe("任务列表右键菜单与改名", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(handlers.onRenameTask).toHaveBeenCalledWith("t1", "登录页报错");
     expect(handlers.onRenamingTaskIdChange).toHaveBeenCalledWith(null);
+  });
+
+  it("归档的任务沉到「已归档」分组，不进活跃分组", () => {
+    renderList({ tasks: [makeTask({ id: "a1", archived: true, prompt: "归档过的任务" })] });
+    expect(screen.getByText("已归档")).toBeTruthy();
+    expect(screen.queryByText("今天")).toBeNull();
+    expect(screen.getByText("归档过的任务")).toBeTruthy();
+  });
+
+  it("右键归档的任务，菜单里是「恢复」而不是「归档」", () => {
+    renderList({ tasks: [makeTask({ archived: true })] });
+    fireEvent.contextMenu(screen.getByText("修一下登录页的报错"));
+    expect(screen.getByText("恢复")).toBeTruthy();
+    expect(screen.queryByText("归档")).toBeNull();
   });
 
   it("改名态属于别的任务时，这一行还是普通标题", () => {

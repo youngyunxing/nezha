@@ -213,9 +213,17 @@ const translations: Record<string, string> = {
   "task.failed": "任务失败",
   "task.cancelled": "任务已取消",
   "task.deleteTitle": "删除任务",
-  "task.deletePrompt": "删除任务“{prompt}”？",
+  "task.deletePrompt":
+    "删除任务“{prompt}”？\n\n这一步不可撤销：终端屏幕记录会被删掉，worktree 和它里面未提交的改动会被丢弃，正在跑的会话会被停掉。\n（会话文件本身留在磁盘上，但这个任务条目找不回来 —— 只想收起来请用「归档」。）",
+  "task.archive": "归档",
+  "task.unarchive": "恢复",
+  "task.archived": "已归档",
+  "task.archiveTitle": "归档任务",
+  "task.archivePrompt":
+    "归档会把这个任务从列表移进「已归档」，正在跑的会话会先停掉。\n\n会话记录、worktree、未提交的改动都会保留，随时可以恢复。继续？",
   "task.deleteProjectTitle": "删除项目",
-  "task.deleteProjectPrompt": "把项目“{project}”从列表移除？会话记录会保留，之后重新添加这个目录即可恢复。",
+  "task.deleteProjectPrompt":
+    "把项目“{project}”从列表移除？\n\n任务和会话记录都不会删：正在跑的会话会先停掉，任务原样留在磁盘上，之后重新添加这个目录就都回来了。",
   "newTask.dialogTitle": "新建任务",
   "handoff.button": "流转会话",
   "handoff.title": "流转到另一个智能体",

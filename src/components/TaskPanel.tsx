@@ -28,6 +28,8 @@ export function TaskPanel({
   onRenameTask,
   renamingTaskId,
   onRenamingTaskIdChange,
+  onArchiveTask,
+  onUnarchiveTask,
   taskDisplayWindow,
 }: {
   project: Project;
@@ -53,6 +55,8 @@ export function TaskPanel({
   /** 改名中的任务 id（提到项目层：主区域标签上右键也能进改名） */
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
+  onArchiveTask: (id: string) => void;
+  onUnarchiveTask: (id: string) => void;
   taskDisplayWindow: TaskDisplayWindow;
 }) {
   const { t } = useI18n();
@@ -188,6 +192,8 @@ export function TaskPanel({
         onRenameTask={onRenameTask}
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={onRenamingTaskIdChange}
+        onArchiveTask={onArchiveTask}
+        onUnarchiveTask={onUnarchiveTask}
       />
     </div>
   );

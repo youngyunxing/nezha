@@ -1572,6 +1572,63 @@ function App() {
     deleteTasks([taskId]);
   }
 
+  /** 归档 = 退出会话 + 移进「已归档」分组。**不删任何东西**：会话文件、worktree、终端屏幕都留着，
+   *  之后可以恢复；跑着的会话会先停掉进程（记录仍可续），所以这一步要确认。 */
+  async function handleArchiveTask(taskId: string) {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const project = projects.find((p) => p.id === task.projectId);
+    const running = isActiveTaskStatus(task.status);
+    if (running) {
+      const ok = await confirm(t("task.archivePrompt"), {
+        title: t("task.archiveTitle"),
+        kind: "warning",
+      });
+      if (!ok) return;
+      await invoke("cancel_task", {
+        taskId,
+        projectPath: task.worktreePath ?? project?.path ?? "",
+      }).catch((e: unknown) => {
+        showToast(t("toast.cancelTaskFailed", { error: String(e) }), "error");
+      });
+    }
+    const archivedAt = Date.now();
+    setTasks((prev) => {
+      const next = prev.map((item) =>
+        item.id === taskId
+          ? {
+              ...item,
+              archived: true,
+              // 停下来的会话落成 interrupted：跟「移除项目」一致，记录仍可续跑
+              status: isActiveTaskStatus(item.status) ? ("interrupted" as TaskStatus) : item.status,
+              updatedAt: archivedAt,
+            }
+          : item,
+      );
+      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
+      return next;
+    });
+    tm.removeTaskBuffers([taskId]);
+    // 归档就是「退出会话」：把它从当前视图上摘掉
+    setProjectViews((prev) => {
+      const view = prev[task.projectId];
+      if (!view || view.selectedTaskId !== taskId) return prev;
+      return { ...prev, [task.projectId]: { ...view, selectedTaskId: null, isNewTask: true } };
+    });
+  }
+
+  function handleUnarchiveTask(taskId: string) {
+    setTasks((prev) => {
+      const task = prev.find((t) => t.id === taskId);
+      if (!task) return prev;
+      const next = prev.map((t) =>
+        t.id === taskId ? { ...t, archived: undefined, updatedAt: Date.now() } : t,
+      );
+      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
+      return next;
+    });
+  }
+
   function handleToggleTaskStar(taskId: string) {
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
@@ -1904,6 +1961,8 @@ function App() {
               onDeleteTask={handleDeleteTask}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
+              onArchiveTask={handleArchiveTask}
+              onUnarchiveTask={handleUnarchiveTask}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}

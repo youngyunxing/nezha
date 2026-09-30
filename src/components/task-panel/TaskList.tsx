@@ -48,6 +48,8 @@ export function TaskList({
   onRenameTask,
   renamingTaskId,
   onRenamingTaskIdChange,
+  onArchiveTask,
+  onUnarchiveTask,
 }: {
   tasks: Task[];
   taskDisplayWindow: TaskDisplayWindow;
@@ -64,6 +66,8 @@ export function TaskList({
   /** 正在改名的任务 id（提到项目层：主区域标签上右键也能进改名） */
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
+  onArchiveTask: (id: string) => void;
+  onUnarchiveTask: (id: string) => void;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,6 +144,7 @@ export function TaskList({
   }, [taskDisplayWindow]);
 
   const rows = useMemo<VirtualRow[]>(() => {
+    const archivedTasks: Task[] = [];
     const waitingTasks: Task[] = [];
     const resumeTasks: Task[] = [];
     const pendingMergeTasks: Task[] = [];
@@ -148,6 +153,11 @@ export function TaskList({
     const earlierTasks: Task[] = [];
 
     for (const task of sorted) {
+      if (task.archived) {
+        // 归档的单独成组沉到底部：不进「等你 / 待恢复 / 今天」这些活跃分组
+        archivedTasks.push(task);
+        continue;
+      }
       if (task.status === "input_required" || task.status === "awaiting_review") {
         // 都是「轮到你了」：一个是被卡住必须回，一个是刚答完等你读
         waitingTasks.push(task);
@@ -191,6 +201,7 @@ export function TaskList({
     appendGroup("starred", t("task.starred"), starredTasks);
     appendGroup("today", t("task.today"), todayTasks);
     appendGroup("earlier", t("task.earlier"), earlierTasks);
+    appendGroup("archived", t("task.archived"), archivedTasks);
 
     // 本地 Claude Code 会话单独成组：它们不是 Nezha 任务，不落盘、不参与状态机，
     // 与上面的任务列表刻意分开。
@@ -313,6 +324,14 @@ export function TaskList({
         }}
         onDelete={() => {
           onDeleteTask(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+        onArchive={() => {
+          onArchiveTask(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+        onUnarchive={() => {
+          onUnarchiveTask(ctxMenu.task.id);
           setCtxMenu(null);
         }}
       />

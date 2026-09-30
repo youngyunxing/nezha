@@ -160,6 +160,8 @@ export interface Task {
   updatedAt?: number;
   attentionRequestedAt?: number;
   starred?: boolean;
+  /** 归档：从任务列表移进「已归档」分组。会话记录、worktree、终端屏幕都保留，可随时恢复。 */
+  archived?: boolean;
   failureReason?: string;
   codexSessionId?: string;
   codexSessionPath?: string;

@@ -62,6 +62,8 @@ export function ProjectPage({
   onDeleteTask,
   onToggleTaskStar,
   onRenameTask,
+  onArchiveTask,
+  onUnarchiveTask,
   onSubmitTask,
   onResumeTask,
   onForkTask,
@@ -124,6 +126,9 @@ export function ProjectPage({
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
+  /** 归档：退出会话、移进「已归档」，不删任何东西 */
+  onArchiveTask: (id: string) => void;
+  onUnarchiveTask: (id: string) => void;
   onSubmitTask: (t: {
     prompt: string;
     agent: AgentType;
@@ -390,6 +395,8 @@ export function ProjectPage({
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
+        onArchiveTask={onArchiveTask}
+        onUnarchiveTask={onUnarchiveTask}
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={setRenamingTaskId}
         taskDisplayWindow={taskDisplayWindow}
@@ -638,6 +645,14 @@ export function ProjectPage({
           }}
           onDelete={() => {
             onDeleteTask(selectedTask.id);
+            setSessionTabMenu(null);
+          }}
+          onArchive={() => {
+            onArchiveTask(selectedTask.id);
+            setSessionTabMenu(null);
+          }}
+          onUnarchive={() => {
+            onUnarchiveTask(selectedTask.id);
             setSessionTabMenu(null);
           }}
           colorPicker={
