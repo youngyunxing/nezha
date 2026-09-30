@@ -1,10 +1,9 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Marked } from "marked";
 import DOMPurify from "dompurify";
-import * as Popover from "@radix-ui/react-popover";
-import { X, AlertCircle, Eye, PencilLine, MoreHorizontal, List } from "lucide-react";
-import { getFileColor } from "../utils";
+import { AlertCircle, List } from "lucide-react";
+import { isMarkdownFile } from "../utils";
 import ReactCodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import { solarizedLight } from "@uiw/codemirror-theme-solarized";
@@ -14,11 +13,6 @@ import { useLanguageExtension } from "./file-viewer/languageExtensions";
 import type { OpenFileTab } from "../hooks/useProjectPanels";
 import type { ThemeVariant } from "../types";
 import { useI18n } from "../i18n";
-
-function isMarkdownFile(fileName: string): boolean {
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  return ext === "md" || ext === "mdx" || ext === "markdown";
-}
 
 type TocEntry = { depth: number; text: string; id: string };
 
@@ -442,115 +436,22 @@ export function FileViewer({
   tabs,
   activeFilePath,
   projectPath,
-  onSelectTab,
-  onCloseTab,
-  onCloseOtherTabs,
-  onCloseTabsToRight,
-  onCloseTabsToLeft,
-  onCloseAllTabs,
   themeVariant,
+  previewModes,
 }: {
   tabs: OpenFileTab[];
   activeFilePath: string | null;
   projectPath: string;
-  onSelectTab: (path: string) => void;
-  onCloseTab: (path: string) => void;
-  onCloseOtherTabs: (path: string) => void;
-  onCloseTabsToRight: (path: string) => void;
-  onCloseTabsToLeft: (path: string) => void;
-  onCloseAllTabs: () => void;
   themeVariant: ThemeVariant;
+  /** 每个文件的 markdown 预览开关；开关按钮在主区域标签条上（见 MainTabBar）。 */
+  previewModes: Record<string, boolean>;
 }) {
-  const { t } = useI18n();
-  const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});
-  const [menuOpen, setMenuOpen] = useState(false);
-  // Right-click context menu for a tab: anchored at the cursor, scoped to the
-  // tab that was right-clicked (which may differ from the active tab).
-  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
-  const tabMenuRef = useRef<HTMLDivElement | null>(null);
-  // Resolved on-screen position after clamping the cursor point against the
-  // menu's *measured* size (see layout effect below). Null until measured, so
-  // the menu stays hidden for the one frame before we know where to put it.
-  const [tabMenuPos, setTabMenuPos] = useState<{ left: number; top: number } | null>(null);
-
-  // Clamp the menu inside the viewport using its real rendered dimensions
-  // rather than hard-coded guesses — the width depends on the longest label,
-  // which varies by locale. Runs before paint, so there is no visible jump.
-  useLayoutEffect(() => {
-    if (!tabMenu || !tabMenuRef.current) return;
-    const { width, height } = tabMenuRef.current.getBoundingClientRect();
-    const margin = 8; // keep a small gap from the viewport edge
-    const left = Math.max(margin, Math.min(tabMenu.x, window.innerWidth - width - margin));
-    const top = Math.max(margin, Math.min(tabMenu.y, window.innerHeight - height - margin));
-    setTabMenuPos({ left, top });
-  }, [tabMenu]);
-
-  useEffect(() => {
-    if (!tabMenu) return;
-    const dismiss = (event: Event) => {
-      if (event.target instanceof Node && tabMenuRef.current?.contains(event.target)) return;
-      setTabMenu(null);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setTabMenu(null);
-    };
-    const close = () => setTabMenu(null);
-    // Capture phase so a click anywhere (incl. another tab) closes first.
-    document.addEventListener("pointerdown", dismiss, true);
-    document.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("blur", close);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss, true);
-      document.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("blur", close);
-    };
-  }, [tabMenu]);
-
-  useEffect(() => {
-    setPreviewModes((prev) => {
-      const next: Record<string, boolean> = {};
-      for (const tab of tabs) {
-        if (tab.path in prev) {
-          // 已经初始化过的 tab：保留之前的状态（包括用户主动切到编辑模式）
-          next[tab.path] = prev[tab.path];
-        } else if (isMarkdownFile(tab.name)) {
-          // 新打开的 markdown 文件默认进入预览模式
-          next[tab.path] = true;
-        }
-      }
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(next);
-      if (prevKeys.length !== nextKeys.length) return next;
-      for (const k of nextKeys) {
-        if (prev[k] !== next[k]) return next;
-      }
-      return prev;
-    });
-  }, [tabs]);
-
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.path === activeFilePath) ?? tabs[tabs.length - 1] ?? null,
     [tabs, activeFilePath],
   );
 
   if (!activeTab) return null;
-
-  // 新打开的 markdown 文件 useEffect 同步 previewMode 前会有一帧 undefined，
-  // 直接根据文件名兜底默认值，避免闪一帧编辑器
-  const activePreviewMode = previewModes[activeTab.path] ?? isMarkdownFile(activeTab.name);
-  const activeIsMarkdown = isMarkdownFile(activeTab.name);
-  const canCloseOtherTabs = tabs.length > 1;
-  const activeTabIndex = tabs.findIndex((tab) => tab.path === activeTab.path);
-  const canCloseTabsToRight = activeTabIndex !== -1 && activeTabIndex < tabs.length - 1;
-  const canCloseTabsToLeft = activeTabIndex > 0;
-
-  // Context-menu actions are scoped to the right-clicked tab, not the active one.
-  const tabMenuIndex = tabMenu ? tabs.findIndex((tab) => tab.path === tabMenu.path) : -1;
-  const tabMenuCanCloseOthers = tabs.length > 1;
-  const tabMenuCanCloseRight = tabMenuIndex !== -1 && tabMenuIndex < tabs.length - 1;
-  const tabMenuCanCloseLeft = tabMenuIndex > 0;
 
   return (
     <div
@@ -564,229 +465,6 @@ export function FileViewer({
         background: "var(--bg-panel)",
       }}
     >
-      <div
-        style={{
-          height: 40,
-          display: "flex",
-          alignItems: "center",
-          borderBottom: "1px solid var(--border-dim)",
-          flexShrink: 0,
-          background: "var(--bg-sidebar)",
-          minWidth: 0,
-        }}
-      >
-        <div
-          className="file-viewer-tab-strip"
-          style={{
-            flex: 1,
-            minWidth: 0,
-            height: "100%",
-            display: "flex",
-            alignItems: "stretch",
-            overflowX: "auto",
-            overflowY: "hidden",
-            paddingLeft: 4,
-          }}
-        >
-          {tabs.map((tab) => {
-            const isActive = tab.path === activeTab.path;
-            const fileColor = getFileColor(tab.name);
-            return (
-              <button
-                key={tab.path}
-                onClick={() => onSelectTab(tab.path)}
-                onContextMenu={(event) => {
-                  // Replace the webview's native menu (Reload / Save As / Print)
-                  // with tab-scoped close actions. The menu is scoped to this
-                  // tab via its path, so right-clicking does NOT change which
-                  // tab is active (matches editor conventions like VS Code).
-                  event.preventDefault();
-                  setMenuOpen(false);
-                  setTabMenuPos(null);
-                  setTabMenu({ x: event.clientX, y: event.clientY, path: tab.path });
-                }}
-                title={tab.path}
-                style={{
-                  height: "100%",
-                  minWidth: 0,
-                  maxWidth: 220,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "0 10px 0 12px",
-                  border: "none",
-                  borderRight: "1px solid var(--border-dim)",
-                  borderTop: isActive ? "2px solid var(--accent)" : "2px solid transparent",
-                  background: isActive ? "var(--bg-panel)" : "transparent",
-                  fontSize: 12.5,
-                  fontWeight: isActive ? 500 : 400,
-                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                <span
-                  style={{
-                    width: 5,
-                    height: 14,
-                    borderRadius: 2,
-                    background: fileColor,
-                    flexShrink: 0,
-                    display: "inline-block",
-                  }}
-                />
-                <span
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {tab.name}
-                </span>
-                <span
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onCloseTab(tab.path);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "2px",
-                    borderRadius: 3,
-                    display: "flex",
-                    alignItems: "center",
-                    color: "var(--text-hint)",
-                    marginLeft: 2,
-                  }}
-                  role="button"
-                  aria-label={t("file.closeTab", { name: tab.name })}
-                >
-                  <X size={12} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <div
-          style={{
-            marginLeft: 8,
-            marginRight: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            flexShrink: 0,
-          }}
-        >
-          {activeIsMarkdown && (
-            <button
-              onClick={() =>
-                setPreviewModes((prev) => ({
-                  ...prev,
-                  [activeTab.path]: !prev[activeTab.path],
-                }))
-              }
-              title={activePreviewMode ? t("common.edit") : t("common.preview")}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "3px 8px",
-                borderRadius: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                color: "var(--text-hint)",
-                fontSize: 11.5,
-                fontFamily: "var(--font-ui)",
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-            >
-              {activePreviewMode ? <PencilLine size={13} /> : <Eye size={13} />}
-              {activePreviewMode ? t("common.edit") : t("common.preview")}
-            </button>
-          )}
-          <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
-            <Popover.Trigger asChild>
-              <button
-                title={t("file.tabActions")}
-                aria-label={t("file.tabActions")}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "4px",
-                  borderRadius: 4,
-                  display: "flex",
-                  alignItems: "center",
-                  color: "var(--text-hint)",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-              >
-                <MoreHorizontal size={15} />
-              </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                sideOffset={6}
-                align="end"
-                onOpenAutoFocus={(event) => event.preventDefault()}
-                className="file-viewer-tab-menu"
-              >
-                <button
-                  type="button"
-                  disabled={!canCloseOtherTabs}
-                  onClick={() => {
-                    onCloseOtherTabs(activeTab.path);
-                    setMenuOpen(false);
-                  }}
-                  className="file-viewer-tab-menu-item"
-                >
-                  {t("file.closeOtherTabs")}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canCloseTabsToRight}
-                  onClick={() => {
-                    onCloseTabsToRight(activeTab.path);
-                    setMenuOpen(false);
-                  }}
-                  className="file-viewer-tab-menu-item"
-                >
-                  {t("file.closeTabsToRight")}
-                </button>
-                <button
-                  type="button"
-                  disabled={!canCloseTabsToLeft}
-                  onClick={() => {
-                    onCloseTabsToLeft(activeTab.path);
-                    setMenuOpen(false);
-                  }}
-                  className="file-viewer-tab-menu-item"
-                >
-                  {t("file.closeTabsToLeft")}
-                </button>
-                <button
-                  type="button"
-                  disabled={tabs.length === 0}
-                  onClick={() => {
-                    onCloseAllTabs();
-                    setMenuOpen(false);
-                  }}
-                  className="file-viewer-tab-menu-item"
-                >
-                  {t("file.closeAllTabs")}
-                </button>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-        </div>
-      </div>
-
       <div
         style={{
           flex: 1,
@@ -820,76 +498,6 @@ export function FileViewer({
           );
         })}
       </div>
-
-      {tabMenu && tabMenuIndex !== -1 && (
-        <div
-          ref={tabMenuRef}
-          className="file-viewer-tab-menu"
-          style={{
-            position: "fixed",
-            // Fall back to the raw cursor point for the first (unmeasured)
-            // frame; the layout effect replaces it before the browser paints.
-            left: tabMenuPos?.left ?? tabMenu.x,
-            top: tabMenuPos?.top ?? tabMenu.y,
-            visibility: tabMenuPos ? "visible" : "hidden",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              onCloseTab(tabMenu.path);
-              setTabMenu(null);
-            }}
-            className="file-viewer-tab-menu-item"
-          >
-            {t("file.closeThisTab")}
-          </button>
-          <button
-            type="button"
-            disabled={!tabMenuCanCloseOthers}
-            onClick={() => {
-              onCloseOtherTabs(tabMenu.path);
-              setTabMenu(null);
-            }}
-            className="file-viewer-tab-menu-item"
-          >
-            {t("file.closeOtherTabs")}
-          </button>
-          <button
-            type="button"
-            disabled={!tabMenuCanCloseRight}
-            onClick={() => {
-              onCloseTabsToRight(tabMenu.path);
-              setTabMenu(null);
-            }}
-            className="file-viewer-tab-menu-item"
-          >
-            {t("file.closeTabsToRight")}
-          </button>
-          <button
-            type="button"
-            disabled={!tabMenuCanCloseLeft}
-            onClick={() => {
-              onCloseTabsToLeft(tabMenu.path);
-              setTabMenu(null);
-            }}
-            className="file-viewer-tab-menu-item"
-          >
-            {t("file.closeTabsToLeft")}
-          </button>
-          <button
-            type="button"
-            disabled={tabs.length === 0}
-            onClick={() => {
-              onCloseAllTabs();
-              setTabMenu(null);
-            }}
-            className="file-viewer-tab-menu-item"
-          >
-            {t("file.closeAllTabs")}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

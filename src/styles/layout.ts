@@ -74,6 +74,51 @@ export const layout = {
     minHeight: 0,
     position: "relative" as const,
   },
+  /** 主区域顶部标签条：会话是一号标签，打开的文件挨着它往后排（见 components/main-tabs/MainTabBar.tsx）。
+      标签本身的激活态/悬停态走 App.css 的 .main-tab[data-active] 选择器。 */
+  mainTabBar: {
+    height: 36,
+    display: "flex",
+    alignItems: "center",
+    borderBottom: "1px solid var(--border-dim)",
+    flexShrink: 0,
+    background: "var(--bg-sidebar)",
+    minWidth: 0,
+  },
+  mainTabStrip: {
+    flex: 1,
+    minWidth: 0,
+    height: "100%",
+    display: "flex",
+    alignItems: "stretch",
+    overflowX: "auto",
+    overflowY: "hidden",
+    paddingLeft: 4,
+  },
+  mainTabActions: {
+    marginLeft: 8,
+    marginRight: 8,
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 0,
+  },
+  mainTabLabel: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  /** 右键菜单本体在 .file-viewer-tab-menu（App.css）里，这里只给定位方式。 */
+  mainTabContextMenu: {
+    position: "fixed" as const,
+  },
+  mainTabDot: {
+    width: 5,
+    height: 14,
+    borderRadius: 2,
+    flexShrink: 0,
+    display: "inline-block",
+  },
   rightPanelWrap: { position: "relative" as const, display: "flex", flexShrink: 0 },
   rightPanelResizeHandle: {
     position: "absolute" as const,

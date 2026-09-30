@@ -3,6 +3,12 @@ import { useState, useCallback, useRef } from "react";
 type RightPanel = "files" | "git-changes" | "git-history" | null;
 type OpenFileTab = { path: string; name: string };
 
+/** 主区域当前显示哪一类内容。
+ *  file 态下具体是哪个文件由 activeFilePath 决定 —— 最后一个文件标签关掉时它会变 null，
+ *  视图自动落回会话，不需要在关标签的地方再同步一次状态。
+ *  diff 不进这里：openDiff 非空就是覆盖层，关掉后自然露出下面原本这个视图。 */
+export type MainView = "session" | "file";
+
 type OpenDiff =
   | { kind: "file"; filePath: string; staged: boolean; label: string }
   | { kind: "commit"; hash: string; message: string }
@@ -19,6 +25,9 @@ export function useProjectPanels() {
     activePath: null,
   });
   const [openDiff, setOpenDiff] = useState<OpenDiff | null>(null);
+  const [mainView, setMainView] = useState<MainView>("session");
+  // 每个文件自己的 markdown 预览开关（缺省按文件类型走：md 默认预览）。
+  const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});
   const [rightPanelWidth, setRightPanelWidth] = useState(280);
   const rightPanelWidthRef = useRef(rightPanelWidth);
   rightPanelWidthRef.current = rightPanelWidth;
@@ -27,8 +36,10 @@ export function useProjectPanels() {
     setRightPanel((prev) => (prev === panel ? null : panel));
   }, []);
 
+  /** 打开文件 = 在会话标签右边追加一个标签并切过去；已有会话不会被顶掉。 */
   const handleFileSelect = useCallback((path: string, name: string) => {
     setOpenDiff(null);
+    setMainView("file");
     setOpenFilesState((prev) => ({
       tabs: prev.tabs.some((tab) => tab.path === path) ? prev.tabs : [...prev.tabs, { path, name }],
       activePath: path,
@@ -36,10 +47,21 @@ export function useProjectPanels() {
   }, []);
 
   const handleFileTabSelect = useCallback((path: string) => {
-    setOpenFilesState((prev) => ({
-      tabs: prev.tabs,
-      activePath: prev.tabs.some((tab) => tab.path === path) ? path : prev.activePath,
-    }));
+    setOpenDiff(null);
+    setMainView("file");
+    setOpenFilesState((prev) =>
+      prev.tabs.some((tab) => tab.path === path) ? { tabs: prev.tabs, activePath: path } : prev,
+    );
+  }, []);
+
+  /** 回到会话标签（文件标签保留，随时能切回来）。 */
+  const showSessionView = useCallback(() => {
+    setOpenDiff(null);
+    setMainView("session");
+  }, []);
+
+  const togglePreviewMode = useCallback((path: string) => {
+    setPreviewModes((prev) => ({ ...prev, [path]: !(prev[path] ?? true) }));
   }, []);
 
   const handleFileTabClose = useCallback((path: string) => {
@@ -104,6 +126,7 @@ export function useProjectPanels() {
     });
   }, []);
 
+  // diff 是覆盖层：打开时不改 mainView，关掉后露出的还是原来那个文件（或会话）。
   const handleDiffFileSelect = useCallback((filePath: string, staged: boolean, label: string) => {
     setOpenDiff({ kind: "file", filePath, staged, label });
   }, []);
@@ -114,14 +137,6 @@ export function useProjectPanels() {
 
   const handleCommitFileClick = useCallback((hash: string, filePath: string, label: string) => {
     setOpenDiff({ kind: "commit-file", hash, filePath, label });
-  }, []);
-
-  const clearFileAndDiff = useCallback(() => {
-    setOpenFilesState({
-      tabs: [],
-      activePath: null,
-    });
-    setOpenDiff(null);
   }, []);
 
   const handleRightResizeStart = useCallback((e: React.MouseEvent) => {
@@ -144,12 +159,22 @@ export function useProjectPanels() {
     document.addEventListener("mouseup", onMouseUp);
   }, []);
 
+  const activeFilePath = openFilesState.activePath;
+  /** 主区域是不是正在显示文件（session 态下显示的是会话 / 终端）。
+   *  带一次「标签还在不在」的校验：文件态下必须真有那个标签，否则落回会话。 */
+  const showingFile =
+    mainView === "file" &&
+    activeFilePath !== null &&
+    openFilesState.tabs.some((tab) => tab.path === activeFilePath);
 
   return {
     rightPanel,
     openFiles: openFilesState.tabs,
-    activeFilePath: openFilesState.activePath,
+    activeFilePath,
     openDiff,
+    mainView,
+    showingFile,
+    previewModes,
     rightPanelWidth,
     setOpenDiff,
     handleTogglePanel,
@@ -163,7 +188,8 @@ export function useProjectPanels() {
     handleDiffFileSelect,
     handleCommitSelect,
     handleCommitFileClick,
-    clearFileAndDiff,
+    showSessionView,
+    togglePreviewMode,
     handleRightResizeStart,
   };
 }

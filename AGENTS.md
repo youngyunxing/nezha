@@ -51,13 +51,16 @@ ErrorBoundary  (全局兜底)
         │   ├── MentionPopover
         │   ├── ImageAttachments / TextAttachments
         │   └── ComposeToolbar   — 智能体选择、图片、发送
+        ├── MainTabBar           — 主区域顶部标签条（会话 / 打开的文件 / diff；见 components/main-tabs/）
         ├── RunningView          — 运行中任务头部（恢复、取消、worktree 信息）
         │   └── TerminalView     — xterm.js 封装组件
         ├── SessionView          — 会话消息查看器（JSONL 回放）
+        ├── FileViewer           — 主区域的文件内容（每个标签一个；顶部标签条由 MainTabBar 渲染）
+        │   └── ImagePreviewPane — 图片/二进制预览
         ├── ShellTerminalPanel   — 嵌入式交互 Shell 终端
         ├── RightToolbar         — 右侧面板与 Shell 的开关入口
         └── 右侧面板（同时只有一个处于激活状态，默认展开文件浏览器）：
-            ├── FileExplorer → FileViewer → ImagePreviewPane
+            ├── FileExplorer     — 文件树（点文件 = 在主区域新开一个标签）
             │   └── FileSearch   — 文件列表上方的「文件名 + 文件类型(多选)」两行搜索
             ├── GitChanges → GitDiffViewer     — 暂存/未暂存变更
             └── GitHistory → GitDiffViewer     — 提交日志、提交差异查看器

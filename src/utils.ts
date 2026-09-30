@@ -145,3 +145,9 @@ export const CODE_EXTS = new Set([
   "swift",
   "kt",
 ]);
+
+/** markdown 文件判据：预览/编辑开关、主区域标签都要用。 */
+export function isMarkdownFile(fileName: string): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  return ext === "md" || ext === "mdx" || ext === "markdown";
+}

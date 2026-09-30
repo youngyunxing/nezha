@@ -320,6 +320,9 @@ const translations: Record<string, string> = {
   "file.imagePreview": "图片预览",
   "file.readOnly": "只读",
   "file.tabActions": "标签页操作",
+  // 主区域标签条（会话是一号标签，文件挨着它往后排）
+  "mainTabs.session": "会话",
+  "mainTabs.localSession": "本地会话",
   "file.outline": "目录",
   "file.closeTab": "关闭 {name}",
   "file.closeThisTab": "关闭",

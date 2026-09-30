@@ -318,25 +318,114 @@ body {
   background: var(--xterm-scrollbar-thumb-hover) !important;
 }
 
-.file-viewer-tab-strip {
+.main-tab {
+  height: 100%;
+  min-width: 0;
+  max-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border: none;
+  border-right: 1px solid var(--border-dim);
+  border-top: 2px solid transparent;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.main-tab:hover {
+  background: var(--bg-hover);
+}
+
+/* 放在 :hover 之后：激活态要压过悬停态 */
+.main-tab[data-active="true"] {
+  border-top-color: var(--accent);
+  background: var(--bg-panel);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.main-tab-icon {
+  flex-shrink: 0;
+  color: var(--text-hint);
+}
+
+.main-tab-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  color: var(--text-hint);
+  margin-left: 2px;
+}
+
+.main-tab-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.main-tab-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  color: var(--text-hint);
+}
+
+.main-tab-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.main-tab-preview-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-hint);
+  font-size: 11.5px;
+  font-family: var(--font-ui);
+  flex-shrink: 0;
+}
+
+.main-tab-preview-btn:hover {
+  background: var(--bg-hover);
+}
+
+.main-tab-strip {
   scrollbar-width: thin;
   scrollbar-color: var(--border-medium) transparent;
 }
 
-.file-viewer-tab-strip::-webkit-scrollbar {
+.main-tab-strip::-webkit-scrollbar {
   height: 3px;
 }
 
-.file-viewer-tab-strip::-webkit-scrollbar-track {
+.main-tab-strip::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.file-viewer-tab-strip::-webkit-scrollbar-thumb {
+.main-tab-strip::-webkit-scrollbar-thumb {
   background: var(--border-medium);
   border-radius: 999px;
 }
 
-.file-viewer-tab-strip::-webkit-scrollbar-thumb:hover {
+.main-tab-strip::-webkit-scrollbar-thumb:hover {
   background: var(--text-hint);
 }
 

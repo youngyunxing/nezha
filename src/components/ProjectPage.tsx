@@ -29,11 +29,14 @@ import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
+import { MainTabBar, fileTabKey, type MainTabKey } from "./main-tabs/MainTabBar";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { useProjectPanels } from "../hooks/useProjectPanels";
 import { resolveProjectGitContext, useGitRoots } from "../hooks/useGitRoots";
+import { isMarkdownFile } from "../utils";
+import { useI18n } from "../i18n";
 import s from "../styles";
 
 export function ProjectPage({
@@ -187,6 +190,8 @@ export function ProjectPage({
     openFiles,
     activeFilePath,
     openDiff,
+    showingFile,
+    previewModes,
     rightPanelWidth,
     setOpenDiff,
     handleTogglePanel,
@@ -200,7 +205,8 @@ export function ProjectPage({
     handleDiffFileSelect,
     handleCommitSelect,
     handleCommitFileClick,
-    clearFileAndDiff,
+    showSessionView,
+    togglePreviewMode,
     handleRightResizeStart,
   } = useProjectPanels();
 
@@ -278,23 +284,46 @@ export function ProjectPage({
   }, [selectedTaskId, isNewTask]);
 
   // diff viewer 打开/关闭时自动联动任务面板的折叠态，但只在 "无 diff → 有 diff" 或
+  // 切任务只是切回会话标签：文件标签留着，随时能切回去看（原来会把它们全清掉）。
   const handleSelectTask = useCallback(
     (id: string) => {
-      clearFileAndDiff();
+      showSessionView();
       onSelectTask(id);
     },
-    [onSelectTask, clearFileAndDiff],
+    [onSelectTask, showSessionView],
   );
 
   // 「新建任务」不再切走视图，而是弹窗——原来切到新建任务页会把当前会话顶掉。
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
 
   const handleNewTask = useCallback(() => {
-    clearFileAndDiff();
+    showSessionView();
     setShowNewTaskDialog(true);
-  }, [clearFileAndDiff]);
+  }, [showSessionView]);
 
   const currentTaskCreatedAt = selectedTask?.createdAt ?? null;
+
+  const { t } = useI18n();
+  // 会话标签的标题：本地会话 / 当前任务 / 新建任务时占位。都没有就不显示会话标签。
+  const sessionTabLabel = localSession
+    ? t("mainTabs.localSession")
+    : selectedTask
+      ? selectedTask.name ?? selectedTask.prompt
+      : isNewTask
+        ? t("task.newTask")
+        : null;
+  const activeFileTab = openFiles.find((tab) => tab.path === activeFilePath) ?? null;
+  // 会话是一号标签，文件挨着它往后排，diff 作为覆盖层占最后一个标签。
+  const mainTabKey: MainTabKey | null = openDiff
+    ? "diff"
+    : showingFile && activeFilePath
+      ? fileTabKey(activeFilePath)
+      : "session";
+  const diffTabLabel = openDiff
+    ? openDiff.kind === "commit"
+      ? openDiff.message
+      : openDiff.label
+    : null;
 
   return (
     <div style={visible ? s.projectBodyVisible : s.projectBodyHidden}>
@@ -344,6 +373,30 @@ export function ProjectPage({
         taskDisplayWindow={taskDisplayWindow}
       />
       <div style={s.mainContent}>
+        {(sessionTabLabel !== null || openFiles.length > 0 || openDiff) && (
+          <MainTabBar
+            sessionLabel={sessionTabLabel}
+            files={openFiles}
+            activeKey={mainTabKey}
+            onSelectSession={showSessionView}
+            onSelectFile={handleFileTabSelect}
+            onCloseFile={handleFileTabClose}
+            onCloseOtherFiles={handleCloseOtherFileTabs}
+            onCloseFilesToRight={handleCloseTabsToRight}
+            onCloseFilesToLeft={handleCloseTabsToLeft}
+            onCloseAllFiles={handleCloseAllFileTabs}
+            diffLabel={diffTabLabel}
+            onCloseDiff={() => setOpenDiff(null)}
+            markdown={
+              showingFile && activeFileTab && isMarkdownFile(activeFileTab.name)
+                ? {
+                    previewOn: previewModes[activeFileTab.path] ?? true,
+                    onToggle: () => togglePreviewMode(activeFileTab.path),
+                  }
+                : null
+            }
+          />
+        )}
         <div style={s.projectMainStage}>
           {/* Foreground: file viewer, diff, or new-task composer */}
           <ErrorBoundary
@@ -359,7 +412,7 @@ export function ProjectPage({
                   </button>
                   <button
                     onClick={() => {
-                      clearFileAndDiff();
+                      showSessionView();
                       reset();
                     }}
                     style={s.errorBoundaryBtn}
@@ -401,18 +454,13 @@ export function ProjectPage({
                   onClose={() => setOpenDiff(null)}
                 />
               )
-            ) : openFiles.length > 0 ? (
+            ) : showingFile ? (
               <FileViewer
                 tabs={openFiles}
                 activeFilePath={activeFilePath}
                 projectPath={project.path}
-                onSelectTab={handleFileTabSelect}
-                onCloseTab={handleFileTabClose}
-                onCloseOtherTabs={handleCloseOtherFileTabs}
-                onCloseTabsToRight={handleCloseTabsToRight}
-                onCloseTabsToLeft={handleCloseTabsToLeft}
-                onCloseAllTabs={handleCloseAllFileTabs}
                 themeVariant={themeVariant}
+                previewModes={previewModes}
               />
             ) : localSession ? (
               <LocalSessionView
@@ -428,7 +476,7 @@ export function ProjectPage({
             .filter((t) => mountedTaskIds.has(t.id))
             .map((task) => {
               const isVisible =
-                openFiles.length === 0 &&
+                !showingFile &&
                 !openDiff &&
                 !isNewTask &&
                 !localSession &&
