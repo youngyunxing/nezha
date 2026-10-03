@@ -426,6 +426,28 @@ export const task = {
     padding: "1px 4px",
     outline: "none",
   },
+  /** 列表底部那行「还有 N 个更早的任务」：贴在滚动区下方，不跟着滚 */
+  taskListWindowHint: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 12px",
+    borderTop: "1px solid var(--border-dim)",
+    color: "var(--text-hint)",
+    fontSize: 11.5,
+  },
+  taskListWindowHintBtn: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    color: "var(--accent)",
+    fontFamily: "var(--font-ui)",
+    fontSize: 11.5,
+    cursor: "pointer",
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+  },
   taskCardSub: { fontSize: 11, color: "var(--text-muted)", marginTop: 1 },
   taskDiffStats: {
     display: "inline-flex",

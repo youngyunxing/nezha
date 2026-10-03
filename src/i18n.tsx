@@ -204,6 +204,8 @@ const translations: Record<string, string> = {
   "task.starred": "已收藏",
   "task.today": "今天",
   "task.earlier": "较早",
+  "task.hiddenByWindow": "还有 {count} 个更早的任务",
+  "task.showAllTasks": "显示全部",
   "task.renameTask": "重命名",
   "task.generateName": "AI 生成标题",
   "task.generatingName": "生成标题中…",

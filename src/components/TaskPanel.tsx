@@ -29,6 +29,7 @@ export function TaskPanel({
   renamingTaskId,
   onRenamingTaskIdChange,
   taskDisplayWindow,
+  onTaskDisplayWindowChange,
 }: {
   project: Project;
   tasks: Task[];
@@ -54,6 +55,7 @@ export function TaskPanel({
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
   taskDisplayWindow: TaskDisplayWindow;
+  onTaskDisplayWindowChange: (window: TaskDisplayWindow) => void;
 }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -188,6 +190,7 @@ export function TaskPanel({
         onRenameTask={onRenameTask}
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={onRenamingTaskIdChange}
+        onTaskDisplayWindowChange={onTaskDisplayWindowChange}
       />
     </div>
   );

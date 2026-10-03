@@ -33,6 +33,7 @@ function renderList(
     onToggleTaskStar: vi.fn(),
     onRenameTask: vi.fn(),
     onRenamingTaskIdChange: vi.fn(),
+    onTaskDisplayWindowChange: vi.fn(),
   };
   const { renamingTaskId: initialRenaming = null, ...rest } = over;
   const props = {
@@ -104,6 +105,47 @@ describe("任务列表右键菜单与改名", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(handlers.onRenameTask).toHaveBeenCalledWith("t1", "登录页报错");
     expect(handlers.onRenamingTaskIdChange).toHaveBeenCalledWith(null);
+  });
+
+  it("窗口外的老任务不显示，但底下告诉你还有几个（点「显示全部」切过去）", () => {
+    const old = makeTask({
+      id: "old1",
+      prompt: "很久以前的任务",
+      createdAt: Date.now() - 40 * 24 * 60 * 60 * 1000,
+      updatedAt: Date.now() - 40 * 24 * 60 * 60 * 1000,
+    });
+    const handlers = renderList({ tasks: [old], taskDisplayWindow: 3 });
+    expect(screen.queryByText("很久以前的任务")).toBeNull();
+    expect(screen.getByText("还有 1 个更早的任务")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("显示全部"));
+    expect(handlers.onTaskDisplayWindowChange).toHaveBeenCalledWith("all");
+  });
+
+  it("显示范围是「所有任务」时不出现那行提示", () => {
+    const old = makeTask({
+      id: "old1",
+      prompt: "很久以前的任务",
+      createdAt: Date.now() - 40 * 24 * 60 * 60 * 1000,
+      updatedAt: Date.now() - 40 * 24 * 60 * 60 * 1000,
+    });
+    renderList({ tasks: [old], taskDisplayWindow: "all" });
+    expect(screen.getByText("很久以前的任务")).toBeTruthy();
+    expect(screen.queryByText(/更早的任务/)).toBeNull();
+  });
+
+  it("收藏 / 等你的任务不受窗口影响，也不计进那行提示", () => {
+    const old = Date.now() - 40 * 24 * 60 * 60 * 1000;
+    renderList({
+      tasks: [
+        makeTask({ id: "s1", prompt: "收藏的老任务", starred: true, createdAt: old, updatedAt: old }),
+        makeTask({ id: "w1", prompt: "等你的老任务", status: "input_required", createdAt: old, updatedAt: old }),
+      ],
+      taskDisplayWindow: 3,
+    });
+    expect(screen.getByText("收藏的老任务")).toBeTruthy();
+    expect(screen.getByText("等你的老任务")).toBeTruthy();
+    expect(screen.queryByText(/更早的任务/)).toBeNull();
   });
 
   it("删掉的任务（deleted 标记）不再出现在列表里", () => {

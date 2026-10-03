@@ -49,6 +49,7 @@ export function TaskList({
   onRenameTask,
   renamingTaskId,
   onRenamingTaskIdChange,
+  onTaskDisplayWindowChange,
 }: {
   tasks: Task[];
   taskDisplayWindow: TaskDisplayWindow;
@@ -65,6 +66,8 @@ export function TaskList({
   /** 正在改名的任务 id（提到项目层：主区域标签上右键也能进改名） */
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
+  /** 底部「显示全部」用：把展示范围切到「所有任务」 */
+  onTaskDisplayWindowChange: (window: TaskDisplayWindow) => void;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -143,7 +146,9 @@ export function TaskList({
     return { todayTs, cutoffTs };
   }, [taskDisplayWindow]);
 
-  const rows = useMemo<VirtualRow[]>(() => {
+  const { rows, windowHiddenCount } = useMemo(() => {
+    // 被「任务展示范围」挡在窗口外、没能进列表的任务数（底下那行提示要用）
+    let windowHiddenCount = 0;
     const waitingTasks: Task[] = [];
     const resumeTasks: Task[] = [];
     const pendingMergeTasks: Task[] = [];
@@ -171,6 +176,9 @@ export function TaskList({
           todayTasks.push(task);
         } else if (bucketAt >= cutoffTs) {
           earlierTasks.push(task);
+        } else {
+          // 展示范围之外：不显示，但底下要告诉用户"还有多少"，否则看着像任务丢了
+          windowHiddenCount += 1;
         }
       }
     }
@@ -215,7 +223,7 @@ export function TaskList({
       });
     }
 
-    return nextRows;
+    return { rows: nextRows, windowHiddenCount };
   }, [cutoffTs, filteredLocalSessions, sorted, t, todayTs]);
 
   const offsets = useMemo(() => {
@@ -303,6 +311,18 @@ export function TaskList({
           })}
         </div>
       </div>
+    {windowHiddenCount > 0 && (
+      <div style={s.taskListWindowHint}>
+        <span>{t("task.hiddenByWindow", { count: windowHiddenCount })}</span>
+        <button
+          type="button"
+          style={s.taskListWindowHintBtn}
+          onClick={() => onTaskDisplayWindowChange("all")}
+        >
+          {t("task.showAllTasks")}
+        </button>
+      </div>
+    )}
     {ctxMenu && (
       <TaskContextMenu
         ctxMenu={ctxMenu}

@@ -393,6 +393,7 @@ export function ProjectPage({
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={setRenamingTaskId}
         taskDisplayWindow={taskDisplayWindow}
+        onTaskDisplayWindowChange={onTaskDisplayWindowChange}
       />
       <div style={s.mainContent}>
         {(sessionTabLabel !== null || openFiles.length > 0 || openDiff) && (
