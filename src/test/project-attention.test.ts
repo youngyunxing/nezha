@@ -44,17 +44,17 @@ describe("项目小标的已读机制", () => {
     expect(buildProjectActivityMap(live, { p1: 999999 }).get("p1")?.status).toBe("running");
   });
 
-  it("归档的任务不参与小标（等待 / 中断 / 运行都不算）", () => {
+  it("删掉的任务不参与小标（等待 / 中断 / 运行都不算）", () => {
     const seen = {};
     const archivedWaiting = buildProjectActivityMap(
-      [task("t1", "input_required", { archived: true })],
+      [task("t1", "input_required", { deleted: true })],
       seen,
     );
     expect(archivedWaiting.get("p1")?.attentionCount ?? 0).toBe(0);
     expect(archivedWaiting.get("p1")?.status ?? null).toBeNull();
 
     const archivedRunning = buildProjectActivityMap(
-      [task("t2", "running", { archived: true })],
+      [task("t2", "running", { deleted: true })],
       seen,
     );
     expect(archivedRunning.get("p1")?.status ?? null).toBeNull();

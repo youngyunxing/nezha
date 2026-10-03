@@ -67,6 +67,7 @@ import {
 } from "./projectName";
 import { useI18n } from "./i18n";
 import { ProjectDrawer } from "./components/ProjectDrawer";
+import { softDeleteTasks } from "./taskDeletion";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -1497,77 +1498,17 @@ function App() {
     });
   }
 
-  function deleteTasks(taskIds: string[]) {
-    if (taskIds.length === 0) return;
-
-    setTasks((prev) => {
-      const toDelete = new Set(taskIds);
-      const deletingTasks = prev.filter((task) => toDelete.has(task.id));
-
-      if (deletingTasks.length === 0) return prev;
-
-      taskIds.forEach((taskId) => {
-        delete pendingResumeStartsRef.current[taskId];
-        const owner = prev.find((task) => task.id === taskId);
-        if (owner) {
-          invoke("delete_task_screen", { projectId: owner.projectId, taskId }).catch(() => {});
-        }
-      });
-
-      deletingTasks
-        .filter((task) => isActiveTaskStatus(task.status))
-        .forEach((task) => {
-          const proj = projects.find((p) => p.id === task.projectId);
-          const projectPath = task.worktreePath ?? proj?.path ?? "";
-          invoke("cancel_task", { taskId: task.id, projectPath })
-            .catch((e: unknown) => {
-              showToast(t("toast.cancelTaskFailed", { error: String(e) }));
-            })
-            .finally(() => {
-              if (proj) cleanupTaskWorktree(task, proj.path);
-            });
-        });
-
-      deletingTasks
-        .filter((task) => !isActiveTaskStatus(task.status))
-        .forEach((task) => {
-          const proj = projects.find((p) => p.id === task.projectId);
-          if (proj) cleanupTaskWorktree(task, proj.path);
-        });
-
-      const next = prev.filter((task) => !toDelete.has(task.id));
-      const affectedProjectIds = new Set(deletingTasks.map((t) => t.projectId));
-      affectedProjectIds.forEach((pid) =>
-        persistProjectTasks(pid, next, showToast, formatSaveTasksError),
-      );
-      return next;
-    });
-
-    tm.removeTaskBuffers(taskIds);
-    setProjectViews((prev) => {
-      const toDelete = new Set(taskIds);
-      let changed = false;
-      const next = { ...prev };
-
-      for (const [projectId, view] of Object.entries(prev)) {
-        if (view.selectedTaskId && toDelete.has(view.selectedTaskId)) {
-          next[projectId] = { ...view, selectedTaskId: null, isNewTask: true };
-          changed = true;
-        }
-      }
-
-      return changed ? next : prev;
-    });
-  }
-
-  /** 删除任务。
-   *  普通任务不弹确认：删掉的只是任务条目和终端屏幕，会话文件还在磁盘上（claude 的那条会重新
-   *  出现在「本地会话」里），点错了也没什么可失去的。
-   *  **有 worktree 的任务例外** —— 那一步会 `git worktree remove --force` + `git branch -D`，
-   *  未提交的改动和分支真的没了，所以单独确认一次，并提示可以改用「归档」。 */
+  /** 删除任务 = 从列表里拿掉，**记录留在磁盘上**（softDeleteTasks 打 deleted 标记，
+   *  tasks.json 里那条原样还在：名字、状态、会话 id、worktree 信息都保得住；终端屏幕记录也不再删）。
+   *
+   *  真会丢东西的只有两处，都在这儿处理：
+   *  - 正在跑的会话必须停：不然它成了没有界面的后台 agent，还占着 PTY。
+   *  - worktree 任务的工作树与分支会被删（`git worktree remove --force` + `git branch -D`），
+   *    这是唯一真丢东西的地方，所以删前确认一次。 */
   async function handleDeleteTask(taskId: string) {
     const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
+    if (!task || task.deleted) return;
+    const project = projects.find((p) => p.id === task.projectId);
     const hasWorktree = !!task.worktreePath && !!task.worktreeBranch && !task.worktreeDiscarded;
     if (hasWorktree) {
       const promptPreview = `${task.prompt.slice(0, 100)}${task.prompt.length > 100 ? "..." : ""}`;
@@ -1577,22 +1518,7 @@ function App() {
       });
       if (!ok) return;
     }
-    deleteTasks([taskId]);
-  }
-
-  /** 归档 = 退出会话 + 移进「已归档」分组。**不删任何东西**：会话文件、worktree、终端屏幕都留着，
-   *  之后可以恢复；跑着的会话会先停掉进程（记录仍可续），所以这一步要确认。 */
-  async function handleArchiveTask(taskId: string) {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    const project = projects.find((p) => p.id === task.projectId);
-    const running = isActiveTaskStatus(task.status);
-    if (running) {
-      const ok = await confirm(t("task.archivePrompt"), {
-        title: t("task.archiveTitle"),
-        kind: "warning",
-      });
-      if (!ok) return;
+    if (isActiveTaskStatus(task.status)) {
       await invoke("cancel_task", {
         taskId,
         projectPath: task.worktreePath ?? project?.path ?? "",
@@ -1600,40 +1526,19 @@ function App() {
         showToast(t("toast.cancelTaskFailed", { error: String(e) }), "error");
       });
     }
-    const archivedAt = Date.now();
     setTasks((prev) => {
-      const next = prev.map((item) =>
-        item.id === taskId
-          ? {
-              ...item,
-              archived: true,
-              // 停下来的会话落成 interrupted：跟「移除项目」一致，记录仍可续跑
-              status: isActiveTaskStatus(item.status) ? ("interrupted" as TaskStatus) : item.status,
-              updatedAt: archivedAt,
-            }
-          : item,
-      );
+      const next = softDeleteTasks(prev, [taskId]);
+      if (next === prev) return prev;
       persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
       return next;
     });
+    if (project) cleanupTaskWorktree(task, project.path);
     tm.removeTaskBuffers([taskId]);
-    // 归档就是「退出会话」：把它从当前视图上摘掉
+    // 删掉的正好是当前显示的任务：把视图摘掉
     setProjectViews((prev) => {
       const view = prev[task.projectId];
       if (!view || view.selectedTaskId !== taskId) return prev;
       return { ...prev, [task.projectId]: { ...view, selectedTaskId: null, isNewTask: true } };
-    });
-  }
-
-  function handleUnarchiveTask(taskId: string) {
-    setTasks((prev) => {
-      const task = prev.find((t) => t.id === taskId);
-      if (!task) return prev;
-      const next = prev.map((t) =>
-        t.id === taskId ? { ...t, archived: undefined, updatedAt: Date.now() } : t,
-      );
-      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
-      return next;
     });
   }
 
@@ -1969,8 +1874,6 @@ function App() {
               onDeleteTask={handleDeleteTask}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
-              onArchiveTask={handleArchiveTask}
-              onUnarchiveTask={handleUnarchiveTask}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}

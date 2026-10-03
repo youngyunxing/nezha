@@ -215,9 +215,6 @@ const translations: Record<string, string> = {
   "task.deleteWorktreeTitle": "删除 worktree 任务",
   "task.deleteWorktreePrompt":
     "删除“{prompt}”？\n\n它的 worktree 和里面未提交的改动会被丢弃，任务分支也会删掉 —— 这一步不可恢复。\n想留着就用「归档」：worktree、分支、改动全都保留。",
-  "task.archive": "归档",
-  "task.unarchive": "恢复",
-  "task.archived": "已归档",
   "task.archiveTitle": "归档任务",
   "task.archivePrompt":
     "归档会把这个任务从列表移进「已归档」，正在跑的会话会先停掉。\n\n会话记录、worktree、未提交的改动都会保留，随时可以恢复。继续？",

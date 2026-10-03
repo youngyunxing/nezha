@@ -160,8 +160,9 @@ export interface Task {
   updatedAt?: number;
   attentionRequestedAt?: number;
   starred?: boolean;
-  /** 归档：从任务列表移进「已归档」分组。会话记录、worktree、终端屏幕都保留，可随时恢复。 */
-  archived?: boolean;
+  /** 已删除：从列表里拿掉，但**记录留在磁盘上**（名字、状态、会话 id 都还在，可恢复）。
+   *  删除只真丢两样东西：worktree 任务的工作树与分支（删前会确认）、以及正在跑的进程。 */
+  deleted?: boolean;
   failureReason?: string;
   codexSessionId?: string;
   codexSessionPath?: string;

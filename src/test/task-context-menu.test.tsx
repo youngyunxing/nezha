@@ -121,8 +121,6 @@ describe("任务右键菜单", () => {
       onRename: vi.fn(),
       onToggleStar: vi.fn(),
       onDelete: vi.fn(),
-      onArchive: vi.fn(),
-      onUnarchive: vi.fn(),
     };
     render(
       <I18nProvider>
@@ -144,18 +142,14 @@ describe("任务右键菜单", () => {
     expect(handlers.onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it("普通任务给「归档」，已归档的给「恢复」", () => {
-    const handlers = renderMenu(makeTask());
-    expect(screen.queryByText("恢复")).toBeNull();
-    fireEvent.click(screen.getByText("归档"));
-    expect(handlers.onArchive).toHaveBeenCalledTimes(1);
-    expect(handlers.onUnarchive).not.toHaveBeenCalled();
-    cleanup();
-
-    const archivedHandlers = renderMenu(makeTask({ archived: true }));
+  it("归档那套已经拆掉：菜单里没有「归档 / 恢复」", () => {
+    renderMenu(makeTask());
     expect(screen.queryByText("归档")).toBeNull();
-    fireEvent.click(screen.getByText("恢复"));
-    expect(archivedHandlers.onUnarchive).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("恢复")).toBeNull();
+    // 剩下的还是那三样
+    expect(screen.getByText("重命名")).toBeTruthy();
+    expect(screen.getByText("收藏")).toBeTruthy();
+    expect(screen.getByText("删除")).toBeTruthy();
   });
 
   it("已收藏的任务显示「取消收藏任务」", () => {

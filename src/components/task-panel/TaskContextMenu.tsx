@@ -17,8 +17,6 @@ export function TaskContextMenu({
   onRename,
   onToggleStar,
   onDelete,
-  onArchive,
-  onUnarchive,
   colorPicker,
 }: {
   ctxMenu: TaskContextMenuState;
@@ -26,9 +24,6 @@ export function TaskContextMenu({
   onRename: () => void;
   onToggleStar: () => void;
   onDelete: () => void;
-  /** 归档：退出会话、移进「已归档」，不删任何东西（跑着的会话会先停） */
-  onArchive: () => void;
-  onUnarchive: () => void;
   /** 会话标签右键时才给：改这个标签的颜色（任务列表里的右键不需要） */
   colorPicker?: { current: ProjectAvatarColor | null; onPick: (color: ProjectAvatarColor) => void };
 }) {
@@ -63,7 +58,6 @@ export function TaskContextMenu({
     return () => window.removeEventListener("resize", updatePosition);
   }, [updatePosition]);
 
-  const archived = ctxMenu.task.archived === true;
   const items = [
     { label: t("task.renameTask"), onSelect: onRename, destructive: false },
     {
@@ -71,9 +65,6 @@ export function TaskContextMenu({
       onSelect: onToggleStar,
       destructive: false,
     },
-    archived
-      ? { label: t("task.unarchive"), onSelect: onUnarchive, destructive: false }
-      : { label: t("task.archive"), onSelect: onArchive, destructive: false },
     { label: t("task.deleteTask"), onSelect: onDelete, destructive: true },
   ];
 
