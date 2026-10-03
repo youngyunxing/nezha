@@ -67,7 +67,6 @@ import {
 } from "./projectName";
 import { useI18n } from "./i18n";
 import { ProjectDrawer } from "./components/ProjectDrawer";
-import { DeleteTaskDialog } from "./components/task-panel/DeleteTaskDialog";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -286,8 +285,6 @@ const noop = () => {};
 
 function App() {
   const { showToast } = useToast();
-  /** 正在确认删除的任务 id（null = 没有弹窗） */
-  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const { t } = useI18n();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(getInitialThemeMode);
@@ -1563,11 +1560,24 @@ function App() {
     });
   }
 
-  /** 删除任务：先开确认框（确认 / 取消 / 归档）。原生 confirm 只有两个按钮，
-   *  没法给「归档」这条更安全的路，所以换成自己画的 DialogTaskDialog。 */
-  function handleDeleteTask(taskId: string) {
-    if (!tasks.some((item) => item.id === taskId)) return;
-    setDeleteTaskId(taskId);
+  /** 删除任务。
+   *  普通任务不弹确认：删掉的只是任务条目和终端屏幕，会话文件还在磁盘上（claude 的那条会重新
+   *  出现在「本地会话」里），点错了也没什么可失去的。
+   *  **有 worktree 的任务例外** —— 那一步会 `git worktree remove --force` + `git branch -D`，
+   *  未提交的改动和分支真的没了，所以单独确认一次，并提示可以改用「归档」。 */
+  async function handleDeleteTask(taskId: string) {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const hasWorktree = !!task.worktreePath && !!task.worktreeBranch && !task.worktreeDiscarded;
+    if (hasWorktree) {
+      const promptPreview = `${task.prompt.slice(0, 100)}${task.prompt.length > 100 ? "..." : ""}`;
+      const ok = await confirm(t("task.deleteWorktreePrompt", { prompt: promptPreview }), {
+        title: t("task.deleteWorktreeTitle"),
+        kind: "warning",
+      });
+      if (!ok) return;
+    }
+    deleteTasks([taskId]);
   }
 
   /** 归档 = 退出会话 + 移进「已归档」分组。**不删任何东西**：会话文件、worktree、终端屏幕都留着，
@@ -2057,20 +2067,6 @@ function App() {
         </div>
       )}
 
-      <DeleteTaskDialog
-        task={tasks.find((item) => item.id === deleteTaskId) ?? null}
-        onCancel={() => setDeleteTaskId(null)}
-        onConfirm={() => {
-          const id = deleteTaskId;
-          setDeleteTaskId(null);
-          if (id) deleteTasks([id]);
-        }}
-        onArchive={() => {
-          const id = deleteTaskId;
-          setDeleteTaskId(null);
-          if (id) void handleArchiveTask(id);
-        }}
-      />
     </div>
   );
   return <ProjectAppearanceProvider projects={projects}>{appTree}</ProjectAppearanceProvider>;

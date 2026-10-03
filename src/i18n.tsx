@@ -212,12 +212,9 @@ const translations: Record<string, string> = {
   "task.completed": "任务已完成",
   "task.failed": "任务失败",
   "task.cancelled": "任务已取消",
-  "task.deleteConfirmTitle": "确认删除？",
-  "task.deleteConfirmOk": "确认",
-  "task.deleteConfirmBody":
-    "删除后：终端屏幕记录会被删掉，这个任务的记录就找不回来了（会话文件本身还留在磁盘上），正在跑的会话会被停掉。\n\n你的代码不会被动 —— 改动都在工作目录里。\n\n建议用「归档」：记录全部保留，随时能恢复。",
-  "task.deleteConfirmBodyWorktree":
-    "删除后：终端屏幕记录会被删掉，worktree 和它里面未提交的改动会被丢弃、任务分支也会删掉，正在跑的会话会被停掉。\n\n建议用「归档」：记录、worktree、分支、未提交的改动都保留，随时能恢复。",
+  "task.deleteWorktreeTitle": "删除 worktree 任务",
+  "task.deleteWorktreePrompt":
+    "删除“{prompt}”？\n\n它的 worktree 和里面未提交的改动会被丢弃，任务分支也会删掉 —— 这一步不可恢复。\n想留着就用「归档」：worktree、分支、改动全都保留。",
   "task.archive": "归档",
   "task.unarchive": "恢复",
   "task.archived": "已归档",
