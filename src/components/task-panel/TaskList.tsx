@@ -117,18 +117,19 @@ export function TaskList({
 
   const sorted = useMemo(() => {
     const sortKey = (task: Task) => task.updatedAt ?? task.createdAt;
+    const needsAttention = (task: Task) =>
+      task.status === "input_required" ||
+      task.status === "awaiting_review" ||
+      task.status === "interrupted";
+    // 结束态（已完成 / 失败 / 已取消）沉到后面：它们刚刚更新过，按时间排会顶到最上面，
+    // 把还在跑、还等着你的挤下去。同一档里再按时间倒序。
+    const isFinished = (task: Task) =>
+      task.status === "done" || task.status === "failed" || task.status === "cancelled";
+    const rank = (task: Task) => (needsAttention(task) ? 0 : isFinished(task) ? 2 : 1);
     return [...filtered].sort((a, b) => {
-      const aNeedsAttention =
-        a.status === "input_required" ||
-        a.status === "awaiting_review" ||
-        a.status === "interrupted";
-      const bNeedsAttention =
-        b.status === "input_required" ||
-        b.status === "awaiting_review" ||
-        b.status === "interrupted";
-      if (aNeedsAttention && !bNeedsAttention) return -1;
-      if (!aNeedsAttention && bNeedsAttention) return 1;
-      if (aNeedsAttention && bNeedsAttention) {
+      const rankDiff = rank(a) - rank(b);
+      if (rankDiff !== 0) return rankDiff;
+      if (rank(a) === 0) {
         return (b.attentionRequestedAt ?? sortKey(b)) - (a.attentionRequestedAt ?? sortKey(a));
       }
       return sortKey(b) - sortKey(a);
