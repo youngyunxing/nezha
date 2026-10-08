@@ -115,8 +115,19 @@ export function TaskList({
   // 删掉的任务（deleted 标记）不再出现在列表里，记录还在磁盘上
   const visibleTasks = useMemo(() => tasks.filter(isVisibleTask), [tasks]);
 
-  // 会话正文的搜索走后端（异步 + 防抖），名字 / 提示词 / 命令在本地同步匹配
-  const { matchedPaths, searching: searchingSessions } = useSessionSearch(visibleTasks, query);
+  // 会话正文的搜索走后端（异步 + 防抖），名字 / 提示词 / 命令在本地同步匹配。
+  // 任务的会话和「本地会话」（自己在本机跑的 claude）走的是同一条搜索 —— 它们的正文
+  // 都该搜得到，不能只按标题和首条消息匹配。
+  const searchPaths = useMemo(() => {
+    const paths = new Set<string>();
+    for (const task of visibleTasks) {
+      const path = taskSessionPath(task);
+      if (path) paths.add(path);
+    }
+    for (const session of localSessions) paths.add(session.sessionPath);
+    return Array.from(paths);
+  }, [visibleTasks, localSessions]);
+  const { matchedPaths, searching: searchingSessions } = useSessionSearch(searchPaths, query);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return visibleTasks;
@@ -138,9 +149,12 @@ export function TaskList({
     const q = query.toLowerCase();
     return localSessions.filter(
       (session) =>
-        session.preview.toLowerCase().includes(q) || session.sessionId.toLowerCase().includes(q),
+        session.preview.toLowerCase().includes(q) ||
+        session.sessionId.toLowerCase().includes(q) ||
+        // 会话正文（跟任务一样走后端全文搜索）
+        matchedPaths.has(session.sessionPath),
     );
-  }, [localSessions, query]);
+  }, [localSessions, query, matchedPaths]);
 
   const sorted = useMemo(() => {
     const sortKey = (task: Task) => task.updatedAt ?? task.createdAt;

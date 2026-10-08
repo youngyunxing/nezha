@@ -198,6 +198,30 @@ describe("任务搜索：会话正文（走后端）", () => {
     expect(screen.queryByText("不相干的名字")).toBeNull();
   });
 
+  it("「本地会话」也能按会话正文搜到（不只是标题和首条消息）", async () => {
+    invokeMock.mockResolvedValue(["/tmp/local.jsonl"]);
+    renderList({
+      tasks: [],
+      localSessions: [
+        {
+          sessionId: "11111111-2222-3333-4444-555555555555",
+          sessionPath: "/tmp/local.jsonl",
+          preview: "无关的首条消息",
+          updatedAt: Date.now(),
+          sizeBytes: 1024,
+        },
+      ],
+      query: "登录页",
+    });
+    await waitFor(() => expect(screen.getByText(/无关的首条消息/)).toBeTruthy(), {
+      timeout: 3000,
+    });
+    expect(invokeMock).toHaveBeenCalledWith("search_session_texts", {
+      sessionPaths: ["/tmp/local.jsonl"],
+      query: "登录页",
+    });
+  });
+
   it("名字命中就立刻显示，不必等后端（本地同步匹配）", () => {
     invokeMock.mockResolvedValue([]);
     renderList({ tasks: [makeTask({ name: "登录页报错", prompt: "无关" })], query: "登录页" });
