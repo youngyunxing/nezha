@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import s from "../styles";
 import { invoke } from "@tauri-apps/api/core";
-import { Copy, Check } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
 import { marked, type Token, type Tokens } from "marked";
 import { useI18n } from "../i18n";
 import type { ThemeVariant } from "../types";
 import { highlightCode } from "../highlight";
+import { scrollJumpForKey } from "../shortcuts";
 
 interface SessionContent {
   type: "text" | "tool_use" | "thinking";
@@ -211,10 +213,15 @@ export function SessionView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // 打开就停在最新一条。用户自己往上滚之后就不再自动贴底 —— 读历史时不该被拽回去。
+  const pinnedRef = useRef(true);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+    // 换会话重新钉回底部
+    pinnedRef.current = true;
     invoke<SessionMessage[]>("read_session_messages", { sessionPath })
       .then((msgs) => {
         setMessages(msgs);
@@ -226,33 +233,102 @@ export function SessionView({
       });
   }, [sessionPath]);
 
+  const jumpToTop = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = false; // 跳上去就别再被"贴底"拽回来
+    el.scrollTop = 0;
+  }, []);
+
+  const jumpToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // 贴底判据：离底部 8px 以内算还在底部（浮点误差 + 行高变化留点余量）
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+  }, []);
+
+  // 打开后跟着内容长高走到底：代码块是懒高亮的（shiki 异步），首屏渲染完还会继续变高，
+  // 只滚一次会停在中间。
+  useEffect(() => {
+    const el = scrollRef.current;
+    const content = contentRef.current;
+    if (!el || !content || loading) return;
+    const stick = () => {
+      if (pinnedRef.current) el.scrollTop = el.scrollHeight;
+    };
+    stick();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(stick);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [loading, sessionPath]);
+
+  // Cmd + ↑↓：和终端那套一致（Home / End 是滚动容器的原生行为，不用管）
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const jump = scrollJumpForKey(event);
+      if (!jump) return;
+      event.preventDefault();
+      if (jump === "top") jumpToTop();
+      else jumpToBottom();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [jumpToBottom, jumpToTop]);
+
   return (
-    <div
-      ref={scrollRef}
-      style={{
-        flex: 1,
-        overflowY: "auto",
-        padding: "20px 28px 32px",
-      }}
-    >
-      {loading && (
-        <div style={{ color: "var(--text-hint)", fontSize: 13, padding: "12px 0" }}>
-          {t("session.loading")}
+    <div style={s.sessionScrollWrap}>
+      <div
+        ref={scrollRef}
+        className="session-scroll-pane"
+        style={s.sessionScrollPane}
+        onScroll={handleScroll}
+      >
+        <div ref={contentRef}>
+          {loading && (
+            <div style={s.sessionPaneHint}>{t("session.loading")}</div>
+          )}
+          {error && (
+            <div style={{ ...s.sessionPaneHint, color: "var(--text-muted)" }}>
+              {t("session.unableToLoad", { error })}
+            </div>
+          )}
+          {!loading && !error && messages.length === 0 && (
+            <div style={s.sessionPaneHint}>{t("session.noMessages")}</div>
+          )}
+          {messages.map((msg, i) => (
+            <MessageBlock key={i} message={msg} themeVariant={themeVariant} />
+          ))}
         </div>
-      )}
-      {error && (
-        <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "12px 0" }}>
-          {t("session.unableToLoad", { error })}
-        </div>
-      )}
-      {!loading && !error && messages.length === 0 && (
-        <div style={{ color: "var(--text-hint)", fontSize: 13, padding: "12px 0" }}>
-          {t("session.noMessages")}
-        </div>
-      )}
-      {messages.map((msg, i) => (
-        <MessageBlock key={i} message={msg} themeVariant={themeVariant} />
-      ))}
+      </div>
+      {/* 右上角一对跳转按钮：和终端那颗一致（那边是 Cmd + ↑↓）*/}
+      <div style={s.sessionScrollJump}>
+        <button
+          type="button"
+          style={s.sessionScrollJumpBtn}
+          title={t("session.jumpTop")}
+          aria-label={t("session.jumpTop")}
+          onClick={jumpToTop}
+        >
+          <ChevronUp size={13} strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          style={s.sessionScrollJumpBtn}
+          title={t("session.jumpBottom")}
+          aria-label={t("session.jumpBottom")}
+          onClick={jumpToBottom}
+        >
+          <ChevronDown size={13} strokeWidth={2.2} />
+        </button>
+      </div>
     </div>
   );
 }

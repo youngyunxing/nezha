@@ -169,6 +169,48 @@ export const terminal = {
     cursor: "pointer",
   },
   // 会话右下角：复制会话 + 快捷输入，并排靠右
+  /** 会话记录（SessionView）的外壳：滚动区 + 右上角那对跳转按钮的定位锚点。 */
+  sessionScrollWrap: {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column" as const,
+    position: "relative" as const,
+  },
+  sessionScrollPane: {
+    flex: 1,
+    overflowY: "auto" as const,
+    padding: "20px 28px 32px",
+  },
+  /** 会话记录里的提示行（加载中 / 加载失败 / 没有消息） */
+  sessionPaneHint: {
+    color: "var(--text-hint)",
+    fontSize: 13,
+    padding: "12px 0",
+  },
+  sessionScrollJump: {
+    position: "absolute" as const,
+    top: 8,
+    right: 14,
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 4,
+    zIndex: 2,
+  },
+  sessionScrollJumpBtn: {
+    width: 22,
+    height: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    border: "1px solid var(--border-dim)",
+    borderRadius: 5,
+    background: "var(--bg-card)",
+    color: "var(--text-hint)",
+    opacity: 0.5,
+    cursor: "pointer",
+  },
   /** 会话记录（SessionView）那一屏：相对定位的容器，好让右下角那排按钮挂上去。 */
   sessionPaneWrap: {
     position: "relative" as const,
