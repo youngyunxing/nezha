@@ -41,6 +41,7 @@ import { ProjectDrawer } from "./ProjectDrawer";
 import { RightToolbar } from "./RightToolbar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { useProjectPanels } from "../hooks/useProjectPanels";
+import { claimedClaudeSessionIds } from "../taskDeletion";
 import { resolveProjectGitContext, useGitRoots } from "../hooks/useGitRoots";
 import { isMarkdownFile } from "../utils";
 import { useI18n } from "../i18n";
@@ -241,15 +242,11 @@ export function ProjectPage({
   const selectedTask = projectTasks.find((t) => t.id === selectedTaskId) ?? null;
 
   // 本机 Claude Code 直接在该目录产生的会话。已被 Nezha 接管的（任务里带 session id）
-  // 排除掉，同一条会话不会既当任务又当本地记录出现两次。
+  // 排除掉，同一条会话不会既当任务又当本地记录出现两次 —— 但**删掉的任务不排除**：
+  // 它的会话文件还在磁盘上，删过之后应该重新出现在这里，能捞回来（见 taskDeletion.ts）。
   const [localSessions, setLocalSessions] = useState<LocalClaudeSession[]>([]);
   const knownClaudeSessionIds = useMemo(
-    () =>
-      projectTasks
-        .map((task) => task.claudeSessionId)
-        .filter((id): id is string => !!id)
-        .sort()
-        .join(","),
+    () => claimedClaudeSessionIds(projectTasks).join(","),
     [projectTasks],
   );
   useEffect(() => {

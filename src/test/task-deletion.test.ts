@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "../types";
-import { isVisibleTask, softDeleteTasks } from "../taskDeletion";
+import { claimedClaudeSessionIds, isVisibleTask, softDeleteTasks } from "../taskDeletion";
 
 function task(id: string, over: Partial<Task> = {}): Task {
   return {
@@ -49,5 +49,24 @@ describe("删除 = 打标记，记录留在磁盘上", () => {
   it("isVisibleTask 把删掉的挡在列表外", () => {
     expect(isVisibleTask(task("a"))).toBe(true);
     expect(isVisibleTask(task("a", { deleted: true }))).toBe(false);
+  });
+});
+
+describe("本地会话列表的排除名单", () => {
+  it("只排除还活着的任务（删掉的不排除，会话才能重新冒出来）", () => {
+    const tasks = [
+      task("a", { claudeSessionId: "s-live" }),
+      task("b", { claudeSessionId: "s-deleted", deleted: true }),
+      task("c", { claudeSessionId: undefined }),
+    ];
+    expect(claimedClaudeSessionIds(tasks)).toEqual(["s-live"]);
+  });
+
+  it("排好序（稳定，不因为数组顺序变化就重新拉一遍）", () => {
+    const tasks = [
+      task("a", { claudeSessionId: "s2" }),
+      task("b", { claudeSessionId: "s1" }),
+    ];
+    expect(claimedClaudeSessionIds(tasks)).toEqual(["s1", "s2"]);
   });
 });
