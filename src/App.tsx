@@ -1542,6 +1542,27 @@ function App() {
     });
   }
 
+  /** 任务列表拖动排序：把这一组任务的显示顺序写成 order（0,1,2…）。只作用在同一档里。 */
+  function handleReorderTasks(orderedIds: string[]) {
+    if (orderedIds.length === 0) return;
+    setTasks((prev) => {
+      const position = new Map(orderedIds.map((id, index) => [id, index]));
+      let projectId: string | null = null;
+      let changed = false;
+      const next = prev.map((task) => {
+        const index = position.get(task.id);
+        if (index === undefined) return task;
+        projectId = task.projectId;
+        if (task.order === index) return task;
+        changed = true;
+        return { ...task, order: index };
+      });
+      if (!changed || !projectId) return prev;
+      persistProjectTasks(projectId, next, showToast, formatSaveTasksError);
+      return next;
+    });
+  }
+
   function handleToggleTaskStar(taskId: string) {
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
@@ -1874,6 +1895,7 @@ function App() {
               onDeleteTask={handleDeleteTask}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
+              onReorderTasks={handleReorderTasks}
               onSubmitTask={(taskInput) => handleSubmitTask(project, taskInput)}
               onResumeTask={handleResumeTask}
               onForkTask={handleForkTask}

@@ -62,6 +62,7 @@ export function ProjectPage({
   onDeleteTask,
   onToggleTaskStar,
   onRenameTask,
+  onReorderTasks,
   onSubmitTask,
   onResumeTask,
   onForkTask,
@@ -124,6 +125,8 @@ export function ProjectPage({
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
+  /** 任务列表拖动排序：按显示顺序回传一组任务 id */
+  onReorderTasks: (orderedIds: string[]) => void;
   onSubmitTask: (t: {
     prompt: string;
     agent: AgentType;
@@ -390,6 +393,7 @@ export function ProjectPage({
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
+        onReorderTasks={onReorderTasks}
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={setRenamingTaskId}
         taskDisplayWindow={taskDisplayWindow}

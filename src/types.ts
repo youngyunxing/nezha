@@ -160,6 +160,10 @@ export interface Task {
   updatedAt?: number;
   attentionRequestedAt?: number;
   starred?: boolean;
+  /** 手动排序位次（拖动排序写入，0 在最上面）。只在自己那一档里生效 —— 列表是按状态分组、
+   *  组内按时间排的，拖出来的顺序属于「同一档里的优先级」，不跨档。没有这个字段的（新任务）
+   *  排在已排过的上面。 */
+  order?: number;
   /** 已删除：从列表里拿掉，但**记录留在磁盘上**（名字、状态、会话 id 都还在，可恢复）。
    *  删除只真丢两样东西：worktree 任务的工作树与分支（删前会确认）、以及正在跑的进程。 */
   deleted?: boolean;

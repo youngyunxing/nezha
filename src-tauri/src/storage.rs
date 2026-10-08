@@ -89,6 +89,8 @@ pub struct Task {
     pub starred: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deleted: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<f64>,
     #[serde(rename = "failureReason", skip_serializing_if = "Option::is_none")]
     pub failure_reason: Option<String>,
     #[serde(rename = "worktreePath", skip_serializing_if = "Option::is_none")]

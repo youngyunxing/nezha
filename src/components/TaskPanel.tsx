@@ -26,6 +26,7 @@ export function TaskPanel({
   onDeleteTask,
   onToggleTaskStar,
   onRenameTask,
+  onReorderTasks,
   renamingTaskId,
   onRenamingTaskIdChange,
   taskDisplayWindow,
@@ -51,6 +52,8 @@ export function TaskPanel({
   onToggleTaskStar: (id: string) => void;
   /** 列表右键菜单的「重命名」 */
   onRenameTask: (id: string, name: string) => void;
+  /** 拖动排序：按显示顺序回传一组任务 id */
+  onReorderTasks: (orderedIds: string[]) => void;
   /** 改名中的任务 id（提到项目层：主区域标签上右键也能进改名） */
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
@@ -188,6 +191,7 @@ export function TaskPanel({
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
+        onReorderTasks={onReorderTasks}
         renamingTaskId={renamingTaskId}
         onRenamingTaskIdChange={onRenamingTaskIdChange}
         onTaskDisplayWindowChange={onTaskDisplayWindowChange}

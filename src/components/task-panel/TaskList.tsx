@@ -3,6 +3,16 @@ import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
 import { isVisibleTask } from "../../taskDeletion";
+import {
+  TASK_DRAG_AUTOSCROLL_EDGE_PX,
+  TASK_DRAG_AUTOSCROLL_STEP_PX,
+  TASK_DRAG_THRESHOLD_PX,
+  clampDropToRun,
+  dropIndexAtOffset,
+  reorderRunIds,
+  shiftForRow,
+  taskRunRange,
+} from "./taskDrag";
 import { useSessionSearch } from "../../hooks/useSessionSearch";
 import { taskSessionPath } from "../../types";
 import { LocalSessionRow } from "./LocalSessionRow";
@@ -49,6 +59,7 @@ export function TaskList({
   onDeleteTask,
   onToggleTaskStar,
   onRenameTask,
+  onReorderTasks,
   renamingTaskId,
   onRenamingTaskIdChange,
   onTaskDisplayWindowChange,
@@ -65,6 +76,8 @@ export function TaskList({
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
+  /** 拖动排序：按显示顺序回传这一组任务的 id */
+  onReorderTasks: (orderedIds: string[]) => void;
   /** 正在改名的任务 id（提到项目层：主区域标签上右键也能进改名） */
   renamingTaskId: string | null;
   onRenamingTaskIdChange: (id: string | null) => void;
@@ -143,6 +156,10 @@ export function TaskList({
     return [...filtered].sort((a, b) => {
       const rankDiff = rank(a) - rank(b);
       if (rankDiff !== 0) return rankDiff;
+      // 同一档里：拖动排过的按手排位次；没排过的（新任务）在最上面 —— 新活别沉到你的安排底下
+      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+      if (a.order !== undefined) return 1;
+      if (b.order !== undefined) return -1;
       if (rank(a) === 0) {
         return (b.attentionRequestedAt ?? sortKey(b)) - (a.attentionRequestedAt ?? sortKey(a));
       }
@@ -263,6 +280,123 @@ export function TaskList({
     }
   }, [renamingTaskId, rows, offsets]);
 
+  // ── 拖动排序 ─────────────────────────────────────────────────────────────
+  // 指针位置更新很频繁，走 ref + rAF 合并，别每个 pointermove 都 setState
+  const [drag, setDrag] = useState<{
+    draggedIndex: number;
+    dropIndex: number;
+    pointerY: number;
+    rowTop: number;
+  } | null>(null);
+  const dragRef = useRef<{
+    draggedIndex: number;
+    startClientY: number;
+    moved: boolean;
+    dropIndex: number;
+    pointerY: number;
+    rowTop: number;
+  } | null>(null);
+  const dragRafRef = useRef(0);
+  // 拖完松手那一下别把行点击也触发了（否则一拖就顺带切了任务）
+  const suppressClickRef = useRef(false);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const offsetsRef = useRef(offsets);
+  offsetsRef.current = offsets;
+  const onReorderRef = useRef(onReorderTasks);
+  onReorderRef.current = onReorderTasks;
+
+  const flushDrag = useCallback(() => {
+    dragRafRef.current = 0;
+    const session = dragRef.current;
+    if (!session) return;
+    setDrag({
+      draggedIndex: session.draggedIndex,
+      dropIndex: session.dropIndex,
+      pointerY: session.pointerY,
+      rowTop: session.rowTop,
+    });
+  }, []);
+
+  const handleDragMove = useCallback(
+    (event: PointerEvent) => {
+      const session = dragRef.current;
+      const el = scrollRef.current;
+      if (!session || !el) return;
+      // 没越过阈值就当点击：手滑几像素不该把行拖走
+      if (!session.moved && Math.abs(event.clientY - session.startClientY) < TASK_DRAG_THRESHOLD_PX) {
+        return;
+      }
+      session.moved = true;
+      const rect = el.getBoundingClientRect();
+      // 内容坐标：列表自己滚动时指针不动，落点也得跟着变
+      const pointerY = event.clientY - rect.top + el.scrollTop;
+      const run = taskRunRange(rowsRef.current, session.draggedIndex);
+      session.pointerY = pointerY;
+      session.dropIndex = clampDropToRun(dropIndexAtOffset(offsetsRef.current, pointerY), run);
+      // 拖到上下边附近自动滚动，长列表才拖得到远处
+      if (event.clientY < rect.top + TASK_DRAG_AUTOSCROLL_EDGE_PX) {
+        el.scrollTop -= TASK_DRAG_AUTOSCROLL_STEP_PX;
+      } else if (event.clientY > rect.bottom - TASK_DRAG_AUTOSCROLL_EDGE_PX) {
+        el.scrollTop += TASK_DRAG_AUTOSCROLL_STEP_PX;
+      }
+      if (!dragRafRef.current) dragRafRef.current = requestAnimationFrame(flushDrag);
+    },
+    [flushDrag],
+  );
+
+  const endDrag = useCallback(() => {
+    window.removeEventListener("pointermove", handleDragMove);
+    window.removeEventListener("pointerup", endDrag);
+    window.removeEventListener("pointercancel", endDrag);
+    if (dragRafRef.current) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = 0;
+    }
+    const session = dragRef.current;
+    dragRef.current = null;
+    setDrag(null);
+    if (!session?.moved) return;
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+
+    const currentRows = rowsRef.current;
+    const run = taskRunRange(currentRows, session.draggedIndex);
+    const before = currentRows
+      .slice(run.start, run.end + 1)
+      .map((row) => (row.type === "task" ? row.task.id : undefined))
+      .filter((id): id is string => !!id);
+    const after = reorderRunIds(currentRows, run, session.draggedIndex, session.dropIndex);
+    // 顺序没变就不提交（拖回原位不该写盘）
+    if (after.join(",") !== before.join(",")) onReorderRef.current(after);
+  }, [handleDragMove]);
+
+  const handleRowPointerDown = useCallback(
+    (event: React.PointerEvent, rowIndex: number) => {
+      if (event.button !== 0) return;
+      const target = event.target as HTMLElement | null;
+      // 改名输入框、按钮上的按下不参与拖动
+      if (target?.closest("input, textarea, button, a")) return;
+      if (rowsRef.current[rowIndex]?.type !== "task") return;
+      const rowTop = offsetsRef.current[rowIndex] ?? 0;
+      dragRef.current = {
+        draggedIndex: rowIndex,
+        startClientY: event.clientY,
+        moved: false,
+        dropIndex: rowIndex,
+        pointerY: rowTop,
+        rowTop,
+      };
+      window.addEventListener("pointermove", handleDragMove);
+      window.addEventListener("pointerup", endDrag);
+      window.addEventListener("pointercancel", endDrag);
+    },
+    [endDrag, handleDragMove],
+  );
+
   const totalHeight = offsets[offsets.length - 1] ?? 0;
   const startIndex = Math.max(0, findRowIndex(offsets, scrollTop) - OVERSCAN_ROWS);
   const endIndex = Math.min(
@@ -288,17 +422,37 @@ export function TaskList({
             const top = offsets[rowIndex] ?? 0;
 
             return (
-              <div
-                key={row.key}
-                style={{
-                  position: "absolute",
-                  top,
-                  left: 0,
-                  right: 0,
-                  height: row.height,
-                  overflow: "hidden",
-                }}
-              >
+              (() => {
+                const isDragged = drag?.draggedIndex === rowIndex;
+                const shift = drag
+                  ? shiftForRow(rowIndex, drag.draggedIndex, drag.dropIndex, TASK_ROW_HEIGHT)
+                  : 0;
+                return (
+                  <div
+                    key={row.key}
+                    data-draggable={row.type === "task" ? "true" : undefined}
+                    data-dragging={isDragged ? "true" : undefined}
+                    style={{
+                      position: "absolute",
+                      top,
+                      left: 0,
+                      right: 0,
+                      height: row.height,
+                      overflow: "hidden",
+                      // 被拖的那行跟着指针走，其余行让位一个行高
+                      transform:
+                        isDragged && drag
+                          ? `translateY(${drag.pointerY - drag.rowTop}px)`
+                          : shift
+                            ? `translateY(${shift}px)`
+                            : undefined,
+                      transition: isDragged ? "none" : "transform 0.12s ease",
+                      zIndex: isDragged ? 3 : undefined,
+                      boxShadow: isDragged ? "var(--shadow-md)" : undefined,
+                      background: isDragged ? "var(--bg-sidebar)" : undefined,
+                    }}
+                    onPointerDown={(event) => handleRowPointerDown(event, rowIndex)}
+                  >
                 {row.type === "group" ? (
                   <div style={s.groupLabel}>{row.label}</div>
                 ) : row.type === "local" ? (
@@ -311,7 +465,10 @@ export function TaskList({
                   <TaskListItem
                     task={row.task}
                     selected={selectedId === row.task.id && !isNewTask}
-                    onClick={() => onSelectTask(row.task.id)}
+                    onClick={() => {
+                      if (suppressClickRef.current) return;
+                      onSelectTask(row.task.id);
+                    }}
                     onContextMenu={(event) => {
                       // 顶掉 webview 自带的右键菜单，换成任务操作（跟文件树一致）。
                       event.preventDefault();
@@ -326,7 +483,9 @@ export function TaskList({
                     onRenameCancel={() => onRenamingTaskIdChange(null)}
                   />
                 )}
-              </div>
+                  </div>
+                );
+              })()
             );
           })}
         </div>

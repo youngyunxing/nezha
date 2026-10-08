@@ -42,6 +42,7 @@ function renderList(
     onRenameTask: vi.fn(),
     onRenamingTaskIdChange: vi.fn(),
     onTaskDisplayWindowChange: vi.fn(),
+    onReorderTasks: vi.fn(),
   };
   const { renamingTaskId: initialRenaming = null, ...rest } = over;
   const props = {

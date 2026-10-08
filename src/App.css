@@ -1136,3 +1136,14 @@ body {
   opacity: 1;
   color: var(--text-primary);
 }
+
+/* ── 任务列表拖动排序（TaskList 的 data-draggable / data-dragging）────────────
+   行的按下即开拖（超过阈值才真拖），给个手势提示：悬停是 grab，拖动中是 grabbing。
+   行内的按钮 / 输入框有自己的 cursor，不受影响。 */
+[data-draggable="true"] {
+  cursor: grab;
+}
+
+[data-draggable="true"][data-dragging="true"] {
+  cursor: grabbing;
+}

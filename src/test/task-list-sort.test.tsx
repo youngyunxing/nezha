@@ -42,6 +42,7 @@ function renderOrder(tasks: Task[]) {
         renamingTaskId={null}
         onRenamingTaskIdChange={vi.fn()}
         onTaskDisplayWindowChange={vi.fn()}
+        onReorderTasks={vi.fn()}
       />
     </I18nProvider>,
   );
