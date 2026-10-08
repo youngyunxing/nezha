@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
+import { ContextMenu } from "../ContextMenu";
 import { isVisibleTask } from "../../taskDeletion";
 import {
   TASK_DRAG_AUTOSCROLL_EDGE_PX,
@@ -55,6 +56,7 @@ export function TaskList({
   localSessions,
   selectedLocalSessionId,
   onSelectLocalSession,
+  onResumeLocalSession,
   onSelectTask,
   onDeleteTask,
   onToggleTaskStar,
@@ -72,6 +74,8 @@ export function TaskList({
   localSessions: LocalClaudeSession[];
   selectedLocalSessionId: string | null;
   onSelectLocalSession: (session: LocalClaudeSession) => void;
+  /** 本地会话行右键「恢复会话」：把它变成一个可续跑的任务 */
+  onResumeLocalSession: (session: LocalClaudeSession) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
@@ -90,6 +94,10 @@ export function TaskList({
   const [scrollTop, setScrollTop] = useState(0);
   // 右键菜单挂在哪条任务上（改名态在项目层，见 renamingTaskId）
   const [ctxMenu, setCtxMenu] = useState<TaskContextMenuState | null>(null);
+  // 本地会话行的右键菜单（它不是 Nezha 任务，菜单也不同：目前只有「恢复会话」）
+  const [localCtxMenu, setLocalCtxMenu] = useState<
+    { x: number; y: number; session: LocalClaudeSession } | null
+  >(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -474,6 +482,12 @@ export function TaskList({
                     session={row.session}
                     selected={selectedLocalSessionId === row.session.sessionId}
                     onClick={() => onSelectLocalSession(row.session)}
+                    onContextMenu={(event) => {
+                      // 顶掉 webview 自带的右键菜单（跟文件树 / 任务行一致）
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setLocalCtxMenu({ x: event.clientX, y: event.clientY, session: row.session });
+                    }}
                   />
                 ) : (
                   <TaskListItem
@@ -515,6 +529,22 @@ export function TaskList({
           {t("task.showAllTasks")}
         </button>
       </div>
+    )}
+    {localCtxMenu && (
+      <ContextMenu
+        anchor={localCtxMenu}
+        onClose={() => setLocalCtxMenu(null)}
+        narrow
+        items={[
+          {
+            label: t("localSession.resumeSession"),
+            onSelect: () => {
+              onResumeLocalSession(localCtxMenu.session);
+              setLocalCtxMenu(null);
+            },
+          },
+        ]}
+      />
     )}
     {ctxMenu && (
       <TaskContextMenu

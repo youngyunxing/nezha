@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type React from "react";
 import { History } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
@@ -23,10 +24,13 @@ export function LocalSessionRow({
   session,
   selected,
   onClick,
+  onContextMenu,
 }: {
   session: LocalClaudeSession;
   selected: boolean;
   onClick: () => void;
+  /** 右键：目前只给「恢复会话」 */
+  onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
@@ -35,6 +39,7 @@ export function LocalSessionRow({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       title={session.preview || session.sessionId}

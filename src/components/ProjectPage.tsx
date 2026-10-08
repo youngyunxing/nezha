@@ -381,6 +381,7 @@ export function ProjectPage({
         localSessions={localSessions}
         selectedLocalSessionId={localSession?.sessionId ?? null}
         onSelectLocalSession={onSelectLocalSession}
+        onResumeLocalSession={onResumeLocalSession}
         onNewTask={handleNewTask}
         presets={presets}
         onRunPreset={(preset) => onRunPreset(preset, subRepoPath)}

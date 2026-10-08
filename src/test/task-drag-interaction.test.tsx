@@ -42,6 +42,7 @@ function renderList(tasks: Task[]) {
         localSessions={[]}
         selectedLocalSessionId={null}
         onSelectLocalSession={vi.fn()}
+        onResumeLocalSession={vi.fn()}
         onSelectTask={onSelectTask}
         onDeleteTask={vi.fn()}
         onToggleTaskStar={vi.fn()}

@@ -17,6 +17,7 @@ export function TaskPanel({
   localSessions,
   selectedLocalSessionId,
   onSelectLocalSession,
+  onResumeLocalSession,
   onNewTask,
   presets,
   onRunPreset,
@@ -39,6 +40,8 @@ export function TaskPanel({
   localSessions: LocalClaudeSession[];
   selectedLocalSessionId: string | null;
   onSelectLocalSession: (session: LocalClaudeSession) => void;
+  /** 本地会话行右键「恢复会话」 */
+  onResumeLocalSession: (session: LocalClaudeSession) => void;
   onNewTask: () => void;
   /** 快捷创建按钮（预设）：点一下直接建任务 */
   presets: TaskPreset[];
@@ -187,6 +190,7 @@ export function TaskPanel({
         localSessions={localSessions}
         selectedLocalSessionId={selectedLocalSessionId}
         onSelectLocalSession={onSelectLocalSession}
+        onResumeLocalSession={onResumeLocalSession}
         onSelectTask={onSelectTask}
         onDeleteTask={onDeleteTask}
         onToggleTaskStar={onToggleTaskStar}

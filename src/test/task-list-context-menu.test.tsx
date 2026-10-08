@@ -36,6 +36,7 @@ function renderList(
 ) {
   const handlers = {
     onSelectLocalSession: vi.fn(),
+    onResumeLocalSession: vi.fn(),
     onSelectTask: vi.fn(),
     onDeleteTask: vi.fn(),
     onToggleTaskStar: vi.fn(),
@@ -167,6 +168,32 @@ describe("任务列表右键菜单与改名", () => {
     renderList({ renamingTaskId: "t2" });
     expect(screen.getByText("修一下登录页的报错")).toBeTruthy();
     expect(screen.queryByPlaceholderText("修一下登录页的报错")).toBeNull();
+  });
+});
+
+describe("本地会话行的右键菜单", () => {
+  const session = {
+    sessionId: "11111111-2222-3333-4444-555555555555",
+    sessionPath: "/tmp/local.jsonl",
+    preview: "本地会话预览",
+    updatedAt: Date.now(),
+    sizeBytes: 1024,
+  };
+
+  it("右键弹出菜单，只有「恢复会话」", () => {
+    renderList({ tasks: [], localSessions: [session] });
+    fireEvent.contextMenu(screen.getByText("本地会话预览"));
+    expect(screen.getByText("恢复会话")).toBeTruthy();
+    // 任务那套操作不该出现在本地会话上（它不是 Nezha 任务）
+    expect(screen.queryByText("删除")).toBeNull();
+    expect(screen.queryByText("收藏")).toBeNull();
+  });
+
+  it("点「恢复会话」把这条会话交给上层去续跑", () => {
+    const handlers = renderList({ tasks: [], localSessions: [session] });
+    fireEvent.contextMenu(screen.getByText("本地会话预览"));
+    fireEvent.click(screen.getByText("恢复会话"));
+    expect(handlers.onResumeLocalSession).toHaveBeenCalledWith(session);
   });
 });
 
