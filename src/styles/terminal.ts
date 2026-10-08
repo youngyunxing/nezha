@@ -219,6 +219,55 @@ export const terminal = {
     display: "flex",
     flexDirection: "column" as const,
   },
+  /* 斜杠命令提示条：右下角那排按钮占着，所以它只占左边这一条，
+     和按钮同一行（终端最底下那行本来是 CLI 的快捷键提示，被盖住无所谓）。
+     单行不换行 —— 多行会往终端里顶，把输入框盖住。 */
+  slashHintBar: {
+    position: "absolute" as const,
+    /* 锚点是 TerminalView 里铺满终端容器内容盒的那层壳，而容器自己有 10px 的
+       padding —— 减掉才是和右下角按钮同一条水平线、同一个左缩进。 */
+    left: 4,
+    bottom: 4,
+    zIndex: 5,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    maxWidth: "min(620px, calc(100% - 420px))",
+    padding: "5px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border-medium)",
+    background: "var(--bg-card)",
+    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.16)",
+    fontSize: 12,
+    lineHeight: 1.4,
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+  },
+  slashHintToken: {
+    flexShrink: 0,
+    fontFamily: "var(--font-mono)",
+    color: "var(--text-primary)",
+  },
+  slashHintCmd: { fontFamily: "var(--font-mono)", color: "var(--control-active-fg)" },
+  slashHintUsage: {
+    flexShrink: 0,
+    fontFamily: "var(--font-mono)",
+    color: "var(--text-hint)",
+  },
+  slashHintDesc: {
+    minWidth: 0,
+    color: "var(--text-secondary)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  slashHintItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    minWidth: 0,
+    paddingLeft: 8,
+    borderLeft: "1px solid var(--border-dim)",
+  },
   sessionCornerActions: {
     position: "absolute" as const,
     right: 14,

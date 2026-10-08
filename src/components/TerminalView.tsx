@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
@@ -49,7 +49,16 @@ import {
   normalizeShiftEnterNewline,
   TERMINAL_NEWLINE_SEQUENCE,
 } from "../shortcuts";
-import type { TerminalFontSize, TerminalScrollback, FontFamily, ThemeVariant } from "../types";
+import type {
+  AgentType,
+  TerminalFontSize,
+  TerminalScrollback,
+  FontFamily,
+  ThemeVariant,
+} from "../types";
+import { slashCommandsFor } from "../slashCommands";
+import { detectSlashHint, slashHintKey, type SlashHintMatch } from "../slashHint";
+import { SlashHintBar } from "./terminal-slash/SlashHintBar";
 import {
   applyTerminalThemeOnPanel,
   initTerminal,
@@ -82,6 +91,8 @@ interface TerminalViewProps {
   terminalScrollback: TerminalScrollback;
   monoFontFamily: FontFamily;
   isActive?: boolean;
+  /** 这个终端跑的是哪个 agent —— 决定斜杠命令提示查哪张表（没表的 agent 不显示） */
+  agent?: AgentType;
   /** 这个终端是 shell 拥有的（纯终端任务）—— 鼠标上报复位只对它做 */
   shellOwned?: boolean;
   initialData?: string;
@@ -99,6 +110,7 @@ export function TerminalView({
   terminalScrollback,
   monoFontFamily,
   isActive = true,
+  agent = "shell",
   shellOwned = false,
   initialData,
   initialSnapshot,
@@ -106,6 +118,11 @@ export function TerminalView({
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  const [slashHint, setSlashHint] = useState<SlashHintMatch | null>(null);
+  /** 上一次 setState 的提示内容；一样就不再 setState */
+  const slashHintKeyRef = useRef("");
+  const agentRef = useRef(agent);
+  agentRef.current = agent;
   const fitAddonRef = useRef<FitAddon | null>(null);
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
@@ -230,6 +247,26 @@ export function TerminalView({
       completeRestore();
     });
 
+    // 斜杠命令提示：CLI 把输入框画在屏幕上、光标就在输入行里，所以每次「有东西写进
+    // buffer」后读一次光标所在行（读到光标为止）就能认出在敲什么命令。读盘限到每帧一次，
+    // 而且只有提示内容真的变了才 setState —— 这条路径跟着 PTY 输出跑，不能每条输出都重渲染。
+    let hintFrame: number | null = null;
+    const readSlashHint = () => {
+      hintFrame = null;
+      const match = detectSlashHint(term, slashCommandsFor(agentRef.current));
+      const key = slashHintKey(match);
+      if (key === slashHintKeyRef.current) return;
+      slashHintKeyRef.current = key;
+      setSlashHint(match);
+    };
+    const scheduleHintRead = () => {
+      if (hintFrame !== null) return;
+      hintFrame = window.requestAnimationFrame(readSlashHint);
+    };
+    const disposeHintOnWrite = term.onWriteParsed(scheduleHintRead);
+    // 光标自己动（方向键、Tab 补全）也会改变「光标前那行」，但可能没有新输出
+    const disposeHintOnCursor = term.onCursorMove(scheduleHintRead);
+
     const disposeSmartCopy = attachSmartCopy(term, {
       matchesNewline: (e) => matchesTerminalNewline(e, shiftEnterNewlineRef.current),
       onNewline: () => onInputRef.current(TERMINAL_NEWLINE_SEQUENCE),
@@ -326,6 +363,9 @@ export function TerminalView({
       disposeSmartCopy();
       disposeCopyOnSelect();
       disposeOnData.dispose();
+      if (hintFrame !== null) cancelAnimationFrame(hintFrame);
+      disposeHintOnWrite.dispose();
+      disposeHintOnCursor.dispose();
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleFit);
@@ -454,6 +494,8 @@ export function TerminalView({
           <ChevronDown size={13} strokeWidth={2.2} />
         </button>
       </div>
+      {/* 斜杠命令提示：只在正在敲命令时出现，其余时候完全不存在 */}
+      {isActive && slashHint && <SlashHintBar hint={slashHint} />}
     </div>
   );
 }
