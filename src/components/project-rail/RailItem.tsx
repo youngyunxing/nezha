@@ -1,7 +1,7 @@
 import { memo, useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, Palette, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
+import { Check, Palette, Pencil, Trash2, X } from "lucide-react";
 import type { Project, ProjectAvatarStyle } from "../../types";
 import { ProjectAvatar } from "../ProjectAvatar";
 import { ProjectAppearanceEditor } from "./ProjectAppearanceEditor";
@@ -58,7 +58,6 @@ export const RailItem = memo(function RailItem({
   onPointerDown,
   onClick,
   onPanelChange,
-  onToggleHidden,
   onUpdateAvatar,
   onDelete,
   onRename,
@@ -76,7 +75,6 @@ export const RailItem = memo(function RailItem({
   onPointerDown: (project: Project, event: React.PointerEvent<HTMLButtonElement>) => void;
   onClick: (project: Project) => void;
   onPanelChange: (projectId: string, panel: RailItemPanel | null) => void;
-  onToggleHidden: (projectId: string) => void;
   onDelete: (projectId: string) => void;
   onRename: (projectId: string, name: string) => Promise<ProjectRenameResult>;
   onUpdateAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
@@ -123,8 +121,6 @@ export const RailItem = memo(function RailItem({
 
   // 让位位移是拖拽期间的高频动态值,通过 CSS 变量注入,其余样式见 project-rail.css。
   const dynamicVars = { "--rail-item-dy": `${translateY}px` } as React.CSSProperties;
-
-  const hiddenLabel = project.hiddenFromRail ? t("welcome.pinToRail") : t("welcome.unpinFromRail");
 
   return (
     <Popover.Root
@@ -221,9 +217,6 @@ export const RailItem = memo(function RailItem({
           ) : (
             <>
               <span className="rail-drawer-item-name">{project.name}</span>
-              {project.hiddenFromRail && (
-                <PinOff size={12} strokeWidth={2} className="rail-drawer-item-hidden" />
-              )}
             </>
           )}
         </button>
@@ -264,22 +257,6 @@ export const RailItem = memo(function RailItem({
                 >
                   <Palette size={13} strokeWidth={2} />
                   <span>{t("project.appearance")}</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="rail-menu-item"
-                  onClick={() => {
-                    onPanelChange(project.id, null);
-                    onToggleHidden(project.id);
-                  }}
-                >
-                  {project.hiddenFromRail ? (
-                    <Pin size={13} strokeWidth={2} />
-                  ) : (
-                    <PinOff size={13} strokeWidth={2} />
-                  )}
-                  <span>{hiddenLabel}</span>
                 </button>
                 <button
                   type="button"

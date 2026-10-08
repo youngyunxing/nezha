@@ -1748,18 +1748,8 @@ function App() {
     });
   }
 
-  function handleToggleProjectHidden(projectId: string) {
-    setProjects((prev) => {
-      const next = prev.map((p) =>
-        p.id === projectId ? { ...p, hiddenFromRail: !p.hiddenFromRail } : p,
-      );
-      persistProjects(next, showToast, formatSaveProjectsError);
-      return next;
-    });
-  }
-
   // 拖拽结束时一次性提交新顺序;beforeId === null 表示拖到 visible 末尾。
-  // visibleIds 来自抽屉内按搜索词过滤后的顺序（含 hiddenFromRail 的项目），
+  // visibleIds 来自抽屉内按搜索词过滤后的顺序，
   // src/dst 必须在这个子集里算,否则会无声打乱隐藏项的相对位置。
   // 拖拽期间抽屉内部只用 transform 让位,不会调到这里,避免高频重渲染和写盘。
   const handleCommitProjectOrder = useCallback(
@@ -1923,7 +1913,6 @@ function App() {
               onSwitchProject={handleProjectClick}
               onCommitProjectOrder={handleCommitProjectOrder}
               onOpen={handleOpen}
-              onToggleProjectHidden={handleToggleProjectHidden}
               onUpdateProjectAvatar={handleUpdateProjectAvatar}
               onDeleteProject={handleDeleteProject}
               onRenameProject={handleRenameProject}
@@ -1970,7 +1959,6 @@ function App() {
             onSwitch={noop}
             onCommitProjectOrder={noop}
             onOpen={handleOpen}
-            onToggleProjectHidden={noop}
             onUpdateProjectAvatar={noop}
             onDelete={noop}
             onRenameProject={async () => ({ ok: false, error: "save_failed" })}

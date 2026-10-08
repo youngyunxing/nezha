@@ -47,7 +47,6 @@ export function ProjectDrawer({
   onSwitch,
   onCommitProjectOrder,
   onOpen,
-  onToggleProjectHidden,
   onUpdateProjectAvatar,
   onDelete,
   onRenameProject,
@@ -74,7 +73,6 @@ export function ProjectDrawer({
   onSwitch: (project: Project) => void;
   onCommitProjectOrder: (draggedId: string, beforeId: string | null, visibleIds: string[]) => void;
   onOpen: () => void;
-  onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDelete: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
@@ -113,14 +111,6 @@ export function ProjectDrawer({
       return prev?.projectId === projectId ? null : prev;
     });
   }, []);
-  const handleToggleHidden = useCallback(
-    (projectId: string) => {
-      setOpenPanel(null);
-      onToggleProjectHidden(projectId);
-    },
-    [onToggleProjectHidden],
-  );
-
   // 抽屉列出全部项目（含被设为非常驻的，用图钉标记区分），再按搜索词过滤。
   const railProjects = useMemo(
     () => projects.filter((p) => projectMatchesRailSearch(p, query)),
@@ -436,7 +426,6 @@ export function ProjectDrawer({
               onPointerDown={handleRailItemPointerDown}
               onClick={handleRailItemClick}
               onPanelChange={handlePanelChange}
-              onToggleHidden={handleToggleHidden}
               onUpdateAvatar={onUpdateProjectAvatar}
               onDelete={onDelete}
               onRename={onRenameProject}

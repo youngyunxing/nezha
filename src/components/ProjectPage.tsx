@@ -91,7 +91,6 @@ export function ProjectPage({
   onSwitchProject,
   onCommitProjectOrder,
   onOpen,
-  onToggleProjectHidden,
   onUpdateProjectAvatar,
   onDeleteProject,
   onRenameProject,
@@ -177,7 +176,6 @@ export function ProjectPage({
   onSwitchProject: (project: Project) => void;
   onCommitProjectOrder: (draggedId: string, beforeId: string | null, visibleIds: string[]) => void;
   onOpen: () => void;
-  onToggleProjectHidden: (projectId: string) => void;
   onUpdateProjectAvatar: (projectId: string, avatar: ProjectAvatarStyle | undefined) => void;
   onDeleteProject: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => Promise<ProjectRenameResult>;
@@ -354,7 +352,6 @@ export function ProjectPage({
         onSwitch={onSwitchProject}
         onCommitProjectOrder={onCommitProjectOrder}
         onOpen={onOpen}
-        onToggleProjectHidden={onToggleProjectHidden}
         onUpdateProjectAvatar={onUpdateProjectAvatar}
         onDelete={onDeleteProject}
         onRenameProject={onRenameProject}
