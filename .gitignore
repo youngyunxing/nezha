@@ -49,3 +49,6 @@ src-tauri/icons/64x64.png
 
 # 个人 fork 的工作笔记：只留本地，不推上游（README 里另有一段对外的改动说明）
 FORK.md
+
+# 扫 CLI 命令表用的小工具（同 FORK.md，只留本地）
+FORK-tools/
