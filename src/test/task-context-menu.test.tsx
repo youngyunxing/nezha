@@ -64,6 +64,13 @@ describe("任务列表行：收藏 / 删除改走右键菜单", () => {
     expect(props.onRenameSubmit).toHaveBeenCalledWith("修登录页");
   });
 
+  it("进入改名态时旧名字是全选中的（直接打字就能替换）", () => {
+    renderItem({ task: makeTask({ name: "旧名字" }), renaming: true });
+    const input = screen.getByPlaceholderText("修一下登录页的报错") as HTMLInputElement;
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("旧名字".length);
+  });
+
   it("改名中按 Esc 取消，不提交", () => {
     const props = renderItem({ renaming: true });
     const input = screen.getByPlaceholderText("修一下登录页的报错");

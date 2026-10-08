@@ -74,8 +74,12 @@ export const TaskListItem = memo(
     // Enter / Esc 已经处理过一次后，紧接着的 blur 不要再提交一遍。每次进入改名态重置，
     // 否则同一条任务第二次改名时（组件实例还留着）会被上次的 true 挡掉 blur 提交。
     const renameDoneRef = useRef(false);
+    const renameInputRef = useRef<HTMLInputElement | null>(null);
     useEffect(() => {
-      if (renaming) renameDoneRef.current = false;
+      if (!renaming) return;
+      renameDoneRef.current = false;
+      // 进去就全选：直接打字即替换，不用先手动删掉旧名字（跟文件树改名一致）
+      renameInputRef.current?.select();
     }, [renaming]);
     const displayTitle = task.name ?? task.prompt;
     const hintKey = statusHintKey(task.status, task.agent);
@@ -104,6 +108,7 @@ export const TaskListItem = memo(
         <div style={{ flex: 1, minWidth: 0 }}>
           {renaming ? (
             <input
+              ref={renameInputRef}
               style={s.taskItemRenameInput}
               defaultValue={task.name ?? ""}
               placeholder={task.prompt.slice(0, 60)}

@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, Palette, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
@@ -88,6 +88,12 @@ export const RailItem = memo(function RailItem({
   const [draftName, setDraftName] = useState(project.name);
   const [nameError, setNameError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 进入改名就全选：直接打字即替换（跟任务列表、文件树那边一致）
+  useEffect(() => {
+    if (editing) renameInputRef.current?.select();
+  }, [editing]);
 
   function cancelEditing() {
     setEditing(false);
@@ -167,6 +173,7 @@ export const RailItem = memo(function RailItem({
             >
               <div className="rail-drawer-rename-row">
                 <input
+                  ref={renameInputRef}
                   autoFocus
                   className="rail-drawer-rename-input"
                   value={draftName}
