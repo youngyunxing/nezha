@@ -226,6 +226,7 @@ pub fn run() {
             git::worktree_diff_stats,
             analytics::read_session_metrics,
             session::read_session_messages,
+            session::search_session_texts,
             session::list_local_claude_sessions,
             session::session_file_size,
             session::export_session_markdown,

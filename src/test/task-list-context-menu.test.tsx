@@ -1,11 +1,19 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const invokeMock = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}));
 import type { Task } from "../types";
 import { TaskList } from "../components/task-panel/TaskList";
 import { I18nProvider } from "../i18n";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  invokeMock.mockReset();
+});
 
 function makeTask(over: Partial<Task> = {}): Task {
   return {
@@ -158,6 +166,41 @@ describe("任务列表右键菜单与改名", () => {
     renderList({ renamingTaskId: "t2" });
     expect(screen.getByText("修一下登录页的报错")).toBeTruthy();
     expect(screen.queryByPlaceholderText("修一下登录页的报错")).toBeNull();
+  });
+});
+
+describe("任务搜索：会话正文（走后端）", () => {
+  it("名字和提示词都不命中、但会话正文命中时也显示", async () => {
+    invokeMock.mockResolvedValue(["/tmp/s.jsonl"]);
+    renderList({
+      tasks: [
+        makeTask({
+          name: "不相干的名字",
+          prompt: "不相干的提示词",
+          claudeSessionPath: "/tmp/s.jsonl",
+        }),
+      ],
+      query: "登录页",
+    });
+    // 搜索带 250ms 防抖，机器忙时别用默认的 1s 超时
+    await waitFor(() => expect(screen.getByText("不相干的名字")).toBeTruthy(), { timeout: 3000 });
+    expect(invokeMock).toHaveBeenCalledWith("search_session_texts", {
+      sessionPaths: ["/tmp/s.jsonl"],
+      query: "登录页",
+    });
+  });
+
+  it("后端说没命中就不显示，并给出「没有匹配的任务」", async () => {
+    invokeMock.mockResolvedValue([]);
+    renderList({ tasks: [makeTask({ name: "不相干的名字", prompt: "也不相干" })], query: "登录页" });
+    await waitFor(() => expect(screen.getByText("没有匹配的任务")).toBeTruthy(), { timeout: 3000 });
+    expect(screen.queryByText("不相干的名字")).toBeNull();
+  });
+
+  it("名字命中就立刻显示，不必等后端（本地同步匹配）", () => {
+    invokeMock.mockResolvedValue([]);
+    renderList({ tasks: [makeTask({ name: "登录页报错", prompt: "无关" })], query: "登录页" });
+    expect(screen.getByText("登录页报错")).toBeTruthy();
   });
 });
 

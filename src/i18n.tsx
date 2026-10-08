@@ -186,6 +186,8 @@ const translations: Record<string, string> = {
   "project.appearance.color.slate": "石板灰",
   "task.newTask": "新建任务",
   "task.searchTasks": "搜索任务...",
+  "task.searchingSessions": "正在搜索会话内容…",
+  "task.noMatchingTasks": "没有匹配的任务",
   "task.noTasksYet": "还没有任务",
   "localSession.groupTitle": "本地 Claude Code 会话",
   "localSession.badge": "本机记录",

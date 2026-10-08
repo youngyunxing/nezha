@@ -751,9 +751,8 @@ pub(crate) enum SessionContent {
     },
 }
 
-#[tauri::command]
-pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMessage>, String> {
-    let content = std::fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
+/// 解析会话正文（回放与全文搜索共用同一条路径 —— 搜索里能命中的，就是回放里能看到的）。
+fn parse_session_messages(content: &str) -> Vec<SessionMessage> {
     let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
     let mut messages = if is_kimi_format(&lines) {
         parse_kimi_session(&lines)
@@ -773,7 +772,112 @@ pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMe
         !message.content.is_empty()
     });
 
-    Ok(messages)
+    messages
+}
+
+#[tauri::command]
+pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMessage>, String> {
+    // 读全文件 + 解析是阻塞活，别压在异步运行时上
+    tokio::task::spawn_blocking(move || {
+        let content = std::fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
+        Ok(parse_session_messages(&content))
+    })
+    .await
+    .map_err(|e| format!("read_session_messages panicked: {e}"))?
+}
+
+// ── 会话全文搜索 ──────────────────────────────────────────────────────────────
+
+/// 搜索时最多读这么多字节的会话文件。几 MB 的会话已经很罕见，几百 MB 的（长跑 agent）不该
+/// 为了搜索整份读进内存 —— 超出部分搜不到，属于可接受的取舍。
+const MAX_SEARCH_BYTES: u64 = 16 * 1024 * 1024;
+/// 解析出来的正文缓存的总量上限，超了整个清空（简单粗暴，够用）。
+const MAX_SEARCH_CACHE_BYTES: usize = 48 * 1024 * 1024;
+
+/// path → (mtime, 小写正文)。搜索是"敲几个字就查一次"的频率，缓存让第二次之后不用再解析。
+static SESSION_TEXT_CACHE: std::sync::OnceLock<
+    parking_lot::Mutex<std::collections::HashMap<String, (u64, String)>>,
+> = std::sync::OnceLock::new();
+
+fn session_text_cache() -> &'static parking_lot::Mutex<std::collections::HashMap<String, (u64, String)>> {
+    SESSION_TEXT_CACHE.get_or_init(|| parking_lot::Mutex::new(std::collections::HashMap::new()))
+}
+
+fn file_mtime_ms(path: &Path) -> u64 {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// 读会话文件（最多 MAX_SEARCH_BYTES），返回「回放里能看到的」正文小写串。
+fn read_session_search_text(path: &str) -> Option<String> {
+    let p = Path::new(path);
+    let mtime = file_mtime_ms(p);
+    if let Some(cached) = session_text_cache().lock().get(path) {
+        if cached.0 == mtime {
+            return Some(cached.1.clone());
+        }
+    }
+
+    let mut buffer = Vec::new();
+    File::open(p)
+        .ok()?
+        .take(MAX_SEARCH_BYTES)
+        .read_to_end(&mut buffer)
+        .ok()?;
+    // 截断处可能停在半行上：丢掉最后一截，别让半个 JSON 影响解析（解析本身也会跳过坏行）
+    let text = String::from_utf8_lossy(&buffer);
+    let content = match text.rfind('\n') {
+        Some(idx) => &text[..idx],
+        None => text.as_ref(),
+    };
+    let messages = parse_session_messages(content);
+    let joined = messages
+        .iter()
+        .flat_map(|message| message.content.iter())
+        .filter_map(|part| match part {
+            SessionContent::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_lowercase();
+
+    let mut cache = session_text_cache().lock();
+    let total: usize = cache.values().map(|(_, text)| text.len()).sum();
+    if total + joined.len() > MAX_SEARCH_CACHE_BYTES {
+        cache.clear();
+    }
+    cache.insert(path.to_string(), (mtime, joined.clone()));
+    Some(joined)
+}
+
+/// 在若干会话文件里找 query（大小写不敏感），返回命中的会话文件路径。
+/// 一次调用扫一批（前端敲字时只发一条 IPC），整段跑在 spawn_blocking 里。
+#[tauri::command]
+pub async fn search_session_texts(
+    session_paths: Vec<String>,
+    query: String,
+) -> Result<Vec<String>, String> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() {
+        return Ok(Vec::new());
+    }
+    tokio::task::spawn_blocking(move || {
+        let mut hits = Vec::new();
+        for path in session_paths {
+            match read_session_search_text(&path) {
+                Some(text) if text.contains(&needle) => hits.push(path),
+                _ => {}
+            }
+        }
+        hits
+    })
+    .await
+    .map_err(|e| format!("search_session_texts panicked: {e}"))
 }
 
 fn is_codex_format(lines: &[&str]) -> bool {
@@ -2964,4 +3068,47 @@ mod kimi_parse_tests {
         assert_eq!(texts(&messages), vec![("user".to_string(), "还在".to_string())]);
     }
 
+    fn write_temp_session(name: &str, content: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, content).expect("写临时会话文件");
+        path
+    }
+
+    #[test]
+    fn session_search_text_covers_what_replay_shows() {
+        let path = write_temp_session(
+            "nezha-search-claude.jsonl",
+            concat!(
+                r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"帮我改一下登录页"}]}}"#,
+                "\n",
+                r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"好的，我先看 LOGIN 组件"}]}}"#,
+                "\n",
+                r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"bash","input":"SECRET-TOOL-INPUT"}]}}"#,
+                "\n",
+            ),
+        );
+        let text = read_session_search_text(path.to_str().unwrap()).expect("读得到正文");
+        assert!(text.contains("登录页"), "中文正文要能搜到");
+        assert!(text.contains("login"), "存的是小写，大小写不敏感");
+        assert!(
+            !text.contains("secret-tool-input"),
+            "工具调用不在回放里显示，也不该被搜到"
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn session_search_text_caches_by_mtime() {
+        let path = write_temp_session("nezha-search-cache.jsonl", r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"第一版内容"}]}}"#);
+        let path_str = path.to_str().unwrap().to_string();
+        assert!(read_session_search_text(&path_str).unwrap().contains("第一版内容"));
+
+        // 改写文件（mtime 变）后要重新解析
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::fs::write(&path, r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"第二版内容"}]}}"#).unwrap();
+        let again = read_session_search_text(&path_str).unwrap();
+        assert!(again.contains("第二版内容"), "改了文件要重解析");
+        assert!(!again.contains("第一版内容"));
+        std::fs::remove_file(&path).ok();
+    }
 }

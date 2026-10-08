@@ -3,6 +3,8 @@ import type { LocalClaudeSession, Task, TaskDisplayWindow } from "../../types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
 import { isVisibleTask } from "../../taskDeletion";
+import { useSessionSearch } from "../../hooks/useSessionSearch";
+import { taskSessionPath } from "../../types";
 import { LocalSessionRow } from "./LocalSessionRow";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
@@ -100,15 +102,23 @@ export function TaskList({
   // 删掉的任务（deleted 标记）不再出现在列表里，记录还在磁盘上
   const visibleTasks = useMemo(() => tasks.filter(isVisibleTask), [tasks]);
 
+  // 会话正文的搜索走后端（异步 + 防抖），名字 / 提示词 / 命令在本地同步匹配
+  const { matchedPaths, searching: searchingSessions } = useSessionSearch(visibleTasks, query);
+
   const filtered = useMemo(() => {
     if (!query.trim()) return visibleTasks;
     const q = query.toLowerCase();
-    // 搜「名字 + 任务自带文本（提示词）+ 命令」。只搜 prompt 时有两个坑：
-    // 改过名的任务按新名字搜不到；快捷指令建的任务 prompt 是空的，等于搜索里不存在。
-    return visibleTasks.filter((t) =>
-      [t.name, t.prompt, t.command].some((value) => value?.toLowerCase().includes(q)),
-    );
-  }, [visibleTasks, query]);
+    return visibleTasks.filter((task) => {
+      // 名字 / 任务自带文本（提示词）/ 命令：只搜 prompt 时有两个坑 —— 改过名的任务按新名字
+      // 搜不到；快捷指令建的任务 prompt 是空的，等于搜索里不存在。
+      if ([task.name, task.prompt, task.command].some((value) => value?.toLowerCase().includes(q))) {
+        return true;
+      }
+      // 会话正文（回放里能看到的那些消息）
+      const sessionPath = taskSessionPath(task);
+      return !!sessionPath && matchedPaths.has(sessionPath);
+    });
+  }, [visibleTasks, query, matchedPaths]);
 
   const filteredLocalSessions = useMemo(() => {
     if (!query.trim()) return localSessions;
@@ -266,6 +276,11 @@ export function TaskList({
       <div ref={scrollRef} style={s.taskListScroll} onScroll={handleScroll}>
         {visibleTasks.length === 0 && localSessions.length === 0 && (
           <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>
+        )}
+        {query.trim() !== "" && filtered.length === 0 && filteredLocalSessions.length === 0 && (
+          <div style={s.taskListEmpty}>
+            {searchingSessions ? t("task.searchingSessions") : t("task.noMatchingTasks")}
+          </div>
         )}
         <div style={{ height: totalHeight, position: "relative" }}>
           {visibleRows.map((row, visibleIndex) => {
