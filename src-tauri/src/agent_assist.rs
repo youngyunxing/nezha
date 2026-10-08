@@ -64,6 +64,59 @@ async fn read_pipe_to_end<R: AsyncRead + Unpin>(
 
 /// 异步启动命名 agent 子进程。超时后通过 `start_kill()` 终止子进程，
 /// 避免阻塞线程和后台 agent 持续运行（M-2 修复）。
+/// 一次性调用各 agent 的参数（提示词直接当参数传，不走 stdin）。
+///
+/// - claude：`-p` + 只读（plan 模式 + 关掉工具）+ 不落会话文件；
+/// - codex：`exec` + read-only 沙箱 + `--ephemeral`（同样不落会话）；
+/// - kimi：只有 `-p` + `--output-format text` —— 它**没有**对应的只读开关（`-p` 与 `--plan`
+///   互斥，实测会报 "Cannot combine --prompt with --plan"），实测 `-p` 模式不会自己跑工具，
+///   只按提示词作答；副作用是每次会在 `~/.kimi-code/sessions/` 落一个小会话（界面上看不到）。
+fn assist_agent_args(agent: &str, prompt: &str) -> Vec<String> {
+    if agent == "codex" {
+        vec![
+            "exec".into(),
+            "--sandbox".into(),
+            "read-only".into(),
+            "--ephemeral".into(),
+            "-c".into(),
+            "approval_policy=\"never\"".into(),
+            prompt.into(),
+        ]
+    } else if agent == "kimi" {
+        vec!["-p".into(), prompt.into(), "--output-format".into(), "text".into()]
+    } else {
+        vec![
+            "-p".into(),
+            prompt.into(),
+            "--output-format".into(),
+            "text".into(),
+            "--permission-mode".into(),
+            "plan".into(),
+            "--tools".into(),
+            "".into(),
+            "--no-session-persistence".into(),
+        ]
+    }
+}
+
+/// kimi 的 `-p` 会在正文外面多打几行：开头 `kimi version 2.1.1` 横幅、结尾
+/// `To resume this session: kimi -r session_…`。两个命令都有「拿不到标签就整段原样当答案」
+/// 的兜底，会把这几行一起当成标题/摘要，所以先摘掉。
+fn strip_assist_noise(agent: &str, raw: &str) -> String {
+    if agent != "kimi" {
+        return raw.to_string();
+    }
+    raw.lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.starts_with("kimi version ") && !trimmed.starts_with("To resume this session:")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 async fn run_assist_agent_with_timeout(
     agent: &str,
     project_path: &str,
@@ -74,29 +127,7 @@ async fn run_assist_agent_with_timeout(
     let login_env: Vec<(String, String)> = crate::app_settings::get_login_shell_env().to_vec();
 
     let mut cmd = tokio::process::Command::new(&launch.program);
-    if agent == "codex" {
-        cmd.args([
-            "exec",
-            "--sandbox",
-            "read-only",
-            "--ephemeral",
-            "-c",
-            "approval_policy=\"never\"",
-            prompt,
-        ]);
-    } else {
-        cmd.args([
-            "-p",
-            prompt,
-            "--output-format",
-            "text",
-            "--permission-mode",
-            "plan",
-            "--tools",
-            "",
-            "--no-session-persistence",
-        ]);
-    }
+    cmd.args(assist_agent_args(agent, prompt));
     cmd.current_dir(project_path);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
@@ -302,7 +333,7 @@ pub async fn generate_task_name(
     session_path: Option<String>,
     original_prompt: String,
 ) -> Result<String, String> {
-    if !matches!(agent.as_str(), "claude" | "codex") {
+    if !matches!(agent.as_str(), "claude" | "codex" | "kimi") {
         return Err(format!("Unsupported agent: {}", agent));
     }
     let is_codex = agent == "codex";
@@ -347,7 +378,7 @@ pub async fn generate_task_name(
         return Err(format!("Agent failed: {}{}", stderr, stdout));
     }
 
-    let raw = String::from_utf8_lossy(&output.stdout).into_owned();
+    let raw = strip_assist_noise(&agent, &String::from_utf8_lossy(&output.stdout));
     // Codex 只接受最后一个 `codex` 输出段里的 <TITLE>，避免命中 prompt 回显里的示例；
     // 未命中再回退到 banner 过滤。
     let answer = if is_codex {
@@ -366,6 +397,33 @@ pub async fn generate_task_name(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assist_args_per_agent() {
+        let kimi = assist_agent_args("kimi", "写个摘要");
+        assert_eq!(kimi, vec!["-p", "写个摘要", "--output-format", "text"]);
+        // kimi 没有 claude 那套只读开关，绝不能把 claude 的参数漏给它（CLI 会报未知选项）
+        assert!(!kimi.iter().any(|arg| arg == "--permission-mode" || arg == "--tools"));
+
+        let claude = assist_agent_args("claude", "写个摘要");
+        assert!(claude.contains(&"--permission-mode".to_string()));
+        assert!(claude.contains(&"--no-session-persistence".to_string()));
+
+        let codex = assist_agent_args("codex", "写个摘要");
+        assert_eq!(codex[0], "exec");
+        assert!(codex.contains(&"read-only".to_string()));
+    }
+
+    #[test]
+    fn strips_kimi_cli_noise() {
+        let raw = "kimi version 2.1.1\n<SUMMARY>\n1) 目标：修登录\n</SUMMARY>\nTo resume this session: kimi -r session_abc";
+        let cleaned = strip_assist_noise("kimi", raw);
+        assert!(!cleaned.contains("kimi version"));
+        assert!(!cleaned.contains("To resume this session"));
+        assert!(cleaned.contains("<SUMMARY>"));
+        // 别的 agent 的输出原样返回
+        assert_eq!(strip_assist_noise("claude", raw), raw);
+    }
 
     #[test]
     fn extracts_titled_answer_from_wrapped_output() {
@@ -496,7 +554,7 @@ pub async fn compress_session_context(
     agent: String,
     session_path: Option<String>,
 ) -> Result<String, String> {
-    if !matches!(agent.as_str(), "claude" | "codex") {
+    if !matches!(agent.as_str(), "claude" | "codex" | "kimi") {
         return Err(format!("Unsupported agent: {}", agent));
     }
 
@@ -534,7 +592,7 @@ pub async fn compress_session_context(
         ));
     }
 
-    let raw = String::from_utf8_lossy(&output.stdout).into_owned();
+    let raw = strip_assist_noise(&agent, &String::from_utf8_lossy(&output.stdout));
     extract_summary_answer(&raw)
         .or_else(|| {
             let trimmed = raw.trim();

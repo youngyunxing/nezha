@@ -6,6 +6,8 @@ import s from "../../styles";
 import type { AgentType } from "../../types";
 import { SelectField } from "../new-task/NewTaskDialog";
 import { loadHandoffCount, saveHandoffCount } from "../../quickInputs";
+import { Moon } from "lucide-react";
+import type React from "react";
 import claudeLogo from "../../assets/claude.svg";
 import chatgptLogo from "../../assets/chatgpt.svg";
 
@@ -21,6 +23,26 @@ export interface HandoffOptions {
 }
 
 
+
+/** 流转的目标 agent。kimi 之前漏了 —— 数据链路（HandoffOptions.agent 的类型、
+ *  建任务、会话回放）本来就认它，只是这个列表和 agent_assist 的 guard 写在 kimi 支持之前。 */
+export const handoffTargets: Array<{ value: string; label: string; icon?: React.ReactNode }> = [
+  {
+    value: "claude",
+    label: "Claude Code",
+    icon: <img src={claudeLogo} style={{ width: 13, height: 13 }} />,
+  },
+  {
+    value: "codex",
+    label: "Codex",
+    icon: <img src={chatgptLogo} style={{ width: 13, height: 13 }} />,
+  },
+  {
+    value: "kimi",
+    label: "Kimi",
+    icon: <Moon size={13} strokeWidth={2} color="var(--text-muted)" />,
+  },
+];
 
 /**
  * 流转：把当前会话的上下文交给另一个 agent 接着做（比如 Claude Code → Codex）。
@@ -87,18 +109,7 @@ export function FlowHandoff({
             <SelectField
               value={agent}
               label={t("handoff.target")}
-              options={[
-                {
-                  value: "claude",
-                  label: "Claude Code",
-                  icon: <img src={claudeLogo} style={{ width: 13, height: 13 }} />,
-                },
-                {
-                  value: "codex",
-                  label: "Codex",
-                  icon: <img src={chatgptLogo} style={{ width: 13, height: 13 }} />,
-                },
-              ]}
+              options={handoffTargets}
               onChange={(value) => setAgent(value as AgentType)}
             />
           </div>
