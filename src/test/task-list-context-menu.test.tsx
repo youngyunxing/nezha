@@ -160,3 +160,38 @@ describe("任务列表右键菜单与改名", () => {
     expect(screen.queryByPlaceholderText("修一下登录页的报错")).toBeNull();
   });
 });
+
+describe("任务搜索匹配哪些字段", () => {
+  it("按名字搜得到（改过名的任务）", () => {
+    renderList({
+      tasks: [makeTask({ name: "登录页报错", prompt: "完全不相关的提示词" })],
+      query: "登录页",
+    });
+    expect(screen.getByText("登录页报错")).toBeTruthy();
+  });
+
+  it("按提示词搜得到（老行为没丢）", () => {
+    renderList({ tasks: [makeTask({ name: "别的名字", prompt: "修一下登录页的报错" })], query: "登录页" });
+    expect(screen.getByText("别的名字")).toBeTruthy();
+  });
+
+  it("按命令搜得到（纯终端任务）", () => {
+    renderList({
+      tasks: [
+        makeTask({ name: "terminal-1", prompt: "", agent: "shell", command: "pnpm dev" }),
+      ],
+      query: "pnpm",
+    });
+    expect(screen.getByText("terminal-1")).toBeTruthy();
+  });
+
+  it("快捷指令建的任务（prompt 为空）也能靠名字搜到", () => {
+    renderList({ tasks: [makeTask({ name: "claude-123", prompt: "" })], query: "claude-123" });
+    expect(screen.getByText("claude-123")).toBeTruthy();
+  });
+
+  it("都不匹配就不显示", () => {
+    renderList({ tasks: [makeTask({ name: "甲", prompt: "乙", command: "丙" })], query: "丁" });
+    expect(screen.queryByText("甲")).toBeNull();
+  });
+});

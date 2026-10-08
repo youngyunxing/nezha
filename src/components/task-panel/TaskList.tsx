@@ -103,7 +103,11 @@ export function TaskList({
   const filtered = useMemo(() => {
     if (!query.trim()) return visibleTasks;
     const q = query.toLowerCase();
-    return visibleTasks.filter((t) => t.prompt.toLowerCase().includes(q));
+    // 搜「名字 + 任务自带文本（提示词）+ 命令」。只搜 prompt 时有两个坑：
+    // 改过名的任务按新名字搜不到；快捷指令建的任务 prompt 是空的，等于搜索里不存在。
+    return visibleTasks.filter((t) =>
+      [t.name, t.prompt, t.command].some((value) => value?.toLowerCase().includes(q)),
+    );
   }, [visibleTasks, query]);
 
   const filteredLocalSessions = useMemo(() => {
