@@ -56,6 +56,7 @@ import type {
   FontFamily,
   ThemeVariant,
 } from "../types";
+import { effectiveTerminalScrollback } from "../types";
 import { slashCommandsFor } from "../slashCommands";
 import {
   detectSlashHint,
@@ -180,9 +181,11 @@ export function TerminalView({
     if (!containerRef.current) return;
     const container = containerRef.current;
 
+    // agent 任务用带下限的回滚（见 types.ts 的说明）—— 用户的 1000 行装不下长会话，
+    // 往上滚只剩最后一截。纯终端任务照旧听用户的。
     const { term, fitAddon, whenFontsReady } = initTerminal(
       themeVariant,
-      terminalScrollback,
+      effectiveTerminalScrollback(agentRef.current, terminalScrollback),
       terminalFontSize,
       monoFontFamily,
     );

@@ -93,6 +93,28 @@ export const TERMINAL_SCROLLBACK_MAX = 5000;
 export const TERMINAL_SCROLLBACK_STEP = 500;
 export const DEFAULT_TERMINAL_SCROLLBACK: TerminalScrollback = 1000;
 
+/**
+ * agent 终端的回滚下限。
+ *
+ * 用户的设置上限只有 5000，而一段长会话的终端输出动辄上万行 —— 往上滚只能看到最后
+ * 一小截（用户原话：「拉到最顶部只有一部分」）。xterm **只能往后追加、不能往前插**，
+ * 所以「滑到顶部再补一段」做不到；唯一能保证的是**别丢**。
+ *
+ * 为什么不是把设置上限调大：那个设置对纯终端（shell）任务也生效，而长驻 shell 的
+ * 回滚大没有收益（见 i18n 里 3000 行以上的告警）。代价又是按**实际内容**付的 ——
+ * 短会话的终端一个字节都不多占，所以给 agent 任务一条下限是安全的一侧。
+ * 真把 2 万行填满的终端 ≈ 几十 MB，属于可接受（同任务的应用层缓冲本来就允许 10MB）。
+ */
+export const AGENT_TERMINAL_SCROLLBACK_FLOOR = 20_000;
+
+/** 某个 agent 的终端该用多大的回滚：agent 任务有下限，纯终端听用户的。 */
+export function effectiveTerminalScrollback(
+  agent: AgentType,
+  userValue: TerminalScrollback,
+): number {
+  return agent === "shell" ? userValue : Math.max(userValue, AGENT_TERMINAL_SCROLLBACK_FLOOR);
+}
+
 export function clampTerminalScrollback(value: unknown): TerminalScrollback {
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num)) return DEFAULT_TERMINAL_SCROLLBACK;

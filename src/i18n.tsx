@@ -51,7 +51,7 @@ const translations: Record<string, string> = {
   "appSettings.terminalScrollback": "终端滚动缓冲",
   "appSettings.terminalScrollbackUnit": "行",
   "appSettings.terminalScrollbackHint":
-    "每个任务终端最多保留的回滚行数,超出后旧行被丢弃。范围:500–5000,步长 500。仅对新打开的终端生效。",
+    "每个任务终端最多保留的回滚行数,超出后旧行被丢弃。范围:500–5000,步长 500。仅对新打开的终端生效。agent 任务另有 20000 行的下限(长会话的历史不该被截)。",
   "appSettings.terminalScrollbackWarning":
     "3000 行以上,内存与选区/复制耗时明显增加,多任务并发可能卡顿。",
   "appSettings.copyOnSelect": "框选自动复制",
