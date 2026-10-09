@@ -222,7 +222,9 @@ export const terminal = {
   /* 斜杠命令提示条：位置由 JS 算出来（浮在光标那一行的上一行，见 slashHint.ts
      的 hintBottomOffset），这里的 left/bottom 只是量不出光标时的兜底 ——
      bottom: 4 落到终端最底下那行、和右下角那排按钮同一条线。
-     单行不换行 —— 多行会往终端里顶，盖住更多内容。 */
+
+     说明文字**不截断**，一行放不下就换行往下长（往上是光标，长不过去）。
+     所以它是块面板而不是胶囊：圆角收小、允许 flex-wrap。 */
   slashHintBar: {
     position: "absolute" as const,
     /* 锚点是 TerminalView 里铺满终端容器内容盒的那层壳，而容器自己有 10px 的
@@ -231,17 +233,18 @@ export const terminal = {
     bottom: 4,
     zIndex: 5,
     display: "flex",
+    flexWrap: "wrap" as const,
     alignItems: "center",
-    gap: 8,
-    maxWidth: "min(620px, calc(100% - 420px))",
+    columnGap: 10,
+    rowGap: 3,
+    maxWidth: "calc(100% - 30px)",
     padding: "5px 10px",
-    borderRadius: 999,
+    borderRadius: 10,
     border: "1px solid var(--border-medium)",
     background: "var(--bg-card)",
     boxShadow: "0 2px 10px rgba(0, 0, 0, 0.16)",
     fontSize: 12,
     lineHeight: 1.4,
-    whiteSpace: "nowrap" as const,
     overflow: "hidden",
   },
   slashHintToken: {
@@ -258,8 +261,8 @@ export const terminal = {
   slashHintDesc: {
     minWidth: 0,
     color: "var(--text-secondary)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+    /* 中文没有空格，靠默认的断行规则逐字断；整条不裁字，放不下就换行 */
+    wordBreak: "break-word" as const,
   },
   slashHintItem: {
     display: "flex",
@@ -268,6 +271,8 @@ export const terminal = {
     minWidth: 0,
     paddingLeft: 8,
     borderLeft: "1px solid var(--border-dim)",
+    /* 一条候选自己也要能换行：说明长的时候不能撑着整条不换 */
+    flexWrap: "wrap" as const,
   },
   sessionCornerActions: {
     position: "absolute" as const,

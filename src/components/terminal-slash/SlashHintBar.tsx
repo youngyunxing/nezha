@@ -1,17 +1,11 @@
 import s from "../../styles";
 import type { SlashHintMatch } from "../../slashHint";
 
-/** 列表模式里每条的说明只留这么长 —— 一行塞四条，长了就撑爆提示条 */
-const LIST_DESC_CHARS = 10;
-
-function shortDesc(zh: string): string {
-  return zh.length > LIST_DESC_CHARS ? `${zh.slice(0, LIST_DESC_CHARS)}…` : zh;
-}
-
 /**
  * 终端底部那条斜杠命令提示。
  *
  * 位置跟着光标走（浮在光标所在行的上一行），所以在哪儿打字都看得见。
+ * 说明文字不截断，一行放不下就换行 —— 宁可长高，不要看不全。
  * 纯展示，**不接管键盘、不做自动补全** —— CLI 自己有补全菜单，两边一起改输入会把
  * 用户敲的字搞乱。这里只回答「这个命令是干什么的 / 怎么用」。
  * 命令名敲全了给「用法 + 说明」，还差几个字母就给候选的名字 + 一句话。
@@ -41,7 +35,7 @@ export function SlashHintBar({
         hint.suggestions.map((c) => (
           <span key={c.name} style={s.slashHintItem}>
             <code style={s.slashHintCmd}>/{c.name}</code>
-            <span style={s.slashHintDesc}>{shortDesc(c.zh)}</span>
+            <span style={s.slashHintDesc}>{c.zh}</span>
           </span>
         ))
       )}
