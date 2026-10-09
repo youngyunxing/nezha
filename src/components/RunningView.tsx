@@ -109,6 +109,7 @@ export function RunningView({
   onRegisterTerminal,
   onTerminalReady,
   onSnapshot,
+  sessionPane = "terminal",
   getRestoreState,
   themeVariant,
   terminalFontSize,
@@ -143,6 +144,8 @@ export function RunningView({
   onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
   onTerminalReady: (generation: number) => void;
   onSnapshot?: (snapshot: string) => void;
+  /** 会话标签看终端还是会话记录（活着的任务也能切）。 */
+  sessionPane?: "terminal" | "record";
   getRestoreState?: () => { initialData?: string; initialSnapshot?: string };
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
@@ -410,8 +413,11 @@ export function RunningView({
 
   // 终端面板抽成变量：正常运行要用，纯终端任务在「异常中断」态也要用它显示上次屏幕
   // （否则重启后只剩一条横幅 +「没有会话记录」，看不到记录）。
+  // 看会话记录时终端不能卸载 —— 卸载会 dispose xterm、把 PTY 尺寸重置，切回来还得重排。
+  // 用 display:none 藏起来，跟「被文件查看器盖住的面板」是同一条路径（safeFit 有 0 尺寸守卫）。
+  const showingRecord = sessionPane === "record" && isActive && Boolean(sessionPath);
   const terminalPane = (
-    <div style={s.terminalContainer}>
+    <div style={{ ...s.terminalContainer, ...(showingRecord ? { display: "none" } : null) }}>
       <TerminalView
         key={`${task.id}-${runCount}`}
         agent={task.agent}
@@ -425,7 +431,7 @@ export function RunningView({
         terminalFontSize={terminalFontSize}
         terminalScrollback={terminalScrollback}
         monoFontFamily={monoFontFamily}
-        isActive={visible}
+        isActive={visible && !showingRecord}
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
@@ -647,6 +653,11 @@ export function RunningView({
               {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
             </div>
           )}
+        </div>
+      ) : showingRecord && sessionPath ? (
+        <div style={s.sessionPaneWrap}>
+          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          {cornerActions}
         </div>
       ) : isActive || !sessionPath ? (
         terminalPane

@@ -97,6 +97,24 @@ describe("主区域标签：打开文件是新增标签，不覆盖会话", () =
 });
 
 describe("MainTabBar", () => {
+  it("会话标签上的「终端 / 会话记录」开关", () => {
+    // 没传 sessionPane 就不该出现（没有会话可看、或当前不在会话标签上）
+    renderBar();
+    expect(screen.queryByText("会话记录")).toBeNull();
+
+    cleanup();
+    const onToggle = vi.fn();
+    // 正在看终端 → 按钮写「会话记录」，点了切过去
+    renderBar({ sessionPane: { record: false, onToggle } });
+    fireEvent.click(screen.getByText("会话记录"));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    // 正在看记录 → 按钮写「终端」
+    renderBar({ sessionPane: { record: true, onToggle } });
+    expect(screen.getByText("终端")).toBeTruthy();
+  });
+
   function renderBar(overrides: Partial<Parameters<typeof MainTabBar>[0]> = {}) {
     const handlers = {
       onSelectSession: vi.fn(),

@@ -8,6 +8,8 @@ import {
 } from "../mainTabs";
 
 type RightPanel = "files" | "git-changes" | "git-history" | null;
+/** 会话标签里看的是哪个：终端（要打字）还是会话记录（完整回放）。 */
+export type SessionPane = "terminal" | "record";
 type OpenFileTab = { path: string; name: string };
 
 /** 主区域当前显示哪一类内容。
@@ -37,6 +39,13 @@ export function useProjectPanels(options?: {
   });
   const [openDiff, setOpenDiff] = useState<OpenDiff | null>(null);
   const [mainView, setMainView] = useState<MainView>("session");
+  // 活着的任务默认给终端 —— 你要打字。想看完整对话时切到记录：终端的滚动只有
+  // terminal_scrollback 那么长，长会话根本翻不到头，而记录是整份 JSONL 回放。
+  // 这是纯 UI 状态，不落盘（重启回终端）。
+  const [sessionPane, setSessionPane] = useState<SessionPane>("terminal");
+  const toggleSessionPane = useCallback(() => {
+    setSessionPane((prev) => (prev === "terminal" ? "record" : "terminal"));
+  }, []);
   // 每个文件自己的 markdown 预览开关（缺省按文件类型走：md 默认预览）。
   const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});
   // 标签颜色：只存用户手挑过的，自动配色按 key 现算（见 mainTabs.ts）
@@ -228,6 +237,8 @@ export function useProjectPanels(options?: {
     showSessionView,
     togglePreviewMode,
     handleRightResizeStart,
+    sessionPane,
+    toggleSessionPane,
   };
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Eye, FileDiff, MoreHorizontal, PencilLine, SquareTerminal, X } from "lucide-react";
+import { Eye, FileDiff, History, MoreHorizontal, PencilLine, SquareTerminal, X } from "lucide-react";
 import type { OpenFileTab } from "../../hooks/useProjectPanels";
 import type { ProjectAvatarColor } from "../../types";
 import { fileTabKey, type MainTabKey } from "../../mainTabs";
@@ -26,6 +26,7 @@ export function MainTabBar({
   diffLabel,
   onCloseDiff,
   markdown,
+  sessionPane,
   onSessionContextMenu,
   colors,
   sessionColorKey,
@@ -46,6 +47,8 @@ export function MainTabBar({
   onCloseDiff: () => void;
   /** 当前文件是 markdown 时，右侧给一个编辑 / 预览开关。 */
   markdown: { previewOn: boolean; onToggle: () => void } | null;
+  /** 会话标签右侧的「终端 / 会话记录」开关；没会话可看时不传。 */
+  sessionPane?: { record: boolean; onToggle: () => void } | null;
   /** 会话标签上的右键：弹任务操作（重命名 / 收藏 / 删除）。没有会话时不传。 */
   onSessionContextMenu?: (event: React.MouseEvent) => void;
   /** 配色键 → 色板 key（见 mainTabs.ts 的 resolveTabColors） */
@@ -164,6 +167,12 @@ export function MainTabBar({
       </div>
 
       <div style={s.mainTabActions}>
+        {sessionPane && (
+          <button className="main-tab-preview-btn" onClick={sessionPane.onToggle}>
+            {sessionPane.record ? <SquareTerminal size={13} /> : <History size={13} />}
+            {sessionPane.record ? t("session.terminal") : t("session.record")}
+          </button>
+        )}
         {markdown && (
           <button className="main-tab-preview-btn" onClick={markdown.onToggle}>
             {markdown.previewOn ? <PencilLine size={13} /> : <Eye size={13} />}

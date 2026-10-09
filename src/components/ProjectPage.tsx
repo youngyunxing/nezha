@@ -13,6 +13,7 @@ import type {
   FontFamily,
   LocalClaudeSession,
 } from "../types";
+import { taskSessionPath } from "../types";
 import type { AttentionSeenMap } from "../attentionSeen";
 import type { TaskPreset } from "../taskPresets";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
@@ -226,6 +227,8 @@ export function ProjectPage({
     tabColors,
     setTabColor,
     handleRightResizeStart,
+    sessionPane,
+    toggleSessionPane,
   } = useProjectPanels({ sessionColorKey });
 
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
@@ -417,6 +420,11 @@ export function ProjectPage({
                   }
                 : null
             }
+            sessionPane={
+              mainTabKey === "session" && selectedTask && taskSessionPath(selectedTask)
+                ? { record: sessionPane === "record", onToggle: toggleSessionPane }
+                : null
+            }
             colors={tabColors}
             sessionColorKey={sessionColorKey}
             onPickColor={setTabColor}
@@ -541,6 +549,7 @@ export function ProjectPage({
                   onResize={(cols, rows) => onResize(task.id, cols, rows)}
                   onRegisterTerminal={(fn) => onRegisterTerminal(task.id, fn)}
                   onTerminalReady={(generation) => onTerminalReady(task.id, generation)}
+                  sessionPane={selectedTaskId === task.id ? sessionPane : "terminal"}
                   onSnapshot={(snapshot) => onSnapshot(task.id, snapshot)}
                   getRestoreState={() => getTaskRestoreState(task.id)}
                   themeVariant={themeVariant}
