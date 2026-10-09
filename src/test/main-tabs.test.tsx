@@ -97,22 +97,20 @@ describe("主区域标签：打开文件是新增标签，不覆盖会话", () =
 });
 
 describe("MainTabBar", () => {
-  it("会话标签上的「终端 / 会话记录」开关", () => {
-    // 没传 sessionPane 就不该出现（没有会话可看、或当前不在会话标签上）
+  it("会话记录标签：开了才出现，能切能关", () => {
+    // 默认没有这个标签
     renderBar();
     expect(screen.queryByText("会话记录")).toBeNull();
 
     cleanup();
-    const onToggle = vi.fn();
-    // 正在看终端 → 按钮写「会话记录」，点了切过去
-    renderBar({ sessionPane: { record: false, onToggle } });
-    fireEvent.click(screen.getByText("会话记录"));
-    expect(onToggle).toHaveBeenCalledTimes(1);
-
-    cleanup();
-    // 正在看记录 → 按钮写「终端」
-    renderBar({ sessionPane: { record: true, onToggle } });
-    expect(screen.getByText("终端")).toBeTruthy();
+    const onSelectRecord = vi.fn();
+    const onCloseRecord = vi.fn();
+    renderBar({ recordOpen: true, onSelectRecord, onCloseRecord });
+    // 排在会话标签后面、文件标签前面，且带关闭按钮
+    fireEvent.click(screen.getByTitle("会话记录"));
+    expect(onSelectRecord).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByLabelText("关闭 会话记录"));
+    expect(onCloseRecord).toHaveBeenCalledTimes(1);
   });
 
   function renderBar(overrides: Partial<Parameters<typeof MainTabBar>[0]> = {}) {
@@ -135,6 +133,9 @@ describe("MainTabBar", () => {
       activeKey: "session" as const,
       diffLabel: null,
       markdown: null,
+      recordOpen: false,
+      onSelectRecord: vi.fn(),
+      onCloseRecord: vi.fn(),
       colors: {} as Record<string, never>,
       sessionColorKey: null,
       onPickColor: vi.fn(),
@@ -235,6 +236,9 @@ describe("MainTabBar", () => {
           sessionLabel="跑个任务"
           files={[{ path: "/p/a.ts", name: "a.ts" }]}
           activeKey={fileTabKey("/p/a.ts")}
+          recordOpen={false}
+          onSelectRecord={vi.fn()}
+          onCloseRecord={vi.fn()}
           onSelectSession={vi.fn()}
           onSelectFile={vi.fn()}
           onCloseFile={vi.fn()}
@@ -259,6 +263,9 @@ describe("MainTabBar", () => {
           sessionLabel="跑个任务"
           files={[{ path: "/p/b.md", name: "b.md" }]}
           activeKey={fileTabKey("/p/b.md")}
+          recordOpen={false}
+          onSelectRecord={vi.fn()}
+          onCloseRecord={vi.fn()}
           onSelectSession={vi.fn()}
           onSelectFile={vi.fn()}
           onCloseFile={vi.fn()}

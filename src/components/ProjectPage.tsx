@@ -31,10 +31,12 @@ import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { MainTabBar } from "./main-tabs/MainTabBar";
+import { SessionView } from "./SessionView";
 import {
   fileTabKey,
   localSessionTabColorKey,
   taskTabColorKey,
+  SESSION_RECORD_TAB_KEY,
   type MainTabKey,
 } from "../mainTabs";
 import { TaskContextMenu } from "./task-panel/TaskContextMenu";
@@ -227,8 +229,10 @@ export function ProjectPage({
     tabColors,
     setTabColor,
     handleRightResizeStart,
-    sessionPane,
-    toggleSessionPane,
+    showingRecord,
+    recordOpen,
+    openRecord,
+    closeRecord,
   } = useProjectPanels({ sessionColorKey });
 
   const [mountedTaskIds, setMountedTaskIds] = useState<Set<string>>(() => new Set());
@@ -333,12 +337,19 @@ export function ProjectPage({
         ? t("task.newTask")
         : null;
   const activeFileTab = openFiles.find((tab) => tab.path === activeFilePath) ?? null;
+  // 记录标签读的是当前选中任务的会话文件。**没有会话的任务不该有这个标签** ——
+  // 否则切到这种任务时，终端被 showingRecord 藏起来、记录又渲染不出来，主区域就白了。
+  const recordSessionPath = selectedTask ? taskSessionPath(selectedTask) : undefined;
+  const recordTabOpen = recordOpen && Boolean(recordSessionPath);
+  const showingRecordTab = showingRecord && Boolean(recordSessionPath);
   // 会话是一号标签，文件挨着它往后排，diff 作为覆盖层占最后一个标签。
   const mainTabKey: MainTabKey | null = openDiff
     ? "diff"
     : showingFile && activeFilePath
       ? fileTabKey(activeFilePath)
-      : "session";
+      : showingRecordTab
+        ? SESSION_RECORD_TAB_KEY
+        : "session";
   const diffTabLabel = openDiff
     ? openDiff.kind === "commit"
       ? openDiff.message
@@ -420,11 +431,9 @@ export function ProjectPage({
                   }
                 : null
             }
-            sessionPane={
-              mainTabKey === "session" && selectedTask && taskSessionPath(selectedTask)
-                ? { record: sessionPane === "record", onToggle: toggleSessionPane }
-                : null
-            }
+            recordOpen={recordTabOpen}
+            onSelectRecord={openRecord}
+            onCloseRecord={closeRecord}
             colors={tabColors}
             sessionColorKey={sessionColorKey}
             onPickColor={setTabColor}
@@ -504,6 +513,11 @@ export function ProjectPage({
                 themeVariant={themeVariant}
                 previewModes={previewModes}
               />
+            ) : showingRecordTab && recordSessionPath ? (
+              /* 会话记录标签：读当前任务的 JSONL 全量回放（工具调用不显示，只留对话） */
+              <div style={s.sessionPaneWrap}>
+                <SessionView sessionPath={recordSessionPath} themeVariant={themeVariant} />
+              </div>
             ) : localSession ? (
               <LocalSessionView
                 session={localSession}
@@ -519,6 +533,7 @@ export function ProjectPage({
             .map((task) => {
               const isVisible =
                 !showingFile &&
+                !showingRecordTab &&
                 !openDiff &&
                 !isNewTask &&
                 !localSession &&
@@ -549,7 +564,7 @@ export function ProjectPage({
                   onResize={(cols, rows) => onResize(task.id, cols, rows)}
                   onRegisterTerminal={(fn) => onRegisterTerminal(task.id, fn)}
                   onTerminalReady={(generation) => onTerminalReady(task.id, generation)}
-                  sessionPane={selectedTaskId === task.id ? sessionPane : "terminal"}
+                  onOpenRecord={openRecord}
                   onSnapshot={(snapshot) => onSnapshot(task.id, snapshot)}
                   getRestoreState={() => getTaskRestoreState(task.id)}
                   themeVariant={themeVariant}

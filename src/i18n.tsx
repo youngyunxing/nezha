@@ -338,7 +338,7 @@ const translations: Record<string, string> = {
   "file.outline": "目录",
   "file.closeTab": "关闭 {name}",
   "session.record": "会话记录",
-  "session.terminal": "终端",
+  "session.closeRecord": "关闭 会话记录",
   "file.closeThisTab": "关闭",
   "file.closeOtherTabs": "关闭其他标签页",
   "file.closeTabsToRight": "关闭右侧标签页",

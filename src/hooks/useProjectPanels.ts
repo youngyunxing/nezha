@@ -8,15 +8,14 @@ import {
 } from "../mainTabs";
 
 type RightPanel = "files" | "git-changes" | "git-history" | null;
-/** 会话标签里看的是哪个：终端（要打字）还是会话记录（完整回放）。 */
-export type SessionPane = "terminal" | "record";
+
 type OpenFileTab = { path: string; name: string };
 
 /** 主区域当前显示哪一类内容。
  *  file 态下具体是哪个文件由 activeFilePath 决定 —— 最后一个文件标签关掉时它会变 null，
  *  视图自动落回会话，不需要在关标签的地方再同步一次状态。
  *  diff 不进这里：openDiff 非空就是覆盖层，关掉后自然露出下面原本这个视图。 */
-export type MainView = "session" | "file";
+export type MainView = "session" | "record" | "file";
 
 type OpenDiff =
   | { kind: "file"; filePath: string; staged: boolean; label: string }
@@ -39,13 +38,11 @@ export function useProjectPanels(options?: {
   });
   const [openDiff, setOpenDiff] = useState<OpenDiff | null>(null);
   const [mainView, setMainView] = useState<MainView>("session");
-  // 活着的任务默认给终端 —— 你要打字。想看完整对话时切到记录：终端的滚动只有
-  // terminal_scrollback 那么长，长会话根本翻不到头，而记录是整份 JSONL 回放。
-  // 这是纯 UI 状态，不落盘（重启回终端）。
-  const [sessionPane, setSessionPane] = useState<SessionPane>("terminal");
-  const toggleSessionPane = useCallback(() => {
-    setSessionPane((prev) => (prev === "terminal" ? "record" : "terminal"));
-  }, []);
+  // 会话记录是个**标签**（跟打开的文件一个待遇）：点了才开，能切走、能关掉。
+  // 终端始终挂着（RunningView 的 visible 一关就只是藏起来），所以切来切去不会
+  // 打断正在跑的 agent。为什么不做成"活着的任务默认看记录"：那样每次重启都会把
+  // 你按回记录页，哪怕你昨天一整天都在终端里打字。
+  const [recordOpen, setRecordOpen] = useState(false);
   // 每个文件自己的 markdown 预览开关（缺省按文件类型走：md 默认预览）。
   const [previewModes, setPreviewModes] = useState<Record<string, boolean>>({});
   // 标签颜色：只存用户手挑过的，自动配色按 key 现算（见 mainTabs.ts）
@@ -81,6 +78,19 @@ export function useProjectPanels(options?: {
   const showSessionView = useCallback(() => {
     setOpenDiff(null);
     setMainView("session");
+  }, []);
+
+  /** 打开会话记录标签并切过去（终端右下角那个按钮调的）。 */
+  const openRecord = useCallback(() => {
+    setOpenDiff(null);
+    setRecordOpen(true);
+    setMainView("record");
+  }, []);
+
+  /** 关掉记录标签：正看着它就落回会话（终端）。 */
+  const closeRecord = useCallback(() => {
+    setRecordOpen(false);
+    setMainView((prev) => (prev === "record" ? "session" : prev));
   }, []);
 
   const togglePreviewMode = useCallback((path: string) => {
@@ -210,6 +220,8 @@ export function useProjectPanels(options?: {
     mainView === "file" &&
     activeFilePath !== null &&
     openFilesState.tabs.some((tab) => tab.path === activeFilePath);
+  /** 主区域是不是正在显示会话记录（记录标签开着 + 当前选中的就是它）。 */
+  const showingRecord = mainView === "record" && recordOpen;
 
   return {
     rightPanel,
@@ -218,6 +230,10 @@ export function useProjectPanels(options?: {
     openDiff,
     mainView,
     showingFile,
+    showingRecord,
+    recordOpen,
+    openRecord,
+    closeRecord,
     previewModes,
     tabColors,
     setTabColor,
@@ -237,8 +253,6 @@ export function useProjectPanels(options?: {
     showSessionView,
     togglePreviewMode,
     handleRightResizeStart,
-    sessionPane,
-    toggleSessionPane,
   };
 }
 

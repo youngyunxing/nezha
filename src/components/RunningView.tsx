@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   GitFork,
   Download,
+  History,
 } from "lucide-react";
 
 interface SessionMetrics {
@@ -109,7 +110,7 @@ export function RunningView({
   onRegisterTerminal,
   onTerminalReady,
   onSnapshot,
-  sessionPane = "terminal",
+  onOpenRecord,
   getRestoreState,
   themeVariant,
   terminalFontSize,
@@ -144,8 +145,8 @@ export function RunningView({
   onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
   onTerminalReady: (generation: number) => void;
   onSnapshot?: (snapshot: string) => void;
-  /** 会话标签看终端还是会话记录（活着的任务也能切）。 */
-  sessionPane?: "terminal" | "record";
+  /** 把「会话记录」开成一个主区域标签（终端右下角那个按钮调的）。 */
+  onOpenRecord: () => void;
   getRestoreState?: () => { initialData?: string; initialSnapshot?: string };
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
@@ -408,16 +409,27 @@ export function RunningView({
           <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
         </button>
       )}
+      {/* 会话记录：把它开成主区域的另一个标签（点了才开，能切走能关掉）。
+          只在任务活着的时候给 —— 结束的任务主区域本来就是记录，不用再开一个。 */}
+      {isActive && sessionPath && (
+        <button
+          type="button"
+          className="quick-input-trigger"
+          style={s.quickInputTrigger}
+          title={t("session.record")}
+          onClick={onOpenRecord}
+        >
+          <History size={12} strokeWidth={2.3} />
+          <span>{t("session.record")}</span>
+        </button>
+      )}
     </div>
   );
 
   // 终端面板抽成变量：正常运行要用，纯终端任务在「异常中断」态也要用它显示上次屏幕
   // （否则重启后只剩一条横幅 +「没有会话记录」，看不到记录）。
-  // 看会话记录时终端不能卸载 —— 卸载会 dispose xterm、把 PTY 尺寸重置，切回来还得重排。
-  // 用 display:none 藏起来，跟「被文件查看器盖住的面板」是同一条路径（safeFit 有 0 尺寸守卫）。
-  const showingRecord = sessionPane === "record" && isActive && Boolean(sessionPath);
   const terminalPane = (
-    <div style={{ ...s.terminalContainer, ...(showingRecord ? { display: "none" } : null) }}>
+    <div style={s.terminalContainer}>
       <TerminalView
         key={`${task.id}-${runCount}`}
         agent={task.agent}
@@ -431,7 +443,7 @@ export function RunningView({
         terminalFontSize={terminalFontSize}
         terminalScrollback={terminalScrollback}
         monoFontFamily={monoFontFamily}
-        isActive={visible && !showingRecord}
+        isActive={visible}
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
@@ -653,11 +665,6 @@ export function RunningView({
               {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
             </div>
           )}
-        </div>
-      ) : showingRecord && sessionPath ? (
-        <div style={s.sessionPaneWrap}>
-          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
-          {cornerActions}
         </div>
       ) : isActive || !sessionPath ? (
         terminalPane

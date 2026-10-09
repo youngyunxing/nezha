@@ -5,7 +5,11 @@ import type { ProjectAvatarColor } from "./types";
 
 /** 主区域标签的标识：会话 / 某个文件 / 当前打开的 diff。
  *  colorKey 与它分开：会话标签的 key 是常量，颜色却按「当前是哪个任务」记。 */
-export type MainTabKey = "session" | "diff" | `file:${string}`;
+export type MainTabKey = "session" | "session-record" | "diff" | `file:${string}`;
+
+/** 会话记录标签的 key。每个项目最多一个，跟着当前选中的任务走 —— 它不是一个"打开的文件"，
+ *  而是同一个任务的另一种看法，所以不需要按任务开多个。 */
+export const SESSION_RECORD_TAB_KEY = "session-record";
 
 export function fileTabKey(path: string): MainTabKey {
   return `file:${path}`;
