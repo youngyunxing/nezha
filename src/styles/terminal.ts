@@ -219,9 +219,10 @@ export const terminal = {
     display: "flex",
     flexDirection: "column" as const,
   },
-  /* 斜杠命令提示条：右下角那排按钮占着，所以它只占左边这一条，
-     和按钮同一行（终端最底下那行本来是 CLI 的快捷键提示，被盖住无所谓）。
-     单行不换行 —— 多行会往终端里顶，把输入框盖住。 */
+  /* 斜杠命令提示条：位置由 JS 算出来（浮在光标那一行的上一行，见 slashHint.ts
+     的 hintBottomOffset），这里的 left/bottom 只是量不出光标时的兜底 ——
+     bottom: 4 落到终端最底下那行、和右下角那排按钮同一条线。
+     单行不换行 —— 多行会往终端里顶，盖住更多内容。 */
   slashHintBar: {
     position: "absolute" as const,
     /* 锚点是 TerminalView 里铺满终端容器内容盒的那层壳，而容器自己有 10px 的

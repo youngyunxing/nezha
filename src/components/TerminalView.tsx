@@ -57,7 +57,12 @@ import type {
   ThemeVariant,
 } from "../types";
 import { slashCommandsFor } from "../slashCommands";
-import { detectSlashHint, slashHintKey, type SlashHintMatch } from "../slashHint";
+import {
+  detectSlashHint,
+  hintBottomOffset,
+  slashHintKey,
+  type SlashHintMatch,
+} from "../slashHint";
 import { SlashHintBar } from "./terminal-slash/SlashHintBar";
 import {
   applyTerminalThemeOnPanel,
@@ -117,8 +122,14 @@ export function TerminalView({
   onSnapshot,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  /** 铺满终端容器的那层壳：提示条以它为定位锚点 */
+  const shellRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
-  const [slashHint, setSlashHint] = useState<SlashHintMatch | null>(null);
+  const [slashHint, setSlashHint] = useState<{
+    match: SlashHintMatch;
+    /** 贴着光标那一行的上边缘；undefined = 没量出来，用 CSS 里的兜底值 */
+    bottom?: number;
+  } | null>(null);
   /** 上一次 setState 的提示内容；一样就不再 setState */
   const slashHintKeyRef = useRef("");
   const agentRef = useRef(agent);
@@ -251,13 +262,30 @@ export function TerminalView({
     // buffer」后读一次光标所在行（读到光标为止）就能认出在敲什么命令。读盘限到每帧一次，
     // 而且只有提示内容真的变了才 setState —— 这条路径跟着 PTY 输出跑，不能每条输出都重渲染。
     let hintFrame: number | null = null;
+    // 光标那一行在屏幕上多高：量的是 .xterm-screen 的格子高（它精确等于
+    // rows × cellHeight），光标行是视口相对的，乘一下就是像素位置。
+    const hintBottomNow = (): number | undefined => {
+      const shell = shellRef.current;
+      const screenEl = term.element?.querySelector<HTMLElement>(".xterm-screen");
+      if (!shell || !screenEl) return undefined;
+      const shellRect = shell.getBoundingClientRect();
+      const screenRect = screenEl.getBoundingClientRect();
+      return hintBottomOffset({
+        containerHeight: shellRect.height,
+        screenTop: screenRect.top - shellRect.top,
+        screenHeight: screenRect.height,
+        rows: term.rows,
+        cursorRow: term.buffer.active.cursorY,
+      });
+    };
     const readSlashHint = () => {
       hintFrame = null;
       const match = detectSlashHint(term, slashCommandsFor(agentRef.current));
-      const key = slashHintKey(match);
+      const bottom = match ? hintBottomNow() : undefined;
+      const key = match ? `${slashHintKey(match)}|${Math.round(bottom ?? -1)}` : "";
       if (key === slashHintKeyRef.current) return;
       slashHintKeyRef.current = key;
-      setSlashHint(match);
+      setSlashHint(match ? { match, bottom } : null);
     };
     const scheduleHintRead = () => {
       if (hintFrame !== null) return;
@@ -313,6 +341,8 @@ export function TerminalView({
       notifyResize(cols, rows);
     };
     const scheduleFit = () => {
+      // 窗口/面板尺寸变了，光标那一行的像素位置也变了，提示条要跟着挪
+      scheduleHintRead();
       // 只有正在显示的那个终端才能决定 PTY 尺寸：隐藏的后台面板（同项目其它任务、
       // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
       if (!isActiveRef.current) return;
@@ -471,7 +501,7 @@ export function TerminalView({
   }, [monoFontFamily, notifyResize]);
 
   return (
-    <div style={scrollShellStyle}>
+    <div ref={shellRef} style={scrollShellStyle}>
       <div ref={containerRef} className="nezha-xterm-host" style={terminalHostStyle} />
       {/* 右上角一对跳转按钮：笔记本没有 Home/End，快捷键记不住也能滚 */}
       <div style={scrollJumpStyle}>
@@ -495,7 +525,9 @@ export function TerminalView({
         </button>
       </div>
       {/* 斜杠命令提示：只在正在敲命令时出现，其余时候完全不存在 */}
-      {isActive && slashHint && <SlashHintBar hint={slashHint} />}
+      {isActive && slashHint && (
+        <SlashHintBar hint={slashHint.match} bottom={slashHint.bottom} />
+      )}
     </div>
   );
 }

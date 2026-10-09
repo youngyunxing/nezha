@@ -3,7 +3,9 @@ import { Terminal } from "@xterm/xterm";
 import { CLAUDE_SLASH_COMMANDS, slashCommandsFor, type SlashCommand } from "../slashCommands";
 import {
   MAX_SLASH_SUGGESTIONS,
+  SLASH_HINT_FALLBACK_BOTTOM,
   detectSlashHint,
+  hintBottomOffset,
   matchSlashHint,
   readLineBeforeCursor,
   slashHintKey,
@@ -190,5 +192,39 @@ describe("从真实 xterm buffer 里读光标行", () => {
     expect(detectSlashHint(term, claude)).not.toBeNull();
     await write("\x1b[2;5H\x1b[K"); // 回到行首、擦掉这一行
     expect(detectSlashHint(term, claude)).toBeNull();
+  });
+});
+
+describe("hintBottomOffset：提示条浮在光标行的上一行", () => {
+  /** 真 CLI 抓下来的那屏：30 行、光标在第 26 行（0 基），输入行是倒数第 4 行 */
+  const REAL = { containerHeight: 30 * 17, screenTop: 0, screenHeight: 30 * 17, rows: 30 };
+
+  it("光标在第 26 行时，返回的距离正好是那一行的上边缘", () => {
+    expect(hintBottomOffset({ ...REAL, cursorRow: 26 })).toBe(68); // 4 行 × 17px
+  });
+
+  it("光标行越往下，提示条越低（跟着走）", () => {
+    const high = hintBottomOffset({ ...REAL, cursorRow: 20 });
+    const low = hintBottomOffset({ ...REAL, cursorRow: 29 });
+    expect(high).toBeGreaterThan(low);
+    expect(low).toBe(17);
+  });
+
+  it("屏幕不在容器顶上（比如上面还有一条头部）也要对得上", () => {
+    // 屏幕顶边下移 34px，光标行上边缘跟着下移，bottom 相应减少
+    expect(hintBottomOffset({ ...REAL, screenTop: 34, cursorRow: 26 })).toBe(34);
+  });
+
+  it("光标贴顶时别把提示条顶出容器", () => {
+    expect(hintBottomOffset({ ...REAL, cursorRow: 0 })).toBe(30 * 17 - 32);
+  });
+
+  it("量不出来就退回兜底位置", () => {
+    const bad = { ...REAL, cursorRow: 26, screenHeight: 0 };
+    expect(hintBottomOffset(bad)).toBe(SLASH_HINT_FALLBACK_BOTTOM);
+    expect(hintBottomOffset({ ...REAL, cursorRow: 26, rows: 0 })).toBe(SLASH_HINT_FALLBACK_BOTTOM);
+    expect(hintBottomOffset({ ...REAL, cursorRow: 26, containerHeight: 0 })).toBe(
+      SLASH_HINT_FALLBACK_BOTTOM,
+    );
   });
 });

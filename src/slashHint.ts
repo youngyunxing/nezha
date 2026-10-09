@@ -96,3 +96,35 @@ export function slashHintKey(match: SlashHintMatch | null): string {
     : match.suggestions.map((c) => c.name).join(",");
   return `${match.token}|${names}`;
 }
+
+/** 量不出光标位置时退回的老位置：贴着容器左下角，和右下角那排按钮同一条线 */
+export const SLASH_HINT_FALLBACK_BOTTOM = 4;
+/** 光标贴顶时至少给提示条留这么多像素，别把它顶出容器 */
+const HINT_MIN_TOP_GAP = 32;
+
+/**
+ * 提示条该浮多高 —— 目标是**贴着「光标那一行的上边缘」**，也就是正好压在
+ * 光标所在行的上面一行。
+ *
+ * 传进来的全是像素（都相对于提示条所在的容器），返回的是 CSS `bottom`。
+ * 抽成纯函数是为了能测：真要测量得读 DOM，jsdom 里量不出来（一律返回 0）。
+ */
+export function hintBottomOffset(input: {
+  containerHeight: number;
+  /** `.xterm-screen` 顶边相对容器顶边的偏移 */
+  screenTop: number;
+  screenHeight: number;
+  rows: number;
+  /** `buffer.active.cursorY`，本来就是视口相对的 */
+  cursorRow: number;
+}): number {
+  const { containerHeight, screenTop, screenHeight, rows, cursorRow } = input;
+  if (rows <= 0 || screenHeight <= 0 || containerHeight <= 0) {
+    return SLASH_HINT_FALLBACK_BOTTOM;
+  }
+  const cellHeight = screenHeight / rows;
+  const cursorTop = screenTop + cursorRow * cellHeight;
+  const bottom = containerHeight - cursorTop;
+  // 光标在很上面的时候别把提示条顶出去（正常不会发生：输入框总在底部）
+  return Math.max(0, Math.min(bottom, containerHeight - HINT_MIN_TOP_GAP));
+}
