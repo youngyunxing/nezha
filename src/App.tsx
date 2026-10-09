@@ -148,6 +148,9 @@ const RAIL_PROJECTS_ORDERED_KEY = "nezha:rail-projects-ordered";
  *  「停在新建任务页」是有意为之，不该粘到下次启动。 */
 const PROJECT_VIEWS_KEY = "nezha:project-views";
 
+/** 跨重启保留「上次正在看的是哪个项目」。只存 id 不存名字 —— 项目改名不影响。 */
+const ACTIVE_PROJECT_KEY = "nezha:active-project";
+
 interface PersistedProjectView {
   selectedTaskId?: string;
   localSession?: LocalClaudeSession;
@@ -636,6 +639,13 @@ function App() {
     );
   }, [activeProjectId]);
 
+  // 记住「人在哪个项目」——重启（含重装）后要回到这个项目，再靠 project-views
+  // 落到它里面那条上次看的会话（见下面启动选项目的注释）。
+  useEffect(() => {
+    if (!activeProjectId) return;
+    localStorage.setItem(ACTIVE_PROJECT_KEY, activeProjectId);
+  }, [activeProjectId]);
+
   useEffect(() => {
     localStorage.setItem("nezha:terminalFontSize", String(terminalFontSize));
   }, [terminalFontSize]);
@@ -806,10 +816,16 @@ function App() {
         persistProjectTasksQuietly(projectId, nextTasks);
       });
 
-      // 没有首页了：启动要直接落到某个项目。优先选「有活跃会话」的第一个项目——打开就能
-      // 看到正在跑（或刚被自动恢复）的 agent；都没有才回落到最近打开的项目。
+      // 没有首页了：启动要直接落到某个项目，优先级从高到低——
+      //   ① 上次正在看的那个项目。用户口径：「我在看 A 项目的 task，恢复时也在这个界面」。
+      //      落到这个项目之后，具体看哪条会话由 project-views 里的记录决定（deriveProjectView），
+      //      所以连着项目和会话一起回来了。
+      //   ② 有活跃会话的第一个项目 —— 老行为，兜住「没存档 / 存档里的项目被删了」。
+      //   ③ 最近打开过的项目。
       // 只设内存状态，不碰 lastOpenedAt，否则每次启动都会重写一遍 projects.json。
+      const lastViewedProjectId = localStorage.getItem(ACTIVE_PROJECT_KEY);
       const startProject =
+        projectsForState.find((project) => project.id === lastViewedProjectId) ??
         projectsForState.find((project) =>
           nextTasks.some(
             (task) => task.projectId === project.id && isActiveTaskStatus(task.status),
