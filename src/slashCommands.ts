@@ -7,6 +7,14 @@ import type { AgentType } from "./types";
  * `argumentHint` 都在二进制里，用脚本扫一遍就有，不用手抄），中文说明是后配的 ——
  * CLI 不提供中文，也没有任何命令能把清单吐出来，所以**升级 CLI 后这张表要重扫**
  * （做法记在 FORK.md）。参数占位保留 CLI 原样，只把描述性占位翻成中文。
+ *
+ * ⚠️ **判据是「CLI 的补全菜单里真有的」**，扫出来还得拿真 CLI 对一遍（做法在 FORK.md）。
+ * 两条已经踩过的坑：
+ *   1. 别把 `jo({name:...})` 那套收进来 —— 那是 **skill 注册表**（bundled skill），
+ *      不是斜杠命令。`/explain-usage`、`/doctor` 就是这么混进来、敲了报 Unknown command 的。
+ *   2. 二进制里注册了 ≠ 这台机器上能用。`/voice`、`/teleport`、`/install*` 这些按套餐 /
+ *      平台 / 云功能开关，本地菜单里根本不出现，敲了一样报 Unknown command。
+ *      宁可少给提示，也别让人敲一条不存在的命令。
  */
 export interface SlashCommand {
   /** 不带斜杠的命令名 */
@@ -21,74 +29,44 @@ export interface SlashCommand {
 
 const REST: readonly SlashCommand[] = [
   { name: "add-dir", usage: "<路径>", zh: "把一个新目录加进本次会话的工作范围" },
-  { name: "artifact-components", usage: "", zh: "在 Artifact 里嵌入可复用组件" },
-  { name: "artifacts", usage: "", zh: "浏览你发布或分享过的产物" },
   { name: "autocompact", usage: "[auto|<token 数>]", zh: "设置上下文多满时自动摘要压缩" },
-  { name: "autofix-pr", usage: "", zh: "盯住当前 PR 的问题并自动修" },
   { name: "background", usage: "[提示词]", zh: "把这个会话丢到后台跑，腾出终端", aliases: ["bg"] },
-  { name: "batch", usage: "", zh: "规划一次大改动，让多个后台 agent 各开一个 PR" },
   { name: "branch", usage: "[名字]", zh: "从当前这一步拉一条对话分支" },
-  { name: "brief", usage: "", zh: "切换「只留要点」模式" },
   { name: "btw", usage: "[问题]", zh: "顺口问一句，不打断主对话" },
   { name: "cd", usage: "<路径>", zh: "把会话切到另一个工作目录" },
-  { name: "claude-api", usage: "", zh: "开发和调试用 Claude API 的应用" },
-  { name: "claude-in-chrome", usage: "", zh: "让 Claude 浏览并操作你 Chrome 里的页面" },
-  { name: "cloud-plugins", usage: "", zh: "选择云端会话是否使用本机启用的插件" },
   { name: "color", usage: "", zh: "设置本会话提示条的颜色" },
   { name: "config", usage: "<键>=<值>", zh: "按 key 改一项配置", aliases: ["settings"] },
-  { name: "daemon", usage: "", zh: "管理后台服务与例行任务" },
-  { name: "debug", usage: "", zh: "打开调试日志、排查问题" },
-  { name: "design-sync", usage: "", zh: "把你的设计系统组件推到 claude.ai/design" },
-  { name: "desktop", usage: "", zh: "在 Claude Desktop 里接着聊当前会话", aliases: ["app"] },
   { name: "effort", usage: "", zh: "设置模型的思考投入档位" },
-  { name: "explain-usage", usage: "", zh: "用大白话讲这次会话的 token 花在哪儿了" },
   { name: "fast", usage: "", zh: "切换 fast 模式" },
   { name: "feedback", usage: "[报告]", zh: "给 Anthropic 发反馈或报 bug" },
-  { name: "fewer-permission-prompts", usage: "", zh: "按你的使用习惯，自动预批准安全的只读命令" },
   { name: "focus", usage: "", zh: "切换专注视图：只看你的提示、摘要和回复" },
   { name: "fork", usage: "<指令>", zh: "派生一个继承完整对话的后台 agent" },
   { name: "goal", usage: "[<条件> | clear]", zh: "设一个目标，Claude 想停下时会先自查" },
   { name: "ide", usage: "[open]", zh: "管理 IDE 集成并查看状态" },
   { name: "import", usage: "[codex|gemini|cursor] [--dry-run]", zh: "从其它 AI 编程助手导入配置" },
-  { name: "install", usage: "[options]", zh: "安装 Claude Code 原生版" },
-  { name: "install-github-app", usage: "", zh: "给仓库配置 Claude GitHub Actions" },
-  { name: "install-slack-app", usage: "", zh: "安装 Claude Slack 应用" },
   { name: "list-agents", usage: "", zh: "列出能发消息的子 agent、队友和其它会话", aliases: ["peers"] },
   { name: "login", usage: "", zh: "登录 Anthropic 账号 / 切换账号" },
   { name: "logout", usage: "", zh: "退出登录" },
-  { name: "loops", usage: "", zh: "查看、创建、删除循环任务" },
   { name: "mobile", usage: "", zh: "显示二维码，下载 Claude 手机 App", aliases: ["ios", "android"] },
   { name: "output-style", usage: "[风格]", zh: "列出输出风格，或切到某个风格" },
   { name: "passes", usage: "", zh: "把 Claude Code 免费一周分享给朋友（可换额度）" },
   { name: "plugin", usage: "", zh: "管理 Claude Code 插件", aliases: ["plugins", "marketplace"] },
   { name: "powerup", usage: "", zh: "用互动小课快速了解 Claude Code 的功能" },
-  { name: "privacy-settings", usage: "", zh: "查看和修改隐私设置" },
   { name: "radio", usage: "", zh: "听 Claude FM lo-fi 电台" },
   { name: "recap", usage: "", zh: "立刻生成一行会话回顾" },
   { name: "release-notes", usage: "", zh: "查看更新日志" },
   { name: "reload-plugins", usage: "[--force]", zh: "让待生效的插件改动在当前会话里生效" },
   { name: "reload-skills", usage: "", zh: "加载会话期间新增或改动过的 skill" },
-  { name: "run", usage: "", zh: "把本项目的应用跑起来，看看改动效果" },
-  { name: "run-skill-generator", usage: "", zh: "生成一个「知道怎么跑本项目」的 skill" },
   { name: "scroll-speed", usage: "", zh: "调整鼠标滚轮的滚动速度" },
   { name: "security-review", usage: "", zh: "对当前分支上未提交的改动做一次安全审查" },
-  { name: "setup-claude", usage: "", zh: "引导式配置：选角色、装插件、试用 skill、接工具" },
   { name: "skill-doctor", usage: "", zh: "看哪些已加载的 skill 从没用过、还在占上下文" },
   { name: "statusline", usage: "", zh: "配置状态栏" },
   { name: "stickers", usage: "", zh: "订购 Claude Code 贴纸" },
-  { name: "stop", usage: "", zh: "停掉这个后台会话（记录和 worktree 都留着）" },
   { name: "subtask", usage: "<任务>", zh: "带完整上下文派一个子 agent 出去，结果回到这里" },
   { name: "tasks", usage: "", zh: "查看和管理后台在跑的所有东西", aliases: ["bashes"] },
-  { name: "teleport", usage: "", zh: "把会话送到云端，或从 claude.ai 恢复一个", aliases: ["tp"] },
   { name: "terminal-setup", usage: "", zh: "配置终端：Option+Enter 换行、关掉提示音" },
   { name: "theme", usage: "", zh: "换主题" },
   { name: "tui", usage: "[default|fullscreen]", zh: "设置终端 UI 渲染方式（default / fullscreen）" },
-  { name: "update-config", usage: "", zh: "改配置：hook、权限、环境变量" },
-  { name: "upgrade", usage: "", zh: "升级到 Max：更高额度、更多 Opus" },
-  { name: "usage-credits", usage: "", zh: "配置用量额度，或额度用完时找管理员申请" },
-  { name: "version", usage: "", zh: "显示本会话的版本号（自动更新可能已有新版）" },
-  { name: "voice", usage: "[hold|tap|off]", zh: "切换语音模式" },
-  { name: "wellbeing", usage: "", zh: "配置休息提醒和免打扰时段", aliases: ["breaks", "break-reminder", "downtime"] },
   { name: "workflows", usage: "", zh: "浏览正在跑和已完成的 workflow" },
 ];
 
@@ -111,7 +89,6 @@ export const CLAUDE_SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: "hooks", usage: "", zh: "查看各工具事件的 hook 配置" },
   { name: "skills", usage: "", zh: "列出可用的 skill" },
   { name: "diff", usage: "", zh: "查看未提交的改动和每一轮的差异" },
-  { name: "doctor", usage: "", zh: "体检安装环境并修问题：安装、冗余扩展、臃肿的记忆文件、慢 hook、更新、权限" },
   { name: "init", usage: "", zh: "初始化 CLAUDE.md（给代码库写文档）" },
   { name: "rename", usage: "[名字]", zh: "重命名当前对话", aliases: ["name"] },
   { name: "exit", usage: "", zh: "退出 CLI（后台会话则是脱离、继续跑）", aliases: ["quit"] },

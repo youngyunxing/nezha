@@ -136,6 +136,19 @@ describe("命令表", () => {
     for (const c of claude) expect(c.zh.length).toBeGreaterThan(0);
   });
 
+  it("不含 skill 注册表混进来的假命令", () => {
+    // 这些曾经被扫进来过，敲下去报 Unknown command：`jo({name:...})` 是 skill
+    // 注册表，不是斜杠命令；另外几条是按套餐/平台开关、本地菜单里根本没有的。
+    const bad = [
+      "explain-usage", "doctor", "run", "setup-claude", "batch", "debug",
+      "design-sync", "claude-api", "claude-in-chrome", "update-config",
+      "voice", "teleport", "install", "version", "upgrade", "artifacts",
+    ];
+    for (const name of bad) {
+      expect(claude.some((c) => c.name === name), `${name} 不该在表里`).toBe(false);
+    }
+  });
+
   it("常用命令排在前面，前缀候选优先给它们", () => {
     expect(claude[0].name).toBe("help");
     expect(matchSlashHint("/co", claude)?.suggestions[0].name).toBe("compact");
