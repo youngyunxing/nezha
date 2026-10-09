@@ -223,8 +223,9 @@ export const terminal = {
      的 hintBottomOffset），这里的 left/bottom 只是量不出光标时的兜底 ——
      bottom: 4 落到终端最底下那行、和右下角那排按钮同一条线。
 
-     说明文字**不截断**，一行放不下就换行往下长（往上是光标，长不过去）。
-     所以它是块面板而不是胶囊：圆角收小、允许 flex-wrap。 */
+     竖排：**一条候选一行**（以前是横着铺开、换行由宽度决定，读起来是一长串）。
+     说明文字不截断，单条太长就在它自己那一行里折。
+     往上是光标，所以整块是往上长的 —— 行数越多盖住的终端内容越多，这是它的代价。 */
   slashHintBar: {
     position: "absolute" as const,
     /* 锚点是 TerminalView 里铺满终端容器内容盒的那层壳，而容器自己有 10px 的
@@ -233,10 +234,9 @@ export const terminal = {
     bottom: 4,
     zIndex: 5,
     display: "flex",
-    flexWrap: "wrap" as const,
-    alignItems: "center",
-    columnGap: 10,
-    rowGap: 3,
+    flexDirection: "column" as const,
+    alignItems: "flex-start",
+    rowGap: 2,
     maxWidth: "calc(100% - 30px)",
     padding: "5px 10px",
     borderRadius: 10,
@@ -264,14 +264,13 @@ export const terminal = {
     /* 中文没有空格，靠默认的断行规则逐字断；整条不裁字，放不下就换行 */
     wordBreak: "break-word" as const,
   },
+  /* 一条候选 = 一行：名字 + 说明横着排，太长就在这一行里折下去 */
   slashHintItem: {
     display: "flex",
-    alignItems: "center",
-    gap: 5,
+    alignItems: "baseline",
+    gap: 6,
     minWidth: 0,
-    paddingLeft: 8,
-    borderLeft: "1px solid var(--border-dim)",
-    /* 一条候选自己也要能换行：说明长的时候不能撑着整条不换 */
+    maxWidth: "100%",
     flexWrap: "wrap" as const,
   },
   sessionCornerActions: {

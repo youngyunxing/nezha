@@ -21,17 +21,19 @@ export function SlashHintBar({
   const exact = hint.exact;
   return (
     <div style={bottom === undefined ? s.slashHintBar : { ...s.slashHintBar, bottom }}>
-      <code style={s.slashHintToken}>{hint.token}</code>
       {exact ? (
-        <>
-          {/* 敲的是别名（比如 /quit）时补一句本名，免得和 CLI 补全出来的名字对不上 */}
+        /* 敲全了：一条 —— 名字 + 用法 + 中文说明（说明长了就在这一行里折） */
+        <span style={s.slashHintItem}>
+          <code style={s.slashHintToken}>{hint.token}</code>
+          {/* 敲的是别名（比如 /quit）时补一句本名，免得和 CLI 菜单里的名字对不上 */}
           {exact.name !== hint.token.slice(1) && (
             <code style={s.slashHintCmd}>→ /{exact.name}</code>
           )}
           {exact.usage && <code style={s.slashHintUsage}>{exact.usage}</code>}
           <span style={s.slashHintDesc}>{exact.zh}</span>
-        </>
+        </span>
       ) : (
+        /* 没敲全：一条候选一行，竖着排 */
         hint.suggestions.map((c) => (
           <span key={c.name} style={s.slashHintItem}>
             <code style={s.slashHintCmd}>/{c.name}</code>
