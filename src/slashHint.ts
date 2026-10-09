@@ -57,6 +57,11 @@ export function matchSlashHint(
         c.name.startsWith(head) ||
         (c.aliases ?? []).some((alias) => alias.startsWith(head)),
     )
+    // 名字命中的排前面：敲 `/c` 该看到 clear / compact / context，而不是被
+    // `/continue`（resume 的别名）占掉一格。sort 是稳定的，同组内保持表里的顺序。
+    .sort(
+      (a, b) => Number(b.name.startsWith(head)) - Number(a.name.startsWith(head)),
+    )
     .slice(0, MAX_SLASH_SUGGESTIONS);
   if (suggestions.length === 0) return null;
 

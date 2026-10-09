@@ -78,6 +78,17 @@ describe("matchSlashHint", () => {
     expect(matchSlashHint(`/${"a".repeat(60)}`, claude)).toBeNull();
   });
 
+  it("名字命中的排在别名命中的前面", () => {
+    // `/c` 也会匹配 resume（别名 continue），但它不该挤掉 context
+    const names = matchSlashHint("/c", claude)?.suggestions.map((c) => c.name) ?? [];
+    expect(names).toEqual(["clear", "compact", "context", "copy"]);
+  });
+
+  it("只有别名命中时照样给出来", () => {
+    const names = matchSlashHint("/conti", claude)?.suggestions.map((c) => c.name) ?? [];
+    expect(names).toEqual(["resume"]);
+  });
+
   it("候选数量封顶", () => {
     const m = matchSlashHint("/c", claude);
     expect(m?.suggestions.length).toBe(MAX_SLASH_SUGGESTIONS);
