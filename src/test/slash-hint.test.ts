@@ -13,6 +13,20 @@ import {
 const claude = CLAUDE_SLASH_COMMANDS;
 
 describe("matchSlashHint", () => {
+  it("认出 Claude Code 真实的输入行（❯ + 不换行空格）", () => {
+    // 这行的形状是从 app 存的终端快照里扒出来的真东西，别改
+    const m = matchSlashHint("\u276f\u00a0/comp", claude);
+    expect(m?.token).toBe("/comp");
+    expect(m?.exact).toBeNull();
+    expect(m?.suggestions.map((c) => c.name)).toContain("compact");
+  });
+
+  it("输入框被换了一套装饰也认得出（老版本 / 别的 TUI）", () => {
+    for (const line of ["│ > /comp", "> /comp", "❯ /comp", "  /comp", "› /comp"]) {
+      expect(matchSlashHint(line, claude)?.token, line).toBe("/comp");
+    }
+  });
+
   it("认出 Claude Code 输入框里的命令（带边框和提示符）", () => {
     const m = matchSlashHint("│ > /comp", claude);
     expect(m?.token).toBe("/comp");
@@ -139,6 +153,14 @@ describe("从真实 xterm buffer 里读光标行", () => {
     expect(readLineBeforeCursor(term)).toBe(`│ > /comp${" ".repeat(7)}`);
     // 光标之后的内容不算数，所以还是认得出 /comp
     expect(detectSlashHint(term, claude)?.exact).toBeNull();
+  });
+
+  it("真实输入行的形状（分隔线 + ❯）也认得出", async () => {
+    const { term, write } = makeTerm(40, 8);
+    // 不写行尾回车：光标自然停在 `/co` 后面，不用去猜提示符占几列
+    await write("─".repeat(30) + "\r\n\u276f\u00a0/co");
+    expect(readLineBeforeCursor(term)).toBe("\u276f\u00a0/co");
+    expect(detectSlashHint(term, claude)?.suggestions.map((c) => c.name)).toContain("compact");
   });
 
   it("画面滚上去以后光标行照样读得对（baseY + cursorY）", async () => {
