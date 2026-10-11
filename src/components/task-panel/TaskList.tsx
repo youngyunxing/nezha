@@ -128,13 +128,23 @@ export function TaskList({
   const visibleTasks = useMemo(() => tasks.filter(isVisibleTask), [tasks]);
   // 「历史」组：删掉的任务。列表里其它地方一律过滤掉它们，只有这一组展示 ——
   // 数据一直都在（软删除），缺的只是这个入口。
-  const deletedTasks = useMemo(
-    () =>
-      tasks
-        .filter((task) => !isVisibleTask(task))
-        .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)),
-    [tasks],
-  );
+  const deletedTasks = useMemo(() => {
+    const sorted = tasks
+      .filter((task) => !isVisibleTask(task))
+      .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+    // **同一条会话只留一条**：以前「恢复会话」是新建任务，删过的会话可能挂了两条记录
+    //（RedAlert 的 main / 红警复刻 就是，指向同一个会话文件），两条一起列出来等于同一条
+    // 对话在历史里出现两次。sorted 是新的在前，所以留下的是最近那条。
+    // 纯终端任务没有会话文件，不参与去重。
+    const seenSessions = new Set<string>();
+    return sorted.filter((task) => {
+      const sessionId = task.claudeSessionId;
+      if (!sessionId) return true;
+      if (seenSessions.has(sessionId)) return false;
+      seenSessions.add(sessionId);
+      return true;
+    });
+  }, [tasks]);
 
   // 会话正文的搜索走后端（异步 + 防抖），名字 / 提示词 / 命令在本地同步匹配。
   // 任务的会话和「本地会话」（自己在本机跑的 claude）走的是同一条搜索 —— 它们的正文
@@ -545,8 +555,10 @@ export function TaskList({
                     task={row.task}
                     session={deletedTaskSession(row.task)}
                     selected={
-                      !!row.task.claudeSessionId &&
-                      row.task.claudeSessionId === selectedLocalSessionId
+                      deletedTaskSession(row.task)
+                        ? !!row.task.claudeSessionId &&
+                          row.task.claudeSessionId === selectedLocalSessionId
+                        : selectedId === row.task.id && !isNewTask
                     }
                     onClick={() => {
                       const session = deletedTaskSession(row.task);
@@ -554,10 +566,10 @@ export function TaskList({
                         onSelectLocalSession(session);
                         return;
                       }
-                      // 纯终端任务：没有会话文件可读，点开就**恢复它并选中** ——
-                      // 选中即挂载，主区域直接显示它那块上次屏幕（"看到"），
-                      // 上面的「重新启动」把 shell 拉起来（"恢复"）
-                      onRestoreTask(row.task.id);
+                      // 纯终端任务：没有会话文件可读，点开就**选中它**（选中即挂载）——
+                      // 主区域直接显示那块上次屏幕，这就是"看到"。
+                      // **点开不恢复**（用户口径：「没有恢复就一直是历史」）：
+                      // 恢复只在右键菜单里点。
                       onSelectTask(row.task.id);
                     }}
                     onContextMenu={(event) => {

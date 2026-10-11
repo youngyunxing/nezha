@@ -159,18 +159,44 @@ describe("任务列表右键菜单与改名", () => {
     expect(screen.queryByText(/更早的任务/)).toBeNull();
   });
 
-  it("删掉的任务落到「历史」组；没有会话的（纯终端）点开 = 恢复 + 选中", () => {
+  it("删掉的任务落到「历史」组；纯终端那条点开只选中（看上次屏幕），不恢复", () => {
     const handlers = renderList({
       tasks: [makeTask({ id: "a1", deleted: true, prompt: "删掉的任务" })],
     });
     // 名字还在（软删除保留记录），但它在「历史」组里，不在正常任务流里
     expect(screen.getByText("历史")).toBeTruthy();
-    // 选中即挂载 → 主区域直接显示那块上次屏幕（这就是终端任务的"看到"）
+    // 选中即挂载 → 主区域显示那块上次屏幕。**点开不恢复**：没点「恢复」就一直是历史
     fireEvent.click(screen.getByText("删掉的任务"));
-    expect(handlers.onRestoreTask).toHaveBeenCalledWith("a1");
     expect(handlers.onSelectTask).toHaveBeenCalledWith("a1");
+    expect(handlers.onRestoreTask).not.toHaveBeenCalled();
     // 也不会因为"看起来没有任务了"而顶一句空态在历史组上面
     expect(screen.queryByText("还没有任务")).toBeNull();
+  });
+
+  it("同一条会话挂了多条记录时，历史组里只出一条", () => {
+    renderList({
+      tasks: [
+        // RedAlert 的 main / 红警复刻 就是这种：同一个会话文件、两条任务记录
+        makeTask({
+          id: "old",
+          deleted: true,
+          name: "main",
+          claudeSessionId: "same-session",
+          claudeSessionPath: "/tmp/same.jsonl",
+          updatedAt: 100,
+        }),
+        makeTask({
+          id: "new",
+          deleted: true,
+          name: "红警复刻",
+          claudeSessionId: "same-session",
+          claudeSessionPath: "/tmp/same.jsonl",
+          updatedAt: 200,
+        }),
+      ],
+    });
+    expect(screen.getByText("红警复刻")).toBeTruthy();
+    expect(screen.queryByText("main")).toBeNull();
   });
 
   it("有会话的那种点开是预览（复用本地会话那一套），不恢复", () => {

@@ -612,6 +612,9 @@ export function RunningView({
                 {t(canReconnect ? "running.detachedTitle" : "running.interruptedTitle")}
               </div>
             </div>
+            {/* 被删掉的任务正在被"看"（历史组点开）：不给启动类按钮 ——
+                它还是已删除状态，跑起来在列表里也看不见。要恢复走右键菜单。 */}
+            {!task.deleted && (
             <div style={s.interruptedBannerActions}>
               <button
                 type="button"
@@ -638,6 +641,7 @@ export function RunningView({
                 </span>
               </button>
             </div>
+            )}
           </div>
           {sessionPath ? (
             <div style={s.sessionPaneWrap}>
