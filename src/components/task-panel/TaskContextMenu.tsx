@@ -15,6 +15,7 @@ export function TaskContextMenu({
   onRename,
   onToggleStar,
   onDelete,
+  onRestore,
   colorPicker,
 }: {
   ctxMenu: TaskContextMenuState;
@@ -22,6 +23,8 @@ export function TaskContextMenu({
   onRename: () => void;
   onToggleStar: () => void;
   onDelete: () => void;
+  /** 「历史」组里的已删除任务：只给「恢复」（把 deleted 标记抹掉） */
+  onRestore?: () => void;
   /** 会话标签右键时才给：改这个标签的颜色（任务列表里的右键不需要） */
   colorPicker?: { current: ProjectAvatarColor | null; onPick: (color: ProjectAvatarColor) => void };
 }) {
@@ -32,14 +35,18 @@ export function TaskContextMenu({
       anchor={ctxMenu}
       onClose={onClose}
       narrow
-      items={[
-        { label: t("task.renameTask"), onSelect: onRename },
-        {
-          label: ctxMenu.task.starred ? t("task.unstar") : t("task.star"),
-          onSelect: onToggleStar,
-        },
-        { label: t("task.deleteTask"), onSelect: onDelete, destructive: true },
-      ]}
+      items={
+        ctxMenu.task.deleted
+          ? [{ label: t("task.restore"), onSelect: () => onRestore?.() }]
+          : [
+              { label: t("task.renameTask"), onSelect: onRename },
+              {
+                label: ctxMenu.task.starred ? t("task.unstar") : t("task.star"),
+                onSelect: onToggleStar,
+              },
+              { label: t("task.deleteTask"), onSelect: onDelete, destructive: true },
+            ]
+      }
       footer={colorPicker && <TabColorPicker current={colorPicker.current} onPick={colorPicker.onPick} />}
     />
   );

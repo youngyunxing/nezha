@@ -53,13 +53,13 @@ describe("删除 = 打标记，记录留在磁盘上", () => {
 });
 
 describe("本地会话列表的排除名单", () => {
-  it("只排除还活着的任务（删掉的不排除，会话才能重新冒出来）", () => {
+  it("删掉的也算被认领 —— 它在「历史」组里有名字，本地会话组别再列一遍", () => {
     const tasks = [
       task("a", { claudeSessionId: "s-live" }),
       task("b", { claudeSessionId: "s-deleted", deleted: true }),
       task("c", { claudeSessionId: undefined }),
     ];
-    expect(claimedClaudeSessionIds(tasks)).toEqual(["s-live"]);
+    expect(claimedClaudeSessionIds(tasks)).toEqual(["s-deleted", "s-live"]);
   });
 
   it("排好序（稳定，不因为数组顺序变化就重新拉一遍）", () => {

@@ -8,14 +8,13 @@ export function isVisibleTask(task: Task): boolean {
 /**
  * 「本地会话」列表里要排除掉的 claude session id —— 也就是**已经被任务认领**的那些。
  *
- * 关键：只算还活着的任务。删掉的任务（deleted）不排除 —— 它的会话文件本来就还在磁盘上，
- * 排除掉它等于把「删过的东西还能捞回来」这条路给堵死了：删除后那条对话本该重新出现在
- * 「本地会话」里（能看回放、能从那儿续跑）。软删除保留记录之后这里必须跟着改，
- * 否则表现就是"删了之后本地会话里找不到"。
+ * **已删除的任务也算认领**（2026-10-11 改）：它现在有「历史」组这个正经的家 ——
+ * 在那儿显示的是**任务名**，点一下右键就能恢复。要是本地会话组也列一遍，同一条对话
+ * 会出现两次，而且那边只能拿会话首句当名字（用户报的就是这个："名字没保留"）。
+ * 所以本地会话组只留「真没人认领」的会话：既不属于活着的任务，也不属于已删除的任务。
  */
 export function claimedClaudeSessionIds(tasks: readonly Task[]): string[] {
   return tasks
-    .filter((task) => !task.deleted)
     .map((task) => task.claudeSessionId)
     .filter((id): id is string => !!id)
     .sort();

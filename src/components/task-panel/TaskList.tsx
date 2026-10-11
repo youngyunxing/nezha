@@ -4,6 +4,7 @@ import { TaskListItem } from "./TaskListItem";
 import { TaskContextMenu, type TaskContextMenuState } from "./TaskContextMenu";
 import { ContextMenu } from "../ContextMenu";
 import { isVisibleTask } from "../../taskDeletion";
+import { DeletedTaskRow } from "./DeletedTaskRow";
 import {
   TASK_DRAG_AUTOSCROLL_EDGE_PX,
   TASK_DRAG_AUTOSCROLL_STEP_PX,
@@ -27,7 +28,8 @@ const OVERSCAN_ROWS = 8;
 type VirtualRow =
   | { type: "group"; key: string; label: string; height: number }
   | { type: "task"; key: string; task: Task; height: number }
-  | { type: "local"; key: string; session: LocalClaudeSession; height: number };
+  | { type: "local"; key: string; session: LocalClaudeSession; height: number }
+  | { type: "deleted"; key: string; task: Task; height: number };
 
 function findRowIndex(offsets: number[], value: number) {
   if (offsets.length <= 1) return 0;
@@ -59,6 +61,7 @@ export function TaskList({
   onResumeLocalSession,
   onSelectTask,
   onDeleteTask,
+  onRestoreTask,
   onToggleTaskStar,
   onRenameTask,
   onReorderTasks,
@@ -78,6 +81,8 @@ export function TaskList({
   onResumeLocalSession: (session: LocalClaudeSession) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
+  /** 「历史」组里恢复一条被删掉的任务（把 deleted 标记抹掉） */
+  onRestoreTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
   /** 拖动排序：按显示顺序回传这一组任务的 id */
@@ -120,21 +125,30 @@ export function TaskList({
     setScrollTop(event.currentTarget.scrollTop);
   }, []);
 
-  // 删掉的任务（deleted 标记）不再出现在列表里，记录还在磁盘上
   const visibleTasks = useMemo(() => tasks.filter(isVisibleTask), [tasks]);
+  // 「历史」组：删掉的任务。列表里其它地方一律过滤掉它们，只有这一组展示 ——
+  // 数据一直都在（软删除），缺的只是这个入口。
+  const deletedTasks = useMemo(
+    () =>
+      tasks
+        .filter((task) => !isVisibleTask(task))
+        .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt)),
+    [tasks],
+  );
 
   // 会话正文的搜索走后端（异步 + 防抖），名字 / 提示词 / 命令在本地同步匹配。
   // 任务的会话和「本地会话」（自己在本机跑的 claude）走的是同一条搜索 —— 它们的正文
   // 都该搜得到，不能只按标题和首条消息匹配。
   const searchPaths = useMemo(() => {
     const paths = new Set<string>();
-    for (const task of visibleTasks) {
+    // 已删除的任务也算进来：搜索是搜「所有任务」，别因为删过就搜不到
+    for (const task of [...visibleTasks, ...deletedTasks]) {
       const path = taskSessionPath(task);
       if (path) paths.add(path);
     }
     for (const session of localSessions) paths.add(session.sessionPath);
     return Array.from(paths);
-  }, [visibleTasks, localSessions]);
+  }, [visibleTasks, deletedTasks, localSessions]);
   const { matchedPaths, searching: searchingSessions } = useSessionSearch(searchPaths, query);
 
   const filtered = useMemo(() => {
@@ -151,6 +165,19 @@ export function TaskList({
       return !!sessionPath && matchedPaths.has(sessionPath);
     });
   }, [visibleTasks, query, matchedPaths]);
+
+  // 「历史」组也吃搜索：不然搜别的词时它照样把一堆删掉的任务顶在底下
+  const filteredDeletedTasks = useMemo(() => {
+    if (!query.trim()) return deletedTasks;
+    const q = query.toLowerCase();
+    return deletedTasks.filter((task) => {
+      if ([task.name, task.prompt, task.command].some((value) => value?.toLowerCase().includes(q))) {
+        return true;
+      }
+      const sessionPath = taskSessionPath(task);
+      return !!sessionPath && matchedPaths.has(sessionPath);
+    });
+  }, [deletedTasks, query, matchedPaths]);
 
   const filteredLocalSessions = useMemo(() => {
     if (!query.trim()) return localSessions;
@@ -277,8 +304,22 @@ export function TaskList({
       });
     }
 
+    // 「历史」放最底下：它是"过去的东西"，不该抢上面那些还需要你管的活的。
+    // 名字/状态/时间都是原文，恢复 = 右键 → 恢复。
+    if (filteredDeletedTasks.length > 0) {
+      nextRows.push({
+        type: "group",
+        key: "__history__",
+        label: t("task.history"),
+        height: GROUP_ROW_HEIGHT,
+      });
+      filteredDeletedTasks.forEach((task) => {
+        nextRows.push({ type: "deleted", key: `deleted:${task.id}`, task, height: TASK_ROW_HEIGHT });
+      });
+    }
+
     return { rows: nextRows, windowHiddenCount };
-  }, [cutoffTs, filteredLocalSessions, sorted, t, todayTs]);
+  }, [cutoffTs, filteredDeletedTasks, filteredLocalSessions, sorted, t, todayTs]);
 
   const offsets = useMemo(() => {
     const nextOffsets = [0];
@@ -430,10 +471,14 @@ export function TaskList({
   return (
     <>
       <div ref={scrollRef} style={s.taskListScroll} onScroll={handleScroll}>
-        {visibleTasks.length === 0 && localSessions.length === 0 && (
+        {/* 「历史」里还有东西时不算空 —— 不然上面写"还没有任务"、下面又列着历史，自相矛盾 */}
+        {visibleTasks.length === 0 && localSessions.length === 0 && filteredDeletedTasks.length === 0 && (
           <div style={s.taskListEmpty}>{t("task.noTasksYet")}</div>
         )}
-        {query.trim() !== "" && filtered.length === 0 && filteredLocalSessions.length === 0 && (
+        {query.trim() !== "" &&
+          filtered.length === 0 &&
+          filteredLocalSessions.length === 0 &&
+          filteredDeletedTasks.length === 0 && (
           <div style={s.taskListEmpty}>
             {searchingSessions ? t("task.searchingSessions") : t("task.noMatchingTasks")}
           </div>
@@ -477,6 +522,15 @@ export function TaskList({
                   >
                 {row.type === "group" ? (
                   <div style={s.groupLabel}>{row.label}</div>
+                ) : row.type === "deleted" ? (
+                  <DeletedTaskRow
+                    task={row.task}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setCtxMenu({ x: event.clientX, y: event.clientY, task: row.task });
+                    }}
+                  />
                 ) : row.type === "local" ? (
                   <LocalSessionRow
                     session={row.session}
@@ -560,6 +614,10 @@ export function TaskList({
         }}
         onDelete={() => {
           onDeleteTask(ctxMenu.task.id);
+          setCtxMenu(null);
+        }}
+        onRestore={() => {
+          onRestoreTask(ctxMenu.task.id);
           setCtxMenu(null);
         }}
       />

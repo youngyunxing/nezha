@@ -38,6 +38,7 @@ function renderOrder(tasks: Task[]) {
         onResumeLocalSession={vi.fn()}
         onSelectTask={vi.fn()}
         onDeleteTask={vi.fn()}
+        onRestoreTask={vi.fn()}
         onToggleTaskStar={vi.fn()}
         onRenameTask={vi.fn()}
         renamingTaskId={null}

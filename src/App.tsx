@@ -1521,6 +1521,22 @@ function App() {
    *  - 正在跑的会话必须停：不然它成了没有界面的后台 agent，还占着 PTY。
    *  - worktree 任务的工作树与分支会被删（`git worktree remove --force` + `git branch -D`），
    *    这是唯一真丢东西的地方，所以删前确认一次。 */
+  /** 「历史」组里恢复一条被删掉的任务 = 把 `deleted` 标记抹掉。
+   *  记录本来就一直在磁盘上（软删除），所以名字、状态、会话、worktree、屏幕记录
+   *  全都原样回来 —— 不需要新建任务，也不需要重新认领会话。 */
+  function handleRestoreTask(taskId: string) {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task || !task.deleted) return;
+    setTasks((prev) => {
+      const next = prev.map((item) =>
+        item.id === taskId ? { ...item, deleted: undefined } : item,
+      );
+      persistProjectTasks(task.projectId, next, showToast, formatSaveTasksError);
+      return next;
+    });
+    showToast(t("task.restored"), "success");
+  }
+
   async function handleDeleteTask(taskId: string) {
     const task = tasks.find((item) => item.id === taskId);
     if (!task || task.deleted) return;
@@ -1899,6 +1915,7 @@ function App() {
                 })
               }
               onDeleteTask={handleDeleteTask}
+              onRestoreTask={handleRestoreTask}
               onToggleTaskStar={handleToggleTaskStar}
               onRenameTask={handleRenameTask}
               onReorderTasks={handleReorderTasks}

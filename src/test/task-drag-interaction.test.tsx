@@ -45,6 +45,7 @@ function renderList(tasks: Task[]) {
         onResumeLocalSession={vi.fn()}
         onSelectTask={onSelectTask}
         onDeleteTask={vi.fn()}
+        onRestoreTask={vi.fn()}
         onToggleTaskStar={vi.fn()}
         onRenameTask={vi.fn()}
         onReorderTasks={onReorderTasks}

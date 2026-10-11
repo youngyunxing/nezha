@@ -39,6 +39,7 @@ function renderList(
     onResumeLocalSession: vi.fn(),
     onSelectTask: vi.fn(),
     onDeleteTask: vi.fn(),
+    onRestoreTask: vi.fn(),
     onToggleTaskStar: vi.fn(),
     onRenameTask: vi.fn(),
     onRenamingTaskIdChange: vi.fn(),
@@ -158,10 +159,18 @@ describe("任务列表右键菜单与改名", () => {
     expect(screen.queryByText(/更早的任务/)).toBeNull();
   });
 
-  it("删掉的任务（deleted 标记）不再出现在列表里", () => {
-    renderList({ tasks: [makeTask({ id: "a1", deleted: true, prompt: "删掉的任务" })] });
-    expect(screen.queryByText("删掉的任务")).toBeNull();
-    expect(screen.getByText("还没有任务")).toBeTruthy();
+  it("删掉的任务不进正常列表，而是落到「历史」组，且点它不做事", () => {
+    const handlers = renderList({
+      tasks: [makeTask({ id: "a1", deleted: true, prompt: "删掉的任务" })],
+    });
+    // 名字还在（软删除保留记录），但它在「历史」组里，不在正常任务流里
+    expect(screen.getByText("历史")).toBeTruthy();
+    const row = screen.getByText("删掉的任务");
+    // 普通任务行是 button（点 = 选中）；历史行故意不是 —— 恢复走右键，避免误触
+    expect(row.closest("button")).toBeNull();
+    expect(handlers.onSelectTask).not.toHaveBeenCalled();
+    // 也不会因为"看起来没有任务了"而顶一句空态在历史组上面
+    expect(screen.queryByText("还没有任务")).toBeNull();
   });
 
   it("改名态属于别的任务时，这一行还是普通标题", () => {

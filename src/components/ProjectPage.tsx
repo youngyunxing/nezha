@@ -64,6 +64,7 @@ export function ProjectPage({
   onResumeLocalSession,
   onSelectTask,
   onDeleteTask,
+  onRestoreTask,
   onToggleTaskStar,
   onRenameTask,
   onReorderTasks,
@@ -126,6 +127,7 @@ export function ProjectPage({
   onResumeLocalSession: (session: LocalClaudeSession) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
+  onRestoreTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   onRenameTask: (id: string, name: string) => void;
   /** 任务列表拖动排序：按显示顺序回传一组任务 id */
@@ -400,6 +402,7 @@ export function ProjectPage({
         onEditPresets={onEditPresets}
         onSelectTask={handleSelectTask}
         onDeleteTask={onDeleteTask}
+        onRestoreTask={onRestoreTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
         onReorderTasks={onReorderTasks}

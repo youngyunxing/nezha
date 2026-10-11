@@ -7,7 +7,9 @@ export const TASK_DRAG_AUTOSCROLL_EDGE_PX = 30;
 export const TASK_DRAG_AUTOSCROLL_STEP_PX = 12;
 
 /** 列表里的一行（只用到这几项，便于测试时构造假数据）。 */
-export type DragRow = { type: "group" | "task" | "local"; task?: Task };
+/** 拖动排序只看「哪几行是任务」—— 非 task 的行（分组头、本地会话、历史里的已删除任务）
+ *  一律当成"断点"，不参与拖动也不接收落点。 */
+export type DragRow = { type: "group" | "task" | "local" | "deleted"; task?: Task };
 
 /** 指针在「内容坐标」里的 y → 插到第几行之前（0..rows.length）。
  *  以每行的中线为界：落在上半算插到它前面，下半算后面。 */

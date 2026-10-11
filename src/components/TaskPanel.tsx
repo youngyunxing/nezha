@@ -25,6 +25,7 @@ export function TaskPanel({
   onEditPresets,
   onSelectTask,
   onDeleteTask,
+  onRestoreTask,
   onToggleTaskStar,
   onRenameTask,
   onReorderTasks,
@@ -52,6 +53,8 @@ export function TaskPanel({
   onEditPresets: (presetId?: string) => void;
   onSelectTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
+  /** 「历史」组里恢复一条被删掉的任务 */
+  onRestoreTask: (id: string) => void;
   onToggleTaskStar: (id: string) => void;
   /** 列表右键菜单的「重命名」 */
   onRenameTask: (id: string, name: string) => void;
@@ -193,6 +196,7 @@ export function TaskPanel({
         onResumeLocalSession={onResumeLocalSession}
         onSelectTask={onSelectTask}
         onDeleteTask={onDeleteTask}
+        onRestoreTask={onRestoreTask}
         onToggleTaskStar={onToggleTaskStar}
         onRenameTask={onRenameTask}
         onReorderTasks={onReorderTasks}
