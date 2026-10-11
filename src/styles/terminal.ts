@@ -190,13 +190,13 @@ export const terminal = {
   },
   sessionScrollJump: {
     position: "absolute" as const,
-    // 8 → 38：上面让给 RunningView 的「会话管理」胶囊（带文案，和终端那边一致）
-    top: 38,
+    top: 6,
     right: 14,
     display: "flex",
-    flexDirection: "column" as const,
-    gap: 4,
-    zIndex: 2,
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 6,
+    zIndex: 6,
   },
   sessionScrollJumpBtn: {
     width: 22,
@@ -274,27 +274,20 @@ export const terminal = {
     maxWidth: "100%",
     flexWrap: "wrap" as const,
   },
-  /* 「会话管理」入口：会话视图右上角。压在跳转按钮那一列上面 —— 跳转按钮已下移
-     28px（见 TerminalView / SessionView 的 scrollJumpStyle）。头部那一行在的时候
-     （恢复/合并 worktree 那些）整块还要再往下让一行，由组件自己算 top。 */
-  sessionManageWrap: {
-    position: "absolute" as const,
-    right: 14,
-    zIndex: 6,
-  },
-  /* 和右下角那排小胶囊同一套观感（用户口径：三个点要加上「会话管理」文案） */
+  /* 「会话管理」胶囊：塞在右上角跳转按钮那一排里（跳转按钮右边）。
+     **高度和那两颗小方钮对齐（20px）** —— 用户口径：「按钮要横着，注意大小」。 */
   sessionManageBtn: {
+    height: 20,
     display: "flex",
     alignItems: "center",
-    gap: 5,
-    padding: "5px 10px",
+    gap: 4,
+    padding: "0 9px",
     borderRadius: 999,
-    border: "1px solid var(--border-medium)",
+    border: "1px solid var(--border-dim)",
     background: "var(--bg-card)",
-    color: "var(--text-secondary)",
-    fontSize: 12,
+    color: "var(--text-hint)",
+    fontSize: 11.5,
     cursor: "pointer",
-    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.16)",
   },
   sessionManageMenu: { minWidth: 180 },
   sessionManageItem: {

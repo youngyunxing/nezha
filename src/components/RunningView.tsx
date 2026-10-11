@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type {
@@ -361,7 +361,7 @@ export function RunningView({
   // 而 fork / 导出 恰恰在那种时候最有用。样式跟这一排的其它按钮一致。
   // 会话管理（fork / 流转 / 复制 / 导出）收进右上角那个 ⋯ —— 它们是对整段会话做的
   // 一次性动作，不该占着右下角"随手要用"的那一排。头部那一行在的时候要往下让一行。
-  const manageEntry = sessionPath ? (
+  const manageEntry: ReactNode = sessionPath ? (
     <SessionManageMenu
       sessionPath={sessionPath}
       assistantLabel={agentLabel(task.agent)}
@@ -428,6 +428,7 @@ export function RunningView({
         isActive={visible && !recordPane}
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
+        topRightSlot={manageEntry}
       />
       {cornerActions}
     </div>
@@ -446,10 +447,6 @@ export function RunningView({
         zIndex: visible ? 1 : 0,
       }}
     >
-      {/* 右上角：头部那一行在的时候（恢复 / 合并 worktree）要让开它 */}
-      {manageEntry && (
-        <div style={{ ...s.sessionManageWrap, top: showHeaderActions ? 42 : 6 }}>{manageEntry}</div>
-      )}
       {/* 头部：任务名已移到主区域标签条，这里只剩动作按钮 */}
       {showHeaderActions && (
         <div
@@ -645,7 +642,11 @@ export function RunningView({
           </div>
           {sessionPath ? (
             <div style={s.sessionPaneWrap}>
-              <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+              <SessionView
+            sessionPath={sessionPath}
+            themeVariant={themeVariant}
+            topRightSlot={manageEntry}
+          />
               {cornerActions}
             </div>
           ) : task.agent === "shell" ? (
@@ -660,14 +661,22 @@ export function RunningView({
         /* 记录视图：和终端共用右下角那一排（快捷输入 / fork / 流转 / 复制 / 导出）——
            之前它挂在 ProjectPage 上，那一排就整个丢了，用户报的"快捷输入不可见"就是这个 */
         <div style={s.sessionPaneWrap}>
-          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          <SessionView
+            sessionPath={sessionPath}
+            themeVariant={themeVariant}
+            topRightSlot={manageEntry}
+          />
           {cornerActions}
         </div>
       ) : isActive || !sessionPath ? (
         terminalPane
       ) : (
         <div style={s.sessionPaneWrap}>
-          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          <SessionView
+            sessionPath={sessionPath}
+            themeVariant={themeVariant}
+            topRightSlot={manageEntry}
+          />
           {cornerActions}
         </div>
       )}

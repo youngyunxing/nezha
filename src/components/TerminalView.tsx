@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
@@ -20,13 +27,13 @@ const scrollShellStyle: CSSProperties = { position: "relative", width: "100%", h
 /** 跳到顶 / 到底：笔记本没有 Home/End，快捷键记不住时就点这个。 */
 const scrollJumpStyle: CSSProperties = {
   position: "absolute",
-  // 6 → 38：上面让给 RunningView 的「会话管理」胶囊（带文案，比原来那颗图标高）
-  top: 38,
+  top: 6,
   right: 14,
   display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  zIndex: 2,
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  zIndex: 6,
 };
 
 const scrollJumpBtnStyle: CSSProperties = {
@@ -105,6 +112,8 @@ interface TerminalViewProps {
   initialData?: string;
   initialSnapshot?: string;
   onSnapshot?: (snapshot: string) => void;
+  /** 右上角那一排里、跳转按钮右边的插槽（RunningView 用来放「会话管理」） */
+  topRightSlot?: ReactNode;
 }
 
 export function TerminalView({
@@ -122,6 +131,7 @@ export function TerminalView({
   initialData,
   initialSnapshot,
   onSnapshot,
+  topRightSlot,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   /** 铺满终端容器的那层壳：提示条以它为定位锚点 */
@@ -527,6 +537,7 @@ export function TerminalView({
         >
           <ChevronDown size={13} strokeWidth={2.2} />
         </button>
+        {topRightSlot}
       </div>
       {/* 斜杠命令提示：只在正在敲命令时出现，其余时候完全不存在 */}
       {isActive && slashHint && (

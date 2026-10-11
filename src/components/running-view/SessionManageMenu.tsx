@@ -110,8 +110,7 @@ export function SessionManageMenu({
   );
 
   return (
-    <div style={s.sessionManageWrap}>
-      <Popover.Root
+    <Popover.Root
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
@@ -217,7 +216,6 @@ export function SessionManageMenu({
             )}
           </Popover.Content>
         </Popover.Portal>
-      </Popover.Root>
-    </div>
+    </Popover.Root>
   );
 }

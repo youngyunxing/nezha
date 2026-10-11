@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import s from "../styles";
 import { invoke } from "@tauri-apps/api/core";
 import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react";
@@ -204,9 +204,12 @@ function MessageBlock({
 export function SessionView({
   sessionPath,
   themeVariant,
+  topRightSlot,
 }: {
   sessionPath: string;
   themeVariant: ThemeVariant;
+  /** 右上角那一排里、跳转按钮右边的插槽（RunningView 用来放「会话管理」） */
+  topRightSlot?: ReactNode;
 }) {
   const { t } = useI18n();
   const [messages, setMessages] = useState<SessionMessage[]>([]);
@@ -328,6 +331,7 @@ export function SessionView({
         >
           <ChevronDown size={13} strokeWidth={2.2} />
         </button>
+        {topRightSlot}
       </div>
     </div>
   );
