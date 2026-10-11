@@ -20,7 +20,8 @@ const scrollShellStyle: CSSProperties = { position: "relative", width: "100%", h
 /** 跳到顶 / 到底：笔记本没有 Home/End，快捷键记不住时就点这个。 */
 const scrollJumpStyle: CSSProperties = {
   position: "absolute",
-  top: 6,
+  // 6 → 34：上面那 28px 让给 RunningView 的「会话管理」⋯ 入口
+  top: 34,
   right: 14,
   display: "flex",
   flexDirection: "column",

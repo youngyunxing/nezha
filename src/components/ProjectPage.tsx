@@ -31,7 +31,6 @@ import { RepoSelector } from "./task-panel/RepoSelector";
 import { GitHistory } from "./GitHistory";
 import { GitDiffViewer } from "./GitDiffViewer";
 import { MainTabBar } from "./main-tabs/MainTabBar";
-import { SessionView } from "./SessionView";
 import {
   fileTabKey,
   localSessionTabColorKey,
@@ -516,11 +515,6 @@ export function ProjectPage({
                 themeVariant={themeVariant}
                 previewModes={previewModes}
               />
-            ) : showingRecordTab && recordSessionPath ? (
-              /* 会话记录标签：读当前任务的 JSONL 全量回放（工具调用不显示，只留对话） */
-              <div style={s.sessionPaneWrap}>
-                <SessionView sessionPath={recordSessionPath} themeVariant={themeVariant} />
-              </div>
             ) : localSession ? (
               <LocalSessionView
                 session={localSession}
@@ -534,9 +528,10 @@ export function ProjectPage({
           {projectTasks
             .filter((t) => mountedTaskIds.has(t.id))
             .map((task) => {
+              // 记录标签下**不藏** RunningView：记录视图现在是它自己渲染的（这样才有
+              // 右下角那一排按钮），藏了就没东西显示了。
               const isVisible =
                 !showingFile &&
-                !showingRecordTab &&
                 !openDiff &&
                 !isNewTask &&
                 !localSession &&
@@ -568,6 +563,7 @@ export function ProjectPage({
                   onRegisterTerminal={(fn) => onRegisterTerminal(task.id, fn)}
                   onTerminalReady={(generation) => onTerminalReady(task.id, generation)}
                   onOpenRecord={openRecord}
+                  showRecord={task.id === selectedTaskId && showingRecordTab}
                   onSnapshot={(snapshot) => onSnapshot(task.id, snapshot)}
                   getRestoreState={() => getTaskRestoreState(task.id)}
                   themeVariant={themeVariant}

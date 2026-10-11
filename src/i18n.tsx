@@ -338,6 +338,8 @@ const translations: Record<string, string> = {
   "file.outline": "目录",
   "file.closeTab": "关闭 {name}",
   "session.record": "会话记录",
+  "session.manage": "会话管理",
+  "session.backToManage": "返回",
   "task.history": "历史",
   "task.restore": "恢复",
   "task.restored": "已恢复",

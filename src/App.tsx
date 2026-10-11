@@ -1382,6 +1382,38 @@ function App() {
    * 否则首批输出进不来 buffer。
    */
   function handleResumeLocalSession(project: Project, session: LocalClaudeSession) {
+    // 这条会话本来就是 Nezha 任务留下的（被删掉了）→ **恢复原来那条**再续跑，而不是新建一条：
+    // 名字、创建时间、worktree 信息、终端屏幕记录全都原样回来（用户口径：「名称等信息保持不变且保留」）。
+    // 先按 sessionId 匹配，兜底再比一次 sessionPath（id 有可能没登记上）。
+    const existing = tasks.find(
+      (item) =>
+        item.projectId === project.id &&
+        item.deleted &&
+        (item.claudeSessionId === session.sessionId ||
+          item.claudeSessionPath === session.sessionPath),
+    );
+    if (existing) {
+      const restored: Task = { ...existing, deleted: undefined, status: "pending" };
+      setTasks((prev) => {
+        const next = prev.map((item) => (item.id === existing.id ? restored : item));
+        persistProjectTasks(project.id, next, showToast, formatSaveTasksError);
+        return next;
+      });
+      setActiveProject(project);
+      mountProject(project.id);
+      updateProjectView(project.id, {
+        selectedTaskId: existing.id,
+        isNewTask: false,
+        localSession: null,
+      });
+      tm.resetTaskTerminal(existing.id);
+      setTaskRunCounts((prev) => ({ ...prev, [existing.id]: (prev[existing.id] ?? 0) + 1 }));
+      pendingResumeStartsRef.current[existing.id] = () =>
+        invokeResumeTask(restored, project, session.sessionId);
+      showToast(t("task.restored"), "success");
+      return;
+    }
+
     const taskId = `${Date.now()}`;
     const now = Date.now();
     const task: Task = {

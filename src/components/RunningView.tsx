@@ -14,7 +14,7 @@ import { SessionView } from "./SessionView";
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
 import { agentLabel, canForkAgent, taskSessionId, taskSessionPath } from "../types";
-import { CopySession } from "./running-view/CopySession";
+import { SessionManageMenu } from "./running-view/SessionManageMenu";
 import { FlowHandoff, type HandoffOptions } from "./running-view/FlowHandoff";
 import type { QuickInput as QuickInputItem } from "../quickInputs";
 import { useToast } from "./Toast";
@@ -22,13 +22,10 @@ import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
 import s from "../styles";
 import {
-  ArrowRightLeft,
   RotateCcw,
   GitMerge,
   Trash2,
   AlertTriangle,
-  GitFork,
-  Download,
   History,
 } from "lucide-react";
 
@@ -111,6 +108,7 @@ export function RunningView({
   onTerminalReady,
   onSnapshot,
   onOpenRecord,
+  showRecord = false,
   getRestoreState,
   themeVariant,
   terminalFontSize,
@@ -147,6 +145,8 @@ export function RunningView({
   onSnapshot?: (snapshot: string) => void;
   /** 把「会话记录」开成一个主区域标签（终端右下角那个按钮调的）。 */
   onOpenRecord: () => void;
+  /** 这个任务当前是不是在「会话记录」标签上（主区域那个标签选中的是它）。 */
+  showRecord?: boolean;
   getRestoreState?: () => { initialData?: string; initialSnapshot?: string };
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
@@ -352,11 +352,33 @@ export function RunningView({
     };
   }, [sessionPath, isActive, projectActive]);
 
+  // 这个任务当前在看「会话记录」标签：终端不卸载，只 display:none 藏起来 ——
+  // 卸载会 dispose xterm、把 PTY 尺寸重置，切回来还得重排（跟「被文件查看器盖住」同一条路）。
+  const recordPane = showRecord && Boolean(sessionPath);
+
   // 会话右下角一排（顺序：快捷输入 / fork / 流转 / 复制 / 导出）。
   // 抽成变量是因为「终端」和「会话记录」两种模式都要挂它 —— 结束的任务是后者，
   // 而 fork / 导出 恰恰在那种时候最有用。样式跟这一排的其它按钮一致。
+  // 会话管理（fork / 流转 / 复制 / 导出）收进右上角那个 ⋯ —— 它们是对整段会话做的
+  // 一次性动作，不该占着右下角"随手要用"的那一排。头部那一行在的时候要往下让一行。
+  const manageEntry = sessionPath ? (
+    <SessionManageMenu
+      sessionPath={sessionPath}
+      assistantLabel={agentLabel(task.agent)}
+      canFork={canFork}
+      canExport={canExport}
+      exporting={exporting}
+      onFork={() => setForkDialogOpen(true)}
+      onHandoff={() => setHandoffOpen(true)}
+      onExport={() => void handleExport()}
+    />
+  ) : null;
+
   const cornerActions = (
     <div style={s.sessionCornerActions}>
+      {/* 快捷输入 = 往终端里打字。PTY 已经没了的（完成/失败/取消/中断）就别给 ——
+          插进去也没人接，只会让人以为还能输入。管快捷指令去活着的会话里管。 */}
+      {isActive && (
       <QuickInput
         items={quickInputs}
         sessionKind={task.agent === "shell" ? "command" : "prompt"}
@@ -367,51 +389,11 @@ export function RunningView({
         onSave={onSaveQuickInput}
         onDelete={onDeleteQuickInput}
       />
-      {canFork && (
-        <button
-          type="button"
-          className="quick-input-trigger"
-          style={s.quickInputTrigger}
-          title={t("running.forkSession")}
-          onClick={() => setForkDialogOpen(true)}
-        >
-          <GitFork size={12} strokeWidth={2.3} />
-          <span>{t("running.forkSession")}</span>
-        </button>
       )}
-      {sessionPath && (
-        <button
-          type="button"
-          className="quick-input-trigger"
-          style={s.quickInputTrigger}
-          title={t("handoff.button")}
-          onClick={() => setHandoffOpen(true)}
-        >
-          <ArrowRightLeft size={12} strokeWidth={2.3} />
-          <span>{t("handoff.button")}</span>
-        </button>
-      )}
-      {sessionPath && <CopySession sessionPath={sessionPath} assistantLabel={agentLabel(task.agent)} />}
-      {canExport && (
-        <button
-          type="button"
-          className="quick-input-trigger"
-          style={{
-            ...s.quickInputTrigger,
-            opacity: exporting ? 0.6 : undefined,
-            cursor: exporting ? "wait" : "pointer",
-          }}
-          title={t("running.exportMarkdown")}
-          disabled={exporting}
-          onClick={handleExport}
-        >
-          <Download size={12} strokeWidth={2.3} className={exporting ? "spin" : ""} />
-          <span>{exporting ? t("running.exporting") : t("running.exportSession")}</span>
-        </button>
-      )}
+
       {/* 会话记录：把它开成主区域的另一个标签（点了才开，能切走能关掉）。
           只在任务活着的时候给 —— 结束的任务主区域本来就是记录，不用再开一个。 */}
-      {isActive && sessionPath && (
+      {isActive && sessionPath && !recordPane && (
         <button
           type="button"
           className="quick-input-trigger"
@@ -429,7 +411,7 @@ export function RunningView({
   // 终端面板抽成变量：正常运行要用，纯终端任务在「异常中断」态也要用它显示上次屏幕
   // （否则重启后只剩一条横幅 +「没有会话记录」，看不到记录）。
   const terminalPane = (
-    <div style={s.terminalContainer}>
+    <div style={{ ...s.terminalContainer, ...(recordPane ? { display: "none" } : null) }}>
       <TerminalView
         key={`${task.id}-${runCount}`}
         agent={task.agent}
@@ -443,7 +425,7 @@ export function RunningView({
         terminalFontSize={terminalFontSize}
         terminalScrollback={terminalScrollback}
         monoFontFamily={monoFontFamily}
-        isActive={visible}
+        isActive={visible && !recordPane}
         initialData={restoreState.initialData}
         initialSnapshot={restoreState.initialSnapshot}
       />
@@ -464,6 +446,10 @@ export function RunningView({
         zIndex: visible ? 1 : 0,
       }}
     >
+      {/* 右上角：头部那一行在的时候（恢复 / 合并 worktree）要让开它 */}
+      {manageEntry && (
+        <div style={{ ...s.sessionManageWrap, top: showHeaderActions ? 42 : 6 }}>{manageEntry}</div>
+      )}
       {/* 头部：任务名已移到主区域标签条，这里只剩动作按钮 */}
       {showHeaderActions && (
         <div
@@ -665,6 +651,13 @@ export function RunningView({
               {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
             </div>
           )}
+        </div>
+      ) : recordPane && sessionPath ? (
+        /* 记录视图：和终端共用右下角那一排（快捷输入 / fork / 流转 / 复制 / 导出）——
+           之前它挂在 ProjectPage 上，那一排就整个丢了，用户报的"快捷输入不可见"就是这个 */
+        <div style={s.sessionPaneWrap}>
+          <SessionView sessionPath={sessionPath} themeVariant={themeVariant} />
+          {cornerActions}
         </div>
       ) : isActive || !sessionPath ? (
         terminalPane

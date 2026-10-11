@@ -151,6 +151,21 @@ export function TaskList({
   }, [visibleTasks, deletedTasks, localSessions]);
   const { matchedPaths, searching: searchingSessions } = useSessionSearch(searchPaths, query);
 
+  /** 把一条被删掉的任务伪装成「本地会话」—— 预览走的是同一套（LocalSessionView），
+   *  所以点开它的样子和本地会话完全一致。没有会话文件的（纯终端任务）返回 null，
+   *  那种行点开没东西可看，只留右键恢复。 */
+  const deletedTaskSession = (task: Task): LocalClaudeSession | null => {
+    const sessionPath = taskSessionPath(task);
+    if (!sessionPath || !task.claudeSessionId) return null;
+    return {
+      sessionId: task.claudeSessionId,
+      sessionPath,
+      preview: task.name ?? task.prompt,
+      updatedAt: task.updatedAt ?? task.createdAt,
+      sizeBytes: 0,
+    };
+  };
+
   const filtered = useMemo(() => {
     if (!query.trim()) return visibleTasks;
     const q = query.toLowerCase();
@@ -285,6 +300,21 @@ export function TaskList({
     appendGroup("today", t("task.today"), todayTasks);
     appendGroup("earlier", t("task.earlier"), earlierTasks);
 
+    // 「历史」紧跟任务之后、本地会话之前 —— 它装的是**被删掉的 Nezha 任务**
+    // （名字、状态、时间都还是原文），比"别人的会话"更该挨着上面的任务列表。
+    // 有会话的那些点开就是预览（和本地会话完全一致），恢复走右键。
+    if (filteredDeletedTasks.length > 0) {
+      nextRows.push({
+        type: "group",
+        key: "__history__",
+        label: t("task.history"),
+        height: GROUP_ROW_HEIGHT,
+      });
+      filteredDeletedTasks.forEach((task) => {
+        nextRows.push({ type: "deleted", key: `deleted:${task.id}`, task, height: TASK_ROW_HEIGHT });
+      });
+    }
+
     // 本地 Claude Code 会话单独成组：它们不是 Nezha 任务，不落盘、不参与状态机，
     // 与上面的任务列表刻意分开。
     if (filteredLocalSessions.length > 0) {
@@ -304,19 +334,7 @@ export function TaskList({
       });
     }
 
-    // 「历史」放最底下：它是"过去的东西"，不该抢上面那些还需要你管的活的。
-    // 名字/状态/时间都是原文，恢复 = 右键 → 恢复。
-    if (filteredDeletedTasks.length > 0) {
-      nextRows.push({
-        type: "group",
-        key: "__history__",
-        label: t("task.history"),
-        height: GROUP_ROW_HEIGHT,
-      });
-      filteredDeletedTasks.forEach((task) => {
-        nextRows.push({ type: "deleted", key: `deleted:${task.id}`, task, height: TASK_ROW_HEIGHT });
-      });
-    }
+  
 
     return { rows: nextRows, windowHiddenCount };
   }, [cutoffTs, filteredDeletedTasks, filteredLocalSessions, sorted, t, todayTs]);
@@ -525,6 +543,15 @@ export function TaskList({
                 ) : row.type === "deleted" ? (
                   <DeletedTaskRow
                     task={row.task}
+                    session={deletedTaskSession(row.task)}
+                    selected={
+                      !!row.task.claudeSessionId &&
+                      row.task.claudeSessionId === selectedLocalSessionId
+                    }
+                    onClick={() => {
+                      const session = deletedTaskSession(row.task);
+                      if (session) onSelectLocalSession(session);
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();

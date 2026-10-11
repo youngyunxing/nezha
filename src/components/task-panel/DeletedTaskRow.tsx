@@ -3,7 +3,7 @@ import type React from "react";
 import { Trash2 } from "lucide-react";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
-import { agentLabel, type Task } from "../../types";
+import { agentLabel, type LocalClaudeSession, type Task } from "../../types";
 
 function formatDeletedTime(ms: number): string {
   if (!ms) return "";
@@ -26,31 +26,47 @@ function formatDeletedTime(ms: number): string {
  */
 export function DeletedTaskRow({
   task,
+  session,
+  selected,
+  onClick,
   onContextMenu,
 }: {
   task: Task;
+  /** 能预览时给的「本地会话」形状（预览走同一套 LocalSessionView）；纯终端任务没有 */
+  session: LocalClaudeSession | null;
+  selected: boolean;
+  onClick: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const title = task.name ?? task.prompt;
+  // 有会话的能点开预览（和本地会话一致）；纯终端任务没有东西可看，就只留右键恢复
+  const previewable = session !== null;
+  const Row = previewable ? "button" : "div";
 
   return (
-    <div
+    <Row
+      {...(previewable ? { type: "button" as const, onClick } : null)}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={title}
+      title={previewable ? `${title}（点开预览）` : title}
       style={{
         ...s.taskCard,
         width: "100%",
+        border: "none",
         textAlign: "left" as const,
         fontFamily: "var(--font-ui)",
         boxSizing: "border-box" as const,
-        cursor: "default",
+        cursor: previewable ? "pointer" : "default",
         // 一眼看出是"过去的东西"：压暗一点，不抢活着的任务的注意力
-        opacity: 0.6,
-        background: hovered ? "var(--bg-hover)" : "transparent",
+        opacity: selected ? 1 : 0.6,
+        background: selected
+          ? "var(--bg-selected)"
+          : hovered
+            ? "var(--bg-hover)"
+            : "transparent",
       }}
     >
       <div style={{ flexShrink: 0, marginTop: 1 }}>
@@ -63,6 +79,6 @@ export function DeletedTaskRow({
           {t("task.restore")}
         </div>
       </div>
-    </div>
+    </Row>
   );
 }

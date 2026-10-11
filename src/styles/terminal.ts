@@ -190,7 +190,8 @@ export const terminal = {
   },
   sessionScrollJump: {
     position: "absolute" as const,
-    top: 8,
+    // 8 → 36：上面那 28px 让给 RunningView 的「会话管理」⋯ 入口（和终端那边一致）
+    top: 36,
     right: 14,
     display: "flex",
     flexDirection: "column" as const,
@@ -272,6 +273,35 @@ export const terminal = {
     minWidth: 0,
     maxWidth: "100%",
     flexWrap: "wrap" as const,
+  },
+  /* 「会话管理」入口：会话视图右上角。压在跳转按钮那一列上面 —— 跳转按钮已下移
+     28px（见 TerminalView / SessionView 的 scrollJumpStyle）。头部那一行在的时候
+     （恢复/合并 worktree 那些）整块还要再往下让一行，由组件自己算 top。 */
+  sessionManageWrap: {
+    position: "absolute" as const,
+    right: 14,
+    zIndex: 6,
+  },
+  sessionManageBtn: {
+    width: 22,
+    height: 20,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    border: "1px solid var(--border-dim)",
+    borderRadius: 5,
+    background: "var(--bg-card)",
+    color: "var(--text-hint)",
+    opacity: 0.5,
+    cursor: "pointer",
+  },
+  sessionManageMenu: { minWidth: 180 },
+  sessionManageItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    width: "100%",
   },
   sessionCornerActions: {
     position: "absolute" as const,
