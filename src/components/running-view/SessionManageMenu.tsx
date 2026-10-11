@@ -121,11 +121,12 @@ export function SessionManageMenu({
         <Popover.Trigger asChild>
           <button
             type="button"
+            className="quick-input-trigger"
             style={s.sessionManageBtn}
             title={t("session.manage")}
-            aria-label={t("session.manage")}
           >
-            <MoreHorizontal size={15} />
+            <MoreHorizontal size={13} strokeWidth={2.3} />
+            <span>{t("session.manage")}</span>
           </button>
         </Popover.Trigger>
         <Popover.Portal>

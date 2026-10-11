@@ -35,23 +35,26 @@ export function DeletedTaskRow({
   /** 能预览时给的「本地会话」形状（预览走同一套 LocalSessionView）；纯终端任务没有 */
   session: LocalClaudeSession | null;
   selected: boolean;
+  /** 有会话的点开 = 预览；纯终端任务点开 = 恢复（它的"内容"就是上次那块屏幕） */
   onClick: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const title = task.name ?? task.prompt;
-  // 有会话的能点开预览（和本地会话一致）；纯终端任务没有东西可看，就只留右键恢复
+  // 有会话的能点开预览（和本地会话一致）；纯终端任务没有会话文件，点开就是恢复它
+  // ——它的"内容"就是那块上次屏幕，恢复出来才看得到
   const previewable = session !== null;
-  const Row = previewable ? "button" : "div";
+  const Row = "button" as const;
 
   return (
     <Row
-      {...(previewable ? { type: "button" as const, onClick } : null)}
+      type="button"
+      onClick={onClick}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={previewable ? `${title}（点开预览）` : title}
+      title={previewable ? `${title}（点开预览）` : `${title}（点开恢复，看上次屏幕）`}
       style={{
         ...s.taskCard,
         width: "100%",
@@ -59,9 +62,9 @@ export function DeletedTaskRow({
         textAlign: "left" as const,
         fontFamily: "var(--font-ui)",
         boxSizing: "border-box" as const,
-        cursor: previewable ? "pointer" : "default",
-        // 一眼看出是"过去的东西"：压暗一点，不抢活着的任务的注意力
-        opacity: selected ? 1 : 0.6,
+        cursor: "pointer",
+        // 观感跟「本地会话」那一组对齐（用户口径：字体颜色和本地会话一致）——
+        // 以前压暗 0.6，看起来像禁用项，和本地会话行不是一套
         background: selected
           ? "var(--bg-selected)"
           : hovered
@@ -76,7 +79,7 @@ export function DeletedTaskRow({
         <div style={s.taskCardTitle}>{title}</div>
         <div style={s.taskCardSub}>
           {agentLabel(task.agent)} · {formatDeletedTime(task.updatedAt ?? task.createdAt)} ·{" "}
-          {t("task.restore")}
+          {previewable ? t("task.restore") : t("task.restore")}
         </div>
       </div>
     </Row>

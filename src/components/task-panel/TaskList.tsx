@@ -550,7 +550,15 @@ export function TaskList({
                     }
                     onClick={() => {
                       const session = deletedTaskSession(row.task);
-                      if (session) onSelectLocalSession(session);
+                      if (session) {
+                        onSelectLocalSession(session);
+                        return;
+                      }
+                      // 纯终端任务：没有会话文件可读，点开就**恢复它并选中** ——
+                      // 选中即挂载，主区域直接显示它那块上次屏幕（"看到"），
+                      // 上面的「重新启动」把 shell 拉起来（"恢复"）
+                      onRestoreTask(row.task.id);
+                      onSelectTask(row.task.id);
                     }}
                     onContextMenu={(event) => {
                       event.preventDefault();

@@ -190,8 +190,8 @@ export const terminal = {
   },
   sessionScrollJump: {
     position: "absolute" as const,
-    // 8 → 36：上面那 28px 让给 RunningView 的「会话管理」⋯ 入口（和终端那边一致）
-    top: 36,
+    // 8 → 38：上面让给 RunningView 的「会话管理」胶囊（带文案，和终端那边一致）
+    top: 38,
     right: 14,
     display: "flex",
     flexDirection: "column" as const,
@@ -282,19 +282,19 @@ export const terminal = {
     right: 14,
     zIndex: 6,
   },
+  /* 和右下角那排小胶囊同一套观感（用户口径：三个点要加上「会话管理」文案） */
   sessionManageBtn: {
-    width: 22,
-    height: 20,
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 0,
-    border: "1px solid var(--border-dim)",
-    borderRadius: 5,
+    gap: 5,
+    padding: "5px 10px",
+    borderRadius: 999,
+    border: "1px solid var(--border-medium)",
     background: "var(--bg-card)",
-    color: "var(--text-hint)",
-    opacity: 0.5,
+    color: "var(--text-secondary)",
+    fontSize: 12,
     cursor: "pointer",
+    boxShadow: "0 2px 10px rgba(0, 0, 0, 0.16)",
   },
   sessionManageMenu: { minWidth: 180 },
   sessionManageItem: {

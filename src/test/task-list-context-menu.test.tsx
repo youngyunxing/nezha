@@ -159,18 +159,42 @@ describe("任务列表右键菜单与改名", () => {
     expect(screen.queryByText(/更早的任务/)).toBeNull();
   });
 
-  it("删掉的任务不进正常列表，而是落到「历史」组，且点它不做事", () => {
+  it("删掉的任务落到「历史」组；没有会话的（纯终端）点开 = 恢复 + 选中", () => {
     const handlers = renderList({
       tasks: [makeTask({ id: "a1", deleted: true, prompt: "删掉的任务" })],
     });
     // 名字还在（软删除保留记录），但它在「历史」组里，不在正常任务流里
     expect(screen.getByText("历史")).toBeTruthy();
-    const row = screen.getByText("删掉的任务");
-    // 普通任务行是 button（点 = 选中）；历史行故意不是 —— 恢复走右键，避免误触
-    expect(row.closest("button")).toBeNull();
-    expect(handlers.onSelectTask).not.toHaveBeenCalled();
+    // 选中即挂载 → 主区域直接显示那块上次屏幕（这就是终端任务的"看到"）
+    fireEvent.click(screen.getByText("删掉的任务"));
+    expect(handlers.onRestoreTask).toHaveBeenCalledWith("a1");
+    expect(handlers.onSelectTask).toHaveBeenCalledWith("a1");
     // 也不会因为"看起来没有任务了"而顶一句空态在历史组上面
     expect(screen.queryByText("还没有任务")).toBeNull();
+  });
+
+  it("有会话的那种点开是预览（复用本地会话那一套），不恢复", () => {
+    const handlers = renderList({
+      tasks: [
+        makeTask({
+          id: "a2",
+          deleted: true,
+          name: "删掉的会话",
+          claudeSessionId: "s-1",
+          claudeSessionPath: "/tmp/s1.jsonl",
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByText("删掉的会话"));
+    expect(handlers.onSelectLocalSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "s-1",
+        sessionPath: "/tmp/s1.jsonl",
+        // 预览那一条用的名字就是任务名（不是会话首句）——这就是"名字保持不变"
+        preview: "删掉的会话",
+      }),
+    );
+    expect(handlers.onRestoreTask).not.toHaveBeenCalled();
   });
 
   it("改名态属于别的任务时，这一行还是普通标题", () => {
