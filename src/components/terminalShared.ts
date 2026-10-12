@@ -733,6 +733,36 @@ function refreshTextureAtlas(term: Terminal): void {
   }
 }
 
+/**
+ * 图集变了（xterm 塞满后会自动清掉重建）→ 下一帧重画一遍视口。
+ *
+ * 为什么必须有这个：屏幕上的字是 WebGL 画在 canvas 上的，已经画出去的那些字符
+ * 指着**旧图集**的坐标 —— 图集被清掉重建的那一刻，它们就成了乱码，而且**不会自己
+ * 恢复**（用户实测：切到别的任务再切回来才好，因为那条路会重刷渲染）。
+ * `onChangeTextureAtlas` 就是 xterm 为这件事准备的事件，之前一直没接。
+ *
+ * ⚠️ 这里**只能 repaint，绝不能 clearTextureAtlas()** —— 那会再次触发
+ * `onChangeTextureAtlas`，和这个回调互相触发，死循环。rAF 去重：一次流式输出里
+ * 图集可能变好几次，只重画最后一帧就够。
+ */
+const viewportRepaintFrames = new WeakMap<Terminal, number>();
+
+function scheduleViewportRepaint(term: Terminal): void {
+  const ownerWindow = getTerminalOwnerWindow(term);
+  const pending = viewportRepaintFrames.get(term);
+  if (pending !== undefined) ownerWindow.cancelAnimationFrame(pending);
+  const frameId = ownerWindow.requestAnimationFrame(() => {
+    viewportRepaintFrames.delete(term);
+    if (!term.element || term.rows <= 0) return;
+    try {
+      term.refresh(0, term.rows - 1);
+    } catch {
+      /* term 已 dispose */
+    }
+  });
+  viewportRepaintFrames.set(term, frameId);
+}
+
 function scheduleTextureAtlasRefresh(term: Terminal): void {
   const ownerWindow = getTerminalOwnerWindow(term);
   const state = cancelScheduledTextureAtlasRefresh(term);
@@ -813,6 +843,8 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
         addon?.dispose();
         addon = null;
       });
+      // 图集重建会让屏幕上已画的字符变乱码 → 一变就重画（见 scheduleViewportRepaint）
+      addon.onChangeTextureAtlas(() => scheduleViewportRepaint(term));
       term.loadAddon(addon);
       scheduleTextureAtlasRefresh(term);
       void whenFontEventuallyReady(fontFamily, fontSize).then(() => {
