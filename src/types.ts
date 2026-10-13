@@ -105,7 +105,12 @@ export const DEFAULT_TERMINAL_SCROLLBACK: TerminalScrollback = 1000;
  * 短会话的终端一个字节都不多占，所以给 agent 任务一条下限是安全的一侧。
  * 真把 2 万行填满的终端 ≈ 几十 MB，属于可接受（同任务的应用层缓冲本来就允许 10MB）。
  */
-export const AGENT_TERMINAL_SCROLLBACK_FLOOR = 20_000;
+// ⚠️ 2026-10-13 试验中：用户报「同一段在终端里显示 2~3 遍」，而且说「之前基本没遇到过」——
+// 时间上对得上这个下限（10-10 才加的）。怀疑是回滚大之后，CLI 每次重画历史留下的**旧副本**
+// 不再被挤掉（1000 行时很快就滚出视野了）。所以先关成 1000（= 等于没有下限）做 A/B：
+//   关掉后不重复 → 就是这个下限引起的，再想两全的办法；
+//   关掉后还重复 → 与回滚无关，去抓原始流（见 FORK.md 第 30 条）。
+export const AGENT_TERMINAL_SCROLLBACK_FLOOR = 1_000;
 
 /** 某个 agent 的终端该用多大的回滚：agent 任务有下限，纯终端听用户的。 */
 export function effectiveTerminalScrollback(
