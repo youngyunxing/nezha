@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { Task } from "../types";
 import { normalizeInterruptedTasksOnStartup } from "../taskStartup";
 
+/**
+ * 只钉「归一化」本身。
+ *
+ * ⚠️ 这里**故意没有**「谁该被自动续跑」的测试：2026-10-13 曾经加过一版筛选
+ * （只自动恢复归一化前在 pending/running 的），被用户否了 —— 「中断待恢复就自动恢复，
+ * 这是之前说过的逻辑」。所以启动时的自动续跑是无条件的（只要 interrupted 且有会话），
+ * 别再往 taskStartup 里加"谁算在干活"的判据。
+ */
 function task(id: string, over: Partial<Task> = {}): Task {
   return {
     id,
@@ -16,35 +24,13 @@ function task(id: string, over: Partial<Task> = {}): Task {
   };
 }
 
-describe("启动对账：谁算「当时在干活」", () => {
-  it("running / pending 算 —— 机器是干活途中被带走的", () => {
-    const { wasWorkingIds } = normalizeInterruptedTasksOnStartup(
-      [task("a", { status: "running" }), task("b", { status: "pending" })],
-      new Set(),
-    );
-    expect([...wasWorkingIds].sort()).toEqual(["a", "b"]);
-  });
-
-  it("停在等你 / 答完待读 / 它在问你 都不算 —— 重启后不该替它们续命", () => {
-    // 用户报的「重启电脑后很多变成正在处理」就是这些被自动 --resume 拉起来了：
-    // 它们本来已经答完、停在等你了，拉起来只会多一堆 claude 进程 + 一个假状态
-    const { wasWorkingIds } = normalizeInterruptedTasksOnStartup(
-      [
-        task("idle", { status: "idle" }),
-        task("review", { status: "awaiting_review" }),
-        task("input", { status: "input_required" }),
-      ],
-      new Set(),
-    );
-    expect([...wasWorkingIds]).toEqual([]);
-  });
-
-  it("归一化本身照旧：活跃状态一律落 interrupted（进程没了 → 点恢复）", () => {
+describe("启动对账：进程已不在的活跃任务落成「待恢复」", () => {
+  it("活跃状态一律落 interrupted（进程没了 → 点恢复）", () => {
     const { tasks, changedProjectIds } = normalizeInterruptedTasksOnStartup(
-      [task("a", { status: "idle" })],
+      [task("a", { status: "idle" }), task("b", { status: "awaiting_review" })],
       new Set(),
     );
-    expect(tasks[0].status).toBe("interrupted");
+    expect(tasks.map((t) => t.status)).toEqual(["interrupted", "interrupted"]);
     expect(tasks[0].processAlive).toBe(false);
     expect(changedProjectIds.has("p1")).toBe(true);
   });
@@ -58,23 +44,17 @@ describe("启动对账：谁算「当时在干活」", () => {
     expect(tasks[0].processAlive).toBe(true);
   });
 
-  it("早就搁着的「待恢复」原样不动，也不再被算成在干活", () => {
+  it("早就搁着的「待恢复」原样不动（同一个对象引用，列表不会白刷）", () => {
     const parked = task("a", { status: "interrupted", processAlive: false });
-    const { tasks, wasWorkingIds } = normalizeInterruptedTasksOnStartup([parked], new Set());
-    // 同一个对象引用：没变就不该产生新数组（列表不会白刷）
+    const { tasks } = normalizeInterruptedTasksOnStartup([parked], new Set());
     expect(tasks[0]).toBe(parked);
-    expect(wasWorkingIds.has("a")).toBe(false);
   });
 
   it("已完成 / 已取消的不碰", () => {
     const done = task("d", { status: "done" });
     const cancelled = task("c", { status: "cancelled" });
-    const { tasks, wasWorkingIds } = normalizeInterruptedTasksOnStartup(
-      [done, cancelled],
-      new Set(),
-    );
+    const { tasks } = normalizeInterruptedTasksOnStartup([done, cancelled], new Set());
     expect(tasks[0]).toBe(done);
     expect(tasks[1]).toBe(cancelled);
-    expect([...wasWorkingIds]).toEqual([]);
   });
 });

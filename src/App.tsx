@@ -727,8 +727,10 @@ function App() {
       });
       const activeTaskIds = new Set(await invoke<string[]>("get_active_task_ids"));
       const rawTasks = chunks.flat();
-      const { tasks: loadedTasks, changedProjectIds, wasWorkingIds } =
-        normalizeInterruptedTasksOnStartup(rawTasks, activeTaskIds);
+      const { tasks: loadedTasks, changedProjectIds } = normalizeInterruptedTasksOnStartup(
+        rawTasks,
+        activeTaskIds,
+      );
 
       // 异常中断自动恢复：状态是「异常中断」（interrupted）的任务在启动时直接 --resume
       // 接回去，不用用户逐个点「恢复」。它涵盖两种来源：
@@ -746,13 +748,6 @@ function App() {
       const autoResume: Array<{ task: Task; project: Project; sessionId: string | null }> = [];
       for (const task of loadedTasks) {
         if (task.status !== "interrupted" || activeTaskIds.has(task.id)) continue;
-        // **只自动恢复「这次启动前确实还在干活」的**（pending / running，见 wasWorkingIds）。
-        // 停在等你（idle）、一轮答完待你读（awaiting_review）、它在问你（input_required）
-        // 都算「停在那儿」—— 替它们续命等于凭空起一堆 claude：重启电脑后 22 条任务全被
-        // 拉起来报 running、状态全变成「正在处理」，就是这么来的。
-        // 附带把另一个毛病也治了：以前每次启动都会把**所有**「待恢复」重新续跑一遍，
-        // 包括你早就搁着不管的那些 —— 现在搁着的就一直搁着，点「恢复」才动。
-        if (!wasWorkingIds.has(task.id)) continue;
         const project = loadedProjects.find((p) => p.id === task.projectId);
         if (!project) continue;
         // 纯终端没有会话可 resume，但也一样自动重开（屏幕由落盘的输出记录回放）。
