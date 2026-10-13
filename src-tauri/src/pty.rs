@@ -341,6 +341,29 @@ fn flush_pty_batch(sink: &OutputSink, batch: &mut String) {
 /// - `sink`：`OutputSink::Channel`（直投单一前端订阅者）
 /// - `session_tx`：可选 channel，用于将原始文本转发给 session watcher
 /// - `on_finish`：PTY 关闭后执行的可选清理回调
+/// 诊断开关（FORK.md 30 条）：`~/.nezha/raw-dump-on` 存在时，把这一路 PTY 的**原始字节**
+/// 按序落盘到 `~/.nezha/raw-dump/reader-<n>.bin`（每路封顶 64MB）。
+///
+/// 用途：分清「同一段在终端里显示 2~3 遍」到底是 **CLI 重发** 还是 **我们写重** ——
+///   原始流里就有重复 → CLI（TUI 重画/重发）；原始流干净而屏幕有 → 我们（写入链路）。
+/// 平时没有那个开关文件 → 一次 stat，几乎零开销。
+fn open_raw_dump_if_enabled() -> Option<(std::fs::File, usize)> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let home = std::env::var_os("HOME")?;
+    let base = std::path::PathBuf::from(home).join(".nezha");
+    if !base.join("raw-dump-on").exists() {
+        return None;
+    }
+    let dir = base.join("raw-dump");
+    std::fs::create_dir_all(&dir).ok()?;
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let path = dir.join(format!("reader-{}-{}.bin", std::process::id(), n));
+    let file = std::fs::File::create(&path).ok()?;
+    eprintln!("[nezha] raw PTY dump -> {}", path.display());
+    Some((file, 0))
+}
+
 fn spawn_pty_reader(
     sink: OutputSink,
     emit_mode: PtyEmitMode,
@@ -383,10 +406,19 @@ fn spawn_pty_reader(
                 (Some(tx), Some(worker))
             }
         };
+        // 诊断落盘（默认关，见 open_raw_dump_if_enabled）
+        const RAW_DUMP_CAP: usize = 64 * 1024 * 1024;
+        let mut raw_dump = open_raw_dump_if_enabled();
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
+                    if let Some((file, written)) = raw_dump.as_mut() {
+                        use std::io::Write;
+                        if *written < RAW_DUMP_CAP && file.write_all(&buf[..n]).is_ok() {
+                            *written += n;
+                        }
+                    }
                     let mut combined = std::mem::take(&mut leftover);
                     combined.extend_from_slice(&buf[..n]);
 
