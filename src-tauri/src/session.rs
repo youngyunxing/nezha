@@ -892,8 +892,49 @@ fn is_codex_format(lines: &[&str]) -> bool {
     false
 }
 
+/// 同一条消息可能在 JSONL 里落好几行 —— Claude Code 是**流式/按 content block 分次**
+/// 写盘的，那些行的 `message.id` 相同、正文重复。以前逐行 push，回放 / 复制会话 /
+/// 导出 markdown 就会把同一段显示好几遍（实测某个会话：15434 条 assistant 里
+/// **5763 个 id 重复**，最多重复 9 遍）。
+///
+/// 所以按 `(role, message.id)` 去重，并且**后来的原地替换前面的** —— 流式场景里
+/// 后落盘的那版往往是更完整的。没有 id 的行（老格式 / 个别事件）照旧直接 push。
+fn push_claude_message(
+    messages: &mut Vec<SessionMessage>,
+    seen: &mut std::collections::HashMap<(String, String), usize>,
+    role: &str,
+    message_id: &str,
+    content: Vec<SessionContent>,
+) {
+    if message_id.is_empty() {
+        messages.push(SessionMessage {
+            role: role.to_string(),
+            content,
+        });
+        return;
+    }
+    let key = (role.to_string(), message_id.to_string());
+    match seen.get(&key) {
+        Some(&index) => {
+            messages[index] = SessionMessage {
+                role: role.to_string(),
+                content,
+            };
+        }
+        None => {
+            seen.insert(key, messages.len());
+            messages.push(SessionMessage {
+                role: role.to_string(),
+                content,
+            });
+        }
+    }
+}
+
 fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
     let mut messages = Vec::new();
+    let mut seen: std::collections::HashMap<(String, String), usize> =
+        std::collections::HashMap::new();
 
     for line in lines {
         let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -903,6 +944,7 @@ fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
         let Some(message) = val.get("message") else {
             continue;
         };
+        let message_id = message.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
         match msg_type {
             "user" => {
@@ -912,10 +954,7 @@ fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
                 }
                 let parts = claude_user_content(message.get("content"));
                 if !parts.is_empty() {
-                    messages.push(SessionMessage {
-                        role: "user".to_string(),
-                        content: parts,
-                    });
+                    push_claude_message(&mut messages, &mut seen, "user", message_id, parts);
                 }
             }
             "assistant" => {
@@ -925,10 +964,7 @@ fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
                     .map(|arr| claude_assistant_blocks(arr))
                     .unwrap_or_default();
                 if !parts.is_empty() {
-                    messages.push(SessionMessage {
-                        role: "assistant".to_string(),
-                        content: parts,
-                    });
+                    push_claude_message(&mut messages, &mut seen, "assistant", message_id, parts);
                 }
             }
             _ => {}
@@ -2355,6 +2391,56 @@ fn format_timestamp_ms(ms: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn text_of(message: &SessionMessage) -> String {
+        message
+            .content
+            .iter()
+            .map(|part| match part {
+                SessionContent::Text { text } => text.clone(),
+                _ => String::new(),
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    #[test]
+    fn claude_session_dedupes_repeated_message_ids() {
+        // 实测某个真实会话：15434 条 assistant 里 **5763 个 message.id 重复**、最多 9 遍
+        //（Claude Code 流式 / 按 content block 分次落盘）。回放 / 复制 / 导出都只该出现一次。
+        let lines = vec![
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"同一段"}]}}"#,
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"同一段"}]}}"#,
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"同一段"}]}}"#,
+            r#"{"type":"assistant","message":{"id":"msg_B","content":[{"type":"text","text":"另一段"}]}}"#,
+        ];
+        let messages = parse_claude_session(&lines);
+        assert_eq!(messages.len(), 2, "同一个 id 的三行只该留一条");
+        assert_eq!(text_of(&messages[0]), "同一段");
+        assert_eq!(text_of(&messages[1]), "另一段");
+    }
+
+    #[test]
+    fn claude_session_keeps_repeated_text_under_different_ids() {
+        // 正文一样但 id 不同 = 真的是两条消息（agent 连答两次同样的话），不能去重
+        let lines = vec![
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"ok"}]}}"#,
+            r#"{"type":"assistant","message":{"id":"msg_B","content":[{"type":"text","text":"ok"}]}}"#,
+        ];
+        assert_eq!(parse_claude_session(&lines).len(), 2);
+    }
+
+    #[test]
+    fn claude_session_later_snapshot_wins() {
+        // 同一条消息分次落盘时后写的那版通常更完整 —— 是原地替换，不是简单丢弃
+        let lines = vec![
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"半句"}]}}"#,
+            r#"{"type":"assistant","message":{"id":"msg_A","content":[{"type":"text","text":"半句，写完了"}]}}"#,
+        ];
+        let messages = parse_claude_session(&lines);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(text_of(&messages[0]), "半句，写完了");
+    }
 
     #[test]
     fn extract_claude_status_session_id_from_status_output() {
