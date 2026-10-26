@@ -757,9 +757,13 @@ function refreshTextureAtlas(term: Terminal): void {
  * 恢复**（用户实测：切到别的任务再切回来才好，因为那条路会重刷渲染）。
  * `onChangeTextureAtlas` 就是 xterm 为这件事准备的事件，之前一直没接。
  *
- * ⚠️ 这里**只能 repaint，绝不能 clearTextureAtlas()** —— 那会再次触发
- * `onChangeTextureAtlas`，和这个回调互相触发，死循环。rAF 去重：一次流式输出里
- * 图集可能变好几次，只重画最后一帧就够。
+ * 只调 `term.refresh()` 不够：WebGL 的 model dirty-check 会跳过内容未变的格子，
+ * 旧 glyph 坐标仍然留在屏幕上。必须清掉 atlas/model 后整屏重画；共享 atlas 的
+ * sibling 也一起失效，否则另一个任务仍会显示错位文字。
+ *
+ * `clearTextureAtlas()` 本身不会触发 `onChangeTextureAtlas`（只有 acquire 新图集
+ * 才会），所以这里不会形成事件循环。rAF 去重：一次流式输出里图集可能变好几次，
+ * 只重画最后一帧就够。
  */
 const viewportRepaintFrames = new WeakMap<Terminal, number>();
 
@@ -770,11 +774,7 @@ function scheduleViewportRepaint(term: Terminal): void {
   const frameId = ownerWindow.requestAnimationFrame(() => {
     viewportRepaintFrames.delete(term);
     if (!term.element || term.rows <= 0) return;
-    try {
-      term.refresh(0, term.rows - 1);
-    } catch {
-      /* term 已 dispose */
-    }
+    refreshTextureAtlas(term);
   });
   viewportRepaintFrames.set(term, frameId);
 }
