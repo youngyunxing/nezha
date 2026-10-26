@@ -1509,9 +1509,13 @@ function App() {
       repoPath: task.worktreeRepo ?? projectPath,
       worktreePath: task.worktreePath,
       branch: task.worktreeBranch,
-    }).catch((e: unknown) => {
-      showToast(t("toast.worktreeDiscardFailed", { error: String(e) }), "warning");
-    });
+    })
+      // 删掉的任务记录还留在 tasks.json 里（软删除）—— 工作树没了就必须打上 discarded，
+      // 否则从「历史」恢复出来的任务仍会显示「合入 / 丢弃工作树」，点下去只会报错。
+      .then(() => markTaskWorktreeDiscarded(task.id))
+      .catch((e: unknown) => {
+        showToast(t("toast.worktreeDiscardFailed", { error: String(e) }), "warning");
+      });
   }
 
   /** 删除任务 = 从列表里拿掉，**记录留在磁盘上**（softDeleteTasks 打 deleted 标记，
