@@ -55,11 +55,11 @@ const messages = [
   { role: "assistant", content: [{ type: "text", text: "最新一条回复" }] },
 ];
 
-async function renderSession() {
+async function renderSession(active = true) {
   invokeMock.mockResolvedValue(messages);
   const { container } = render(
     <I18nProvider>
-      <SessionView sessionPath="/tmp/session.jsonl" themeVariant="dark" />
+      <SessionView sessionPath="/tmp/session.jsonl" themeVariant="dark" active={active} />
     </I18nProvider>,
   );
   await waitFor(() => expect(screen.getByText("最新一条回复")).toBeTruthy());
@@ -99,5 +99,27 @@ describe("历史会话的滚动", () => {
     fireEvent.scroll(pane);
     fireResize();
     expect(pane.scrollTop).toBe(300);
+  });
+});
+
+describe("Cmd+↑↓ 的守卫", () => {
+  it("焦点在输入框里时不抢（macOS 上这是输入框自己的「光标到首/尾」）", async () => {
+    const pane = await renderSession();
+    pane.scrollTop = 0;
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    // fireEvent 返回 false 表示 preventDefault 被调用过
+    const notPrevented = fireEvent.keyDown(input, { key: "ArrowDown", metaKey: true });
+    expect(notPrevented).toBe(true);
+    expect(pane.scrollTop).toBe(0);
+    input.remove();
+  });
+
+  it("不可见的实例不响应（切到别的项目 / 关掉记录标签）", async () => {
+    const pane = await renderSession(false);
+    pane.scrollTop = 0;
+    const notPrevented = fireEvent.keyDown(document.body, { key: "ArrowDown", metaKey: true });
+    expect(notPrevented).toBe(true);
+    expect(pane.scrollTop).toBe(0);
   });
 });

@@ -23,10 +23,13 @@ export function LocalSessionView({
   session,
   themeVariant,
   onResume,
+  active = true,
 }: {
   session: LocalClaudeSession;
   themeVariant: ThemeVariant;
   onResume: () => void;
+  /** 这个视图当前是否真的显示着（不可见的项目页里实例还挂着） */
+  active?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -44,7 +47,11 @@ export function LocalSessionView({
           <span>{t("localSession.resume")}</span>
         </button>
       </div>
-      <SessionView sessionPath={session.sessionPath} themeVariant={themeVariant} />
+      <SessionView
+        sessionPath={session.sessionPath}
+        themeVariant={themeVariant}
+        active={active}
+      />
     </div>
   );
 }

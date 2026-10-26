@@ -205,11 +205,15 @@ export function SessionView({
   sessionPath,
   themeVariant,
   topRightSlot,
+  active = true,
 }: {
   sessionPath: string;
   themeVariant: ThemeVariant;
   /** 右上角那一排里、跳转按钮右边的插槽（RunningView 用来放「会话管理」） */
   topRightSlot?: ReactNode;
+  /** 这个视图当前是否真的显示着。不可见的项目页 / 关掉的记录标签里实例还挂着，
+   *  但它们不该响应快捷键（否则每个实例都白滚一遍，还会抢 preventDefault）。 */
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const [messages, setMessages] = useState<SessionMessage[]>([]);
@@ -273,9 +277,15 @@ export function SessionView({
     return () => observer.disconnect();
   }, [loading, sessionPath]);
 
-  // Cmd + ↑↓：和终端那套一致（Home / End 是滚动容器的原生行为，不用管）
+  // Cmd + ↑↓：和终端那套一致（Home / End 是滚动容器的原生行为，不用管）。
+  // 两处守卫：
+  // - 焦点在输入框里时不要抢 —— macOS 上 Cmd+↑↓ 是「光标到文档首/尾」，属于输入框自己；
+  // - 视图不可见时（切到别的项目、记录标签关掉）不抢 —— 挂着的实例不该响应。
   useEffect(() => {
+    if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       const jump = scrollJumpForKey(event);
       if (!jump) return;
       event.preventDefault();
@@ -284,7 +294,7 @@ export function SessionView({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [jumpToBottom, jumpToTop]);
+  }, [active, jumpToBottom, jumpToTop]);
 
   return (
     <div style={s.sessionScrollWrap}>

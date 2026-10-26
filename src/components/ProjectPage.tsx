@@ -520,6 +520,7 @@ export function ProjectPage({
                 session={localSession}
                 themeVariant={themeVariant}
                 onResume={() => onResumeLocalSession(localSession)}
+                active={visible}
               />
             ) : null}
           </ErrorBoundary>

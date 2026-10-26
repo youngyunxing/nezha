@@ -643,10 +643,11 @@ export function RunningView({
           {sessionPath ? (
             <div style={s.sessionPaneWrap}>
               <SessionView
-            sessionPath={sessionPath}
-            themeVariant={themeVariant}
-            topRightSlot={manageEntry}
-          />
+                sessionPath={sessionPath}
+                themeVariant={themeVariant}
+                topRightSlot={manageEntry}
+                active={visible}
+              />
               {cornerActions}
             </div>
           ) : task.agent === "shell" ? (
@@ -665,6 +666,7 @@ export function RunningView({
             sessionPath={sessionPath}
             themeVariant={themeVariant}
             topRightSlot={manageEntry}
+            active={visible}
           />
           {cornerActions}
         </div>
@@ -676,6 +678,7 @@ export function RunningView({
             sessionPath={sessionPath}
             themeVariant={themeVariant}
             topRightSlot={manageEntry}
+            active={visible}
           />
           {cornerActions}
         </div>
