@@ -963,7 +963,7 @@ function App() {
     texts: string[] = [],
   ) {
     // 先等面板量出真实尺寸，别让 CLI 按默认 220 列画第一帧
-    await tm.waitForMeasuredSize();
+    await tm.waitForMeasuredSize(task.id);
     invoke("run_task", {
       taskId: task.id,
       projectPath,
@@ -973,8 +973,7 @@ function App() {
       images,
       texts,
       command: task.command ?? null,
-      cols: tm.terminalSizeRef.current.cols,
-      rows: tm.terminalSizeRef.current.rows,
+      ...tm.getSpawnSize(task.id),
       onOutput: tm.createOutputChannel(task.id),
     })
       .then(() => tm.reapplyTerminalSize(task.id))
@@ -1198,7 +1197,7 @@ function App() {
   }
 
   async function invokeResumeTask(task: Task, project: Project, sessionId: string) {
-    await tm.waitForMeasuredSize();
+    await tm.waitForMeasuredSize(task.id);
     invoke("resume_task", {
       taskId: task.id,
       projectPath: task.worktreePath ?? project.path,
@@ -1206,8 +1205,7 @@ function App() {
       sessionId,
       prompt: task.prompt,
       permissionMode: task.permissionMode,
-      cols: tm.terminalSizeRef.current.cols,
-      rows: tm.terminalSizeRef.current.rows,
+      ...tm.getSpawnSize(task.id),
       onOutput: tm.createOutputChannel(task.id),
     })
       .then(() => tm.reapplyTerminalSize(task.id))
@@ -1416,15 +1414,14 @@ function App() {
   }
 
   async function invokeForkTask(task: Task, project: Project, sourceSessionId: string) {
-    await tm.waitForMeasuredSize();
+    await tm.waitForMeasuredSize(task.id);
     invoke("fork_task", {
       taskId: task.id,
       projectPath: project.path,
       agent: task.agent,
       sourceSessionId,
       permissionMode: task.permissionMode,
-      cols: tm.terminalSizeRef.current.cols,
-      rows: tm.terminalSizeRef.current.rows,
+      ...tm.getSpawnSize(task.id),
       onOutput: tm.createOutputChannel(task.id),
     })
       .then(() => tm.reapplyTerminalSize(task.id))

@@ -100,7 +100,15 @@ export function useTerminalManager(options?: {
   );
   const terminalWriteRefs = useRef<Record<string, TerminalWriteFn>>({});
   const terminalWriteStateRef = useRef<Record<string, TerminalWriteState>>({});
-  const terminalSizeRef = useRef<{ cols: number; rows: number }>({ cols: 220, rows: 50 });
+  // 终端尺寸按任务记账：面板尺寸是所有任务共享的，但同一时刻只有一个任务的面板可见。
+  // 全局单值的问题：任务 A 在宽面板量出 156 列，切到窄窗口里的任务 B，B 的 reapply/spawn
+  // 会拿到 A 的尺寸 —— PTY 比 xterm 宽就会换行堆叠（PTY winsize 决定 CLI 绘制宽度）。
+  // lastMeasuredSizeRef 是「最近一次实测」，只作新任务还没量出尺寸时的 spawn 兜底。
+  const taskTerminalSizeRef = useRef<Record<string, { cols: number; rows: number }>>({});
+  const lastMeasuredSizeRef = useRef<{ cols: number; rows: number }>({
+    cols: DEFAULT_TERMINAL_COLS,
+    rows: DEFAULT_TERMINAL_ROWS,
+  });
 
   // ── Write state management ───────────────────────────────────────────────
 
@@ -222,6 +230,7 @@ export function useTerminalManager(options?: {
       delete terminalSnapshotRef.current[taskId];
       delete terminalWriteRefs.current[taskId];
       delete terminalWriteStateRef.current[taskId];
+      delete taskTerminalSizeRef.current[taskId];
     }
   }, []);
 
@@ -239,16 +248,13 @@ export function useTerminalManager(options?: {
     invoke("send_input", { taskId, data }).catch(console.error);
   }, []);
 
-  /** 等终端量出真实尺寸再 spawn（最多 DEFAULT_SIZE_WAIT_MS）。
-   *  面板比 spawn 早一步就位：挂载后一帧内会 fit 并把真实 cols/rows 写进 terminalSizeRef。
-   *  不等的话，PTY 会先拿到初始默认值 220×50，CLI 就按 220 列画了第一帧 —— 那个宽度远大于
-   *  面板，会留在终端历史里（实测记录里能看到 220 / 156 / 87 / 39 六种宽度的边框线）。
-   *  已经有真实尺寸（非默认值）或超时就照常返回。 */
-  const waitForMeasuredSize = useCallback(async () => {
-    const isDefaultSize = () =>
-      terminalSizeRef.current.cols === DEFAULT_TERMINAL_COLS &&
-      terminalSizeRef.current.rows === DEFAULT_TERMINAL_ROWS;
-    if (!isDefaultSize()) return;
+  /** 等这个任务的终端量出真实尺寸再 spawn（最多 DEFAULT_SIZE_WAIT_MS）。
+   *  面板比 spawn 早一步就位：挂载后一帧内会 fit 并把真实 cols/rows 按任务记进
+   *  taskTerminalSizeRef。不等的话，PTY 会先拿到初始默认值 220×50，CLI 就按 220 列
+   *  画了第一帧 —— 那个宽度远大于面板，会留在终端历史里（实测记录里能看到
+   *  220 / 156 / 87 / 39 六种宽度的边框线）。已有该任务的实测尺寸或超时就照常返回。 */
+  const waitForMeasuredSize = useCallback(async (taskId: string) => {
+    if (taskTerminalSizeRef.current[taskId]) return;
     const deadline = Date.now() + DEFAULT_SIZE_WAIT_MS;
     // rAF 在窗口被遮挡/隐藏时不会触发（应用的"隐藏到 Dock"、后台启动都算），
     // 所以每一步都拿 setTimeout 兜底 —— 否则这个 await 会永远挂着，任务再也起不来。
@@ -260,9 +266,14 @@ export function useTerminalManager(options?: {
           resolve();
         });
       });
-    while (Date.now() < deadline && isDefaultSize()) {
+    while (Date.now() < deadline && !taskTerminalSizeRef.current[taskId]) {
       await nextFrame();
     }
+  }, []);
+
+  /** spawn 用的尺寸：优先这个任务自己量出的，其次最近一次实测，最后才是默认 220×50。 */
+  const getSpawnSize = useCallback((taskId: string) => {
+    return taskTerminalSizeRef.current[taskId] ?? lastMeasuredSizeRef.current;
   }, []);
 
   /** PTY 建好之后重发一次当前尺寸。
@@ -270,12 +281,14 @@ export function useTerminalManager(options?: {
    *  于是 CLI 按默认 220×50 画了第一屏（首屏换行错乱），要等下一次尺寸变化（切走再切回）
    *  才重排。spawn/resume 完成后再补一次，SIGWINCH 就会让它按真实宽度重画。 */
   const reapplyTerminalSize = useCallback((taskId: string) => {
-    const { cols, rows } = terminalSizeRef.current;
+    const { cols, rows } =
+      taskTerminalSizeRef.current[taskId] ?? lastMeasuredSizeRef.current;
     invoke("resize_pty", { taskId, cols, rows }).catch(() => {});
   }, []);
 
   const handleResize = useCallback((taskId: string, cols: number, rows: number) => {
-    terminalSizeRef.current = { cols, rows };
+    taskTerminalSizeRef.current[taskId] = { cols, rows };
+    lastMeasuredSizeRef.current = { cols, rows };
     invoke("resize_pty", { taskId, cols, rows }).catch(console.error);
   }, []);
 
@@ -418,13 +431,13 @@ export function useTerminalManager(options?: {
   }, []);
 
   return {
-    terminalSizeRef,
     resetTerminalInputModes,
-      resetTaskTerminal,
+    resetTaskTerminal,
     removeTaskBuffers,
     writeErrorToTerminal,
     handleInput,
     handleResize,
+    getSpawnSize,
     reapplyTerminalSize,
     waitForMeasuredSize,
     handleRegisterTerminal,
