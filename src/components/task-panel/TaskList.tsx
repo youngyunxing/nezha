@@ -16,7 +16,7 @@ import {
   taskRunRange,
 } from "./taskDrag";
 import { useSessionSearch } from "../../hooks/useSessionSearch";
-import { taskSessionPath } from "../../types";
+import { taskSessionId, taskSessionPath } from "../../types";
 import { sortTasks } from "./taskSort";
 import { LocalSessionRow } from "./LocalSessionRow";
 import { useI18n } from "../../i18n";
@@ -139,7 +139,8 @@ export function TaskList({
     // 纯终端任务没有会话文件，不参与去重。
     const seenSessions = new Set<string>();
     return sorted.filter((task) => {
-      const sessionId = task.claudeSessionId;
+      // 按 agent 取对应会话 id（claude / codex / kimi 各存一套），同一条会话只留一条
+      const sessionId = taskSessionId(task);
       if (!sessionId) return true;
       if (seenSessions.has(sessionId)) return false;
       seenSessions.add(sessionId);
@@ -167,9 +168,10 @@ export function TaskList({
    *  那种行点开没东西可看，只留右键恢复。 */
   const deletedTaskSession = (task: Task): LocalClaudeSession | null => {
     const sessionPath = taskSessionPath(task);
-    if (!sessionPath || !task.claudeSessionId) return null;
+    const sessionId = taskSessionId(task);
+    if (!sessionPath || !sessionId) return null;
     return {
-      sessionId: task.claudeSessionId,
+      sessionId,
       sessionPath,
       preview: task.name ?? task.prompt,
       updatedAt: task.updatedAt ?? task.createdAt,
@@ -571,12 +573,12 @@ export function TaskList({
                   <DeletedTaskRow
                     task={row.task}
                     session={deletedTaskSession(row.task)}
-                    selected={
-                      deletedTaskSession(row.task)
-                        ? !!row.task.claudeSessionId &&
-                          row.task.claudeSessionId === selectedLocalSessionId
-                        : selectedId === row.task.id && !isNewTask
-                    }
+                    selected={(() => {
+                      const session = deletedTaskSession(row.task);
+                      return session
+                        ? session.sessionId === selectedLocalSessionId
+                        : selectedId === row.task.id && !isNewTask;
+                    })()}
                     onClick={() => {
                       const session = deletedTaskSession(row.task);
                       if (session) {
