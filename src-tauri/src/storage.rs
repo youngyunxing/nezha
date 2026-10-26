@@ -190,30 +190,41 @@ fn task_screen_path(project_id: &str, task_id: &str) -> Result<PathBuf, String> 
 
 /// 保存某任务的终端屏幕（xterm 序列化结果）。空内容视为删除。
 #[tauri::command]
-pub fn save_task_screen(
+pub async fn save_task_screen(
     project_id: String,
     task_id: String,
     content: String,
 ) -> Result<(), String> {
-    let path = task_screen_path(&project_id, &task_id)?;
-    if content.is_empty() {
-        let _ = fs::remove_file(&path);
-        return Ok(());
-    }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    atomic_write(&path, &content)
+    tokio::task::spawn_blocking(move || {
+        let path = task_screen_path(&project_id, &task_id)?;
+        if content.is_empty() {
+            let _ = fs::remove_file(&path);
+            return Ok(());
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        atomic_write(&path, &content)
+    })
+    .await
+    .map_err(|e| format!("save_task_screen panicked: {e}"))?
 }
 
 /// 读回某任务的终端屏幕；没有则 None。
 #[tauri::command]
-pub fn load_task_screen(project_id: String, task_id: String) -> Result<Option<String>, String> {
-    let path = task_screen_path(&project_id, &task_id)?;
-    if !path.exists() {
-        return Ok(None);
-    }
-    fs::read_to_string(&path).map(Some).map_err(|e| e.to_string())
+pub async fn load_task_screen(
+    project_id: String,
+    task_id: String,
+) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || {
+        let path = task_screen_path(&project_id, &task_id)?;
+        if !path.exists() {
+            return Ok(None);
+        }
+        fs::read_to_string(&path).map(Some).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("load_task_screen panicked: {e}"))?
 }
 
 /// 任务被删除时清掉它的屏幕快照。
