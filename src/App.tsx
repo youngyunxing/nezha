@@ -862,9 +862,11 @@ function App() {
         const { task_id, status, failure_reason } = e.payload;
         updateTaskStatus(task_id, status, undefined, failure_reason);
         if (!isActiveTaskStatus(status)) {
-          tm.removeTaskBuffers([task_id]);
-          // 进程没了：此时关掉鼠标上报模式绝对安全（不然下次在这个终端里起 shell 就会被刷）
+          // 先复位再丢 buffer：resetTerminalInputModes 走的是 terminalWriteRefs，
+          // 而 removeTaskBuffers 会把那个 ref 删掉 —— 顺序反了就是一次空操作。
+          // 进程没了，此时关掉鼠标上报模式绝对安全（不然下次在这个终端里起 shell 就会被刷）。
           tm.resetTerminalInputModes(task_id);
+          tm.removeTaskBuffers([task_id]);
         }
         if (status === "done") scheduleForDoneTask(task_id);
       },
