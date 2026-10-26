@@ -5,6 +5,7 @@ import * as Select from "@radix-ui/react-select";
 import { useI18n } from "../../i18n";
 import {
   clampTerminalScrollback,
+  effectiveTerminalScrollback,
   normalizeTaskDisplayWindow,
   TASK_DISPLAY_WINDOW_VALUES,
   TERMINAL_SCROLLBACK_MIN,
@@ -92,6 +93,9 @@ export function GeneralPanel({
       clampTerminalScrollback(terminalScrollback + direction * TERMINAL_SCROLLBACK_STEP),
     );
   };
+  // agent 终端实际生效的是 max(用户值, 下限) —— 输入框里显示的只是用户值。
+  // 两者不同时把真实生效值写出来，否则「设成 1000、实际用 20000」在界面上看不出来。
+  const agentEffectiveScrollback = effectiveTerminalScrollback("claude", terminalScrollback);
 
   return (
     <div style={s.settingsBodyColumn}>
@@ -193,6 +197,11 @@ export function GeneralPanel({
           />
           <span style={s.fontSizeUnit}>{t("appSettings.terminalScrollbackUnit")}</span>
         </div>
+        {agentEffectiveScrollback !== terminalScrollback && (
+          <span style={s.settingFieldHint}>
+            {t("appSettings.terminalScrollbackAgentEffective", { value: agentEffectiveScrollback })}
+          </span>
+        )}
         <span style={s.settingFieldHint}>{t("appSettings.terminalScrollbackHint")}</span>
         {terminalScrollback > 3000 && (
           <div style={s.settingsFieldWarning} role="alert">
