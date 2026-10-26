@@ -220,10 +220,7 @@ const translations: Record<string, string> = {
   "task.cancelled": "任务已取消",
   "task.deleteWorktreeTitle": "删除 worktree 任务",
   "task.deleteWorktreePrompt":
-    "删除“{prompt}”？\n\n它的 worktree 和里面未提交的改动会被丢弃，任务分支也会删掉 —— 这一步不可恢复。\n想留着就用「归档」：worktree、分支、改动全都保留。",
-  "task.archiveTitle": "归档任务",
-  "task.archivePrompt":
-    "归档会把这个任务从列表移进「已归档」，正在跑的会话会先停掉。\n\n会话记录、worktree、未提交的改动都会保留，随时可以恢复。继续？",
+    "删除“{prompt}”？\n\n它的 worktree 和里面未提交的改动会被丢弃，任务分支也会删掉 —— 这一步不可恢复。\n任务记录会留在「历史」里，可以恢复；但 worktree、分支和里面的改动恢复不了。",
   "task.deleteProjectTitle": "删除项目",
   "task.deleteProjectPrompt":
     "把项目“{project}”从列表移除？\n\n任务和会话记录都不会删：正在跑的会话会先停掉，任务原样留在磁盘上，之后重新添加这个目录就都回来了。",
