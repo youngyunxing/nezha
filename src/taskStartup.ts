@@ -1,4 +1,12 @@
-import { isActiveTaskStatus, type Task, type TaskStatus } from "./types";
+import {
+  isActiveTaskStatus,
+  taskSessionId,
+  taskSessionPath,
+  type Project,
+  type Task,
+  type TaskStatus,
+} from "./types";
+import { isVisibleTask } from "./taskDeletion";
 
 /**
  * 启动时把「进程已经不在的活跃任务」归一化成 `interrupted`（待恢复）。
@@ -36,4 +44,47 @@ export function normalizeInterruptedTasksOnStartup(
   });
 
   return { tasks: normalized, changedProjectIds };
+}
+
+/** 启动时自动续跑的一条候选。 */
+export interface StartupAutoResumeCandidate {
+  task: Task;
+  project: Project;
+  /** 纯终端任务没有会话可 resume（null = 重开一个 shell） */
+  sessionId: string | null;
+}
+
+/**
+ * 启动时该自动续跑哪些任务（判据集中在这里，便于测试钉住）。
+ *
+ * ⚠️ 只钉「哪些不续 / 哪些续」的事实，**不要加回「谁当时在干活」那类筛选** ——
+ * 2026-10-13 加过一版按 pending/running 过滤的，被用户否了（见上方注释）。
+ *
+ * 三条规则：
+ * - **软删除的任务一律不续**：记录还在 tasks.json 里（「历史」组能恢复），但它不在
+ *   任务列表里，跑起来就是个看不见的后台 agent，而且每次启动都会被重新拉起；
+ * - 有活子进程的交给「重连」路径，免得起第二个 claude；
+ * - 非 shell 任务必须有会话 id + 路径（只有 id 的多半是刚建好就被带走的，--resume 必然失败）。
+ */
+export function selectStartupAutoResumeTasks(
+  tasks: readonly Task[],
+  projects: readonly Project[],
+  activeTaskIds: ReadonlySet<string>,
+): StartupAutoResumeCandidate[] {
+  const out: StartupAutoResumeCandidate[] = [];
+  for (const task of tasks) {
+    if (!isVisibleTask(task)) continue;
+    if (task.status !== "interrupted" || activeTaskIds.has(task.id)) continue;
+    const project = projects.find((p) => p.id === task.projectId);
+    if (!project) continue;
+    if (task.agent === "shell") {
+      out.push({ task, project, sessionId: null });
+      continue;
+    }
+    const sessionId = taskSessionId(task);
+    const sessionPath = taskSessionPath(task);
+    if (!sessionId || !sessionPath) continue;
+    out.push({ task, project, sessionId });
+  }
+  return out;
 }

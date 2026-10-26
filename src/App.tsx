@@ -67,8 +67,8 @@ import {
 } from "./projectName";
 import { useI18n } from "./i18n";
 import { ProjectDrawer } from "./components/ProjectDrawer";
-import { softDeleteTasks } from "./taskDeletion";
-import { normalizeInterruptedTasksOnStartup } from "./taskStartup";
+import { isVisibleTask, softDeleteTasks } from "./taskDeletion";
+import { normalizeInterruptedTasksOnStartup, selectStartupAutoResumeTasks } from "./taskStartup";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -413,7 +413,11 @@ function App() {
    */
   const deriveProjectView = useCallback(
     (projectId: string, allTasks: Task[] = tasks): ProjectViewState => {
-      const projectTasks = allTasks.filter((task) => task.projectId === projectId);
+      // 已删除的任务（软删除）不参与视图推导：它只活在「历史」组里，不能被 persisted /
+      // 活跃会话这两条路径重新选回主区域 —— 记录还在磁盘上，但界面上它已经"不在"了。
+      const projectTasks = allTasks.filter(
+        (task) => task.projectId === projectId && isVisibleTask(task),
+      );
       const byRecency = (a: Task, b: Task) =>
         (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt);
 
@@ -745,21 +749,8 @@ function App() {
       // - 不想被自动恢复就取消它（cancelled 不在恢复范围内）。
       // 另外不动 updatedAt：任务列表按它排序，改成 now 会让恢复回来的任务全跳到最前面，
       // 而这里要的是与中断前一致的顺序。
-      const autoResume: Array<{ task: Task; project: Project; sessionId: string | null }> = [];
-      for (const task of loadedTasks) {
-        if (task.status !== "interrupted" || activeTaskIds.has(task.id)) continue;
-        const project = loadedProjects.find((p) => p.id === task.projectId);
-        if (!project) continue;
-        // 纯终端没有会话可 resume，但也一样自动重开（屏幕由落盘的输出记录回放）。
-        if (task.agent === "shell") {
-          autoResume.push({ task, project, sessionId: null });
-          continue;
-        }
-        const sessionId = taskSessionId(task);
-        const sessionPath = taskSessionPath(task);
-        if (!sessionId || !sessionPath) continue;
-        autoResume.push({ task, project, sessionId });
-      }
+      // 判据（含「已删除的一律不续」）集中在 selectStartupAutoResumeTasks 里，有测试钉着。
+      const autoResume = selectStartupAutoResumeTasks(loadedTasks, loadedProjects, activeTaskIds);
 
       const resumedIds = new Set(autoResume.map((item) => item.task.id));
       const nextTasks = loadedTasks.map((task) =>
@@ -800,7 +791,10 @@ function App() {
         projectsForState.find((project) => project.id === lastViewedProjectId) ??
         projectsForState.find((project) =>
           nextTasks.some(
-            (task) => task.projectId === project.id && isActiveTaskStatus(task.status),
+            (task) =>
+              task.projectId === project.id &&
+              isVisibleTask(task) &&
+              isActiveTaskStatus(task.status),
           ),
         ) ?? [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
       if (startProject) {
