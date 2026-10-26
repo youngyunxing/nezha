@@ -808,9 +808,9 @@ function App() {
         updateProjectView(startProject.id, deriveProjectView(startProject.id, nextTasks));
       }
 
-      // 全部任务仍会恢复，但不让几十个 CLI 同时读会话和重画首屏。每路等到
-      // 当前任务输出稳定后再取下一个，长会话回放期间也不会继续叠加进程。
-      await runWithConcurrency(autoResume, 2, async ({ task, project, sessionId }) => {
+      // 全部任务仍会恢复，但不让几十个 CLI 同时读会话和重画首屏。单路等到
+      // 当前任务过了启动间隔且输出稳定后再取下一个，长会话回放也不会叠加进程。
+      await runWithConcurrency(autoResume, 1, async ({ task, project, sessionId }) => {
         const pendingTask = {
           ...task,
           status: "pending" as TaskStatus,

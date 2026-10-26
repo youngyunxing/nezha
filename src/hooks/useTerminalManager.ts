@@ -253,13 +253,18 @@ export function useTerminalManager(options?: {
   }, []);
 
   /** 启动恢复时等这一轮回放输出稳定，再放行下一个任务。只读 ref，不引入渲染；
-   *  超时是异常进程一直刷输出时的兜底，避免后续任务永远排队。 */
+   *  输出停顿不等于 CLI 已过了启动高峰，因此还要有最小启动间隔；超时是异常
+   *  进程一直刷输出时的兜底，避免后续任务永远排队。 */
   const waitForTerminalQuiet = useCallback(
-    async (taskId: string, quietMs = 500, timeoutMs = 15000) => {
-      const deadline = Date.now() + timeoutMs;
+    async (taskId: string, quietMs = 1500, minWaitMs = 5000, timeoutMs = 15000) => {
+      const startedAt = Date.now();
+      const deadline = startedAt + timeoutMs;
       while (Date.now() < deadline) {
+        const elapsed = Date.now() - startedAt;
         const lastOutputAt = lastOutputAtRef.current[taskId] ?? 0;
-        if (lastOutputAt > 0 && Date.now() - lastOutputAt >= quietMs) return;
+        if (elapsed >= minWaitMs && lastOutputAt > 0 && Date.now() - lastOutputAt >= quietMs) {
+          return;
+        }
         await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
       }
     },
