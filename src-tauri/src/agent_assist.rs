@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::Path;
 use std::process::{Output, Stdio};
 use std::time::Duration;
@@ -70,7 +71,7 @@ async fn read_pipe_to_end<R: AsyncRead + Unpin>(
 /// - codex：`exec` + read-only 沙箱 + `--ephemeral`（同样不落会话）；
 /// - kimi：只有 `-p` + `--output-format text` —— 它**没有**对应的只读开关（`-p` 与 `--plan`
 ///   互斥，实测会报 "Cannot combine --prompt with --plan"），实测 `-p` 模式不会自己跑工具，
-///   只按提示词作答；副作用是每次会在 `~/.kimi-code/sessions/` 落一个小会话（界面上看不到）。
+///   只按提示词作答；每次落下的一次性小会话在调用结束后按 session id 清理。
 fn assist_agent_args(agent: &str, prompt: &str) -> Vec<String> {
     if agent == "codex" {
         vec![
@@ -115,6 +116,55 @@ fn strip_assist_noise(agent: &str, raw: &str) -> String {
         .join("\n")
         .trim()
         .to_string()
+}
+
+fn extract_kimi_session_id(raw: &str) -> Option<&str> {
+    raw.lines().find_map(|line| {
+        let id = line
+            .trim()
+            .strip_prefix("To resume this session: kimi -r ")?
+            .split_whitespace()
+            .next()?;
+        let valid = id.strip_prefix("session_").is_some_and(|suffix| !suffix.is_empty())
+            && id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'));
+        valid.then_some(id)
+    })
+}
+
+fn cleanup_kimi_assist_session(raw: &str) {
+    let Some(session_id) = extract_kimi_session_id(raw) else {
+        return;
+    };
+    let Some(sessions_root) = crate::session::kimi_home().map(|home| home.join("sessions")) else {
+        return;
+    };
+    let Ok(sessions_root) = sessions_root.canonicalize() else {
+        return;
+    };
+    let Ok(workdirs) = fs::read_dir(&sessions_root) else {
+        return;
+    };
+
+    for workdir in workdirs.flatten() {
+        let candidate = workdir.path().join(session_id);
+        let Ok(canonical) = candidate.canonicalize() else {
+            continue;
+        };
+        if !canonical.is_dir() || !canonical.starts_with(&sessions_root) {
+            continue;
+        }
+        let recent = canonical
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age <= Duration::from_secs(600));
+        if recent {
+            let _ = fs::remove_dir_all(canonical);
+        }
+    }
 }
 
 async fn run_assist_agent_with_timeout(
@@ -182,6 +232,11 @@ async fn run_assist_agent_with_timeout(
     let stderr_data = stderr_task
         .await
         .map_err(|e| format!("Agent stderr task failed: {}", e))??;
+
+    if agent == "kimi" {
+        let raw = String::from_utf8_lossy(&stdout_data).into_owned();
+        let _ = tokio::task::spawn_blocking(move || cleanup_kimi_assist_session(&raw)).await;
+    }
 
     Ok(Output {
         status,
@@ -423,6 +478,21 @@ mod tests {
         assert!(cleaned.contains("<SUMMARY>"));
         // 别的 agent 的输出原样返回
         assert_eq!(strip_assist_noise("claude", raw), raw);
+    }
+
+    #[test]
+    fn extracts_only_safe_kimi_session_ids() {
+        assert_eq!(
+            extract_kimi_session_id(
+                "kimi version 2.1.1\nTo resume this session: kimi -r session_abc-123"
+            ),
+            Some("session_abc-123")
+        );
+        assert_eq!(
+            extract_kimi_session_id("To resume this session: kimi -r ../../other"),
+            None
+        );
+        assert_eq!(extract_kimi_session_id("ordinary output"), None);
     }
 
     #[test]
