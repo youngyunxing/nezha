@@ -12,9 +12,9 @@ describe("effectiveTerminalScrollback", () => {
       AGENT_TERMINAL_SCROLLBACK_FLOOR,
     );
     expect(effectiveTerminalScrollback("codex", 500)).toBe(AGENT_TERMINAL_SCROLLBACK_FLOOR);
-    // 下限当前是 1000（试验性关闭）→ 用户调得更大时听用户的
+    // 用户设置的上限（5000）也不该把 agent 终端的下限压下来
     expect(effectiveTerminalScrollback("kimi", TERMINAL_SCROLLBACK_MAX)).toBe(
-      TERMINAL_SCROLLBACK_MAX,
+      AGENT_TERMINAL_SCROLLBACK_FLOOR,
     );
   });
 
