@@ -88,3 +88,20 @@ export function selectStartupAutoResumeTasks(
   }
   return out;
 }
+
+/** 保留全部启动任务，但限制同时进入恢复阶段的数量。 */
+export async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  const laneCount = Math.min(items.length, Math.max(1, Math.floor(concurrency)));
+  let nextIndex = 0;
+  const lanes = Array.from({ length: laneCount }, async () => {
+    while (nextIndex < items.length) {
+      const item = items[nextIndex++];
+      await worker(item);
+    }
+  });
+  await Promise.all(lanes);
+}

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Task } from "../types";
-import { normalizeInterruptedTasksOnStartup, selectStartupAutoResumeTasks } from "../taskStartup";
+import {
+  normalizeInterruptedTasksOnStartup,
+  runWithConcurrency,
+  selectStartupAutoResumeTasks,
+} from "../taskStartup";
 
 /**
  * 只钉「归一化」本身。
@@ -113,5 +117,24 @@ describe("启动自动续跑：软删除的任务绝不复活", () => {
       new Set(["live"]),
     );
     expect(picked).toEqual([]);
+  });
+});
+
+describe("启动恢复并发", () => {
+  it("全部任务都会执行，同时恢复数不超过上限", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const completed: number[] = [];
+
+    await runWithConcurrency([1, 2, 3, 4, 5], 2, async (item) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      completed.push(item);
+    });
+
+    expect(maxActive).toBe(2);
+    expect(completed.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
   });
 });

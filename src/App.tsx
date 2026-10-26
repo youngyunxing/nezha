@@ -68,7 +68,11 @@ import {
 import { useI18n } from "./i18n";
 import { ProjectDrawer } from "./components/ProjectDrawer";
 import { isVisibleTask, softDeleteTasks } from "./taskDeletion";
-import { normalizeInterruptedTasksOnStartup, selectStartupAutoResumeTasks } from "./taskStartup";
+import {
+  normalizeInterruptedTasksOnStartup,
+  runWithConcurrency,
+  selectStartupAutoResumeTasks,
+} from "./taskStartup";
 import {
   DARK_THEME_MODE,
   getNextThemeMode,
@@ -804,17 +808,18 @@ function App() {
         updateProjectView(startProject.id, deriveProjectView(startProject.id, nextTasks));
       }
 
-      autoResume.forEach(({ task, project, sessionId }) => {
+      // 全部任务仍会恢复，但不让几十个 CLI 同时读会话和重画首屏。每路等到
+      // 当前任务输出稳定后再取下一个，长会话回放期间也不会继续叠加进程。
+      await runWithConcurrency(autoResume, 2, async ({ task, project, sessionId }) => {
         const pendingTask = {
           ...task,
           status: "pending" as TaskStatus,
           attentionRequestedAt: undefined,
         };
-        if (sessionId) {
-          invokeResumeTask(pendingTask, project, sessionId);
-          return;
-        }
-        invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
+        const started = sessionId
+          ? await invokeResumeTask(pendingTask, project, sessionId)
+          : await invokeRunTask(pendingTask, task.worktreePath ?? project.path, []);
+        if (started) await tm.waitForTerminalQuiet(task.id);
       });
     }
 
@@ -964,24 +969,27 @@ function App() {
   ) {
     // 先等面板量出真实尺寸，别让 CLI 按默认 220 列画第一帧
     await tm.waitForMeasuredSize(task.id);
-    invoke("run_task", {
-      taskId: task.id,
-      projectPath,
-      prompt: task.prompt,
-      agent: task.agent,
-      permissionMode: task.permissionMode,
-      images,
-      texts,
-      command: task.command ?? null,
-      ...tm.getSpawnSize(task.id),
-      onOutput: tm.createOutputChannel(task.id),
-    })
-      .then(() => tm.reapplyTerminalSize(task.id))
-      .catch((err: unknown) => {
+    try {
+      await invoke("run_task", {
+        taskId: task.id,
+        projectPath,
+        prompt: task.prompt,
+        agent: task.agent,
+        permissionMode: task.permissionMode,
+        images,
+        texts,
+        command: task.command ?? null,
+        ...tm.getSpawnSize(task.id),
+        onOutput: tm.createOutputChannel(task.id),
+      });
+      tm.reapplyTerminalSize(task.id);
+      return true;
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
       updateTaskStatus(task.id, "failed", undefined, msg);
-    });
+      return false;
+    }
   }
 
   async function handleSubmitTask(
@@ -1198,22 +1206,25 @@ function App() {
 
   async function invokeResumeTask(task: Task, project: Project, sessionId: string) {
     await tm.waitForMeasuredSize(task.id);
-    invoke("resume_task", {
-      taskId: task.id,
-      projectPath: task.worktreePath ?? project.path,
-      agent: task.agent,
-      sessionId,
-      prompt: task.prompt,
-      permissionMode: task.permissionMode,
-      ...tm.getSpawnSize(task.id),
-      onOutput: tm.createOutputChannel(task.id),
-    })
-      .then(() => tm.reapplyTerminalSize(task.id))
-      .catch((err: unknown) => {
+    try {
+      await invoke("resume_task", {
+        taskId: task.id,
+        projectPath: task.worktreePath ?? project.path,
+        agent: task.agent,
+        sessionId,
+        prompt: task.prompt,
+        permissionMode: task.permissionMode,
+        ...tm.getSpawnSize(task.id),
+        onOutput: tm.createOutputChannel(task.id),
+      });
+      tm.reapplyTerminalSize(task.id);
+      return true;
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
       updateTaskStatus(task.id, "failed", undefined, msg);
-    });
+      return false;
+    }
   }
 
   /** 纯终端任务重开前，把落盘的屏幕记录预塞进缓冲区，让旧内容出现在新输出之前。

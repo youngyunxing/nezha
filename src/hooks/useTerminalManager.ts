@@ -139,6 +139,7 @@ export function useTerminalManager(options?: {
   // pendingOutputs / RAF 仍在 hook 级共享，保留原批量写入节奏与每帧字节预算。
 
   const pendingOutputsRef = useRef<Map<string, string[]>>(new Map());
+  const lastOutputAtRef = useRef<Record<string, number>>({});
   const rafIdRef = useRef<number>(0);
 
   const drainPendingOutputs = useCallback(() => {
@@ -178,6 +179,7 @@ export function useTerminalManager(options?: {
 
   const ingestAgentChunk = useCallback(
     (taskId: string, data: string) => {
+      lastOutputAtRef.current[taskId] = Date.now();
       const pendingOutputs = pendingOutputsRef.current;
       let arr = pendingOutputs.get(taskId);
       if (!arr) {
@@ -218,6 +220,7 @@ export function useTerminalManager(options?: {
     taskBufferRef.current[taskId] = createTaskBuffer();
     delete terminalSnapshotRef.current[taskId];
     delete screenSavedRef.current[taskId];
+    delete lastOutputAtRef.current[taskId];
     // 旧记录缓存也清掉：下一次落盘/回放会重新从磁盘读（此时读到的才是最新的那份）
     delete restoredPrefixRef.current[taskId];
     // 顺带把残留的鼠标上报模式关掉（本地写入 xterm，不进 PTY）
@@ -231,6 +234,7 @@ export function useTerminalManager(options?: {
       delete terminalWriteRefs.current[taskId];
       delete terminalWriteStateRef.current[taskId];
       delete taskTerminalSizeRef.current[taskId];
+      delete lastOutputAtRef.current[taskId];
     }
   }, []);
 
@@ -247,6 +251,20 @@ export function useTerminalManager(options?: {
   const handleInput = useCallback((taskId: string, data: string) => {
     invoke("send_input", { taskId, data }).catch(console.error);
   }, []);
+
+  /** 启动恢复时等这一轮回放输出稳定，再放行下一个任务。只读 ref，不引入渲染；
+   *  超时是异常进程一直刷输出时的兜底，避免后续任务永远排队。 */
+  const waitForTerminalQuiet = useCallback(
+    async (taskId: string, quietMs = 500, timeoutMs = 15000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const lastOutputAt = lastOutputAtRef.current[taskId] ?? 0;
+        if (lastOutputAt > 0 && Date.now() - lastOutputAt >= quietMs) return;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+      }
+    },
+    [],
+  );
 
   /** 等这个任务的终端量出真实尺寸再 spawn（最多 DEFAULT_SIZE_WAIT_MS）。
    *  面板比 spawn 早一步就位：挂载后一帧内会 fit 并把真实 cols/rows 按任务记进
@@ -440,6 +458,7 @@ export function useTerminalManager(options?: {
     getSpawnSize,
     reapplyTerminalSize,
     waitForMeasuredSize,
+    waitForTerminalQuiet,
     handleRegisterTerminal,
     seedTaskScreen,
     handleTerminalReady,
