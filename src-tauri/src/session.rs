@@ -752,14 +752,26 @@ pub(crate) enum SessionContent {
 }
 
 /// 解析会话正文（回放与全文搜索共用同一条路径 —— 搜索里能命中的，就是回放里能看到的）。
-fn parse_session_messages(content: &str) -> Vec<SessionMessage> {
-    let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
-    let mut messages = if is_kimi_format(&lines) {
-        parse_kimi_session(&lines)
-    } else if is_codex_format(&lines) {
-        parse_codex_session(&lines)
+///
+/// 吃行迭代器而不是 `&str`：长会话文件能有几百 MB，`read_to_string` 一次性进内存会直接把
+/// 进程顶爆；调用方用 BufReader 逐行喂进来。格式探测看前 10 个非空行，探完接回迭代器继续。
+fn parse_session_messages<I, S>(lines: I) -> Vec<SessionMessage>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut non_empty = lines.filter(|l| !l.as_ref().trim().is_empty());
+    let head: Vec<S> = non_empty.by_ref().take(10).collect();
+    let head_refs: Vec<&str> = head.iter().map(|s| s.as_ref()).collect();
+    let kimi_format = is_kimi_format(&head_refs);
+    let codex_format = is_codex_format(&head_refs);
+    let all = head.into_iter().chain(non_empty);
+    let mut messages = if kimi_format {
+        parse_kimi_session(all)
+    } else if codex_format {
+        parse_codex_session(all)
     } else {
-        parse_claude_session(&lines)
+        parse_claude_session(all)
     };
 
     // 回放只呈现「双方的对话」：工具调用与思考块在解析出口就丢掉——它们往往占会话文件的
@@ -777,10 +789,11 @@ fn parse_session_messages(content: &str) -> Vec<SessionMessage> {
 
 #[tauri::command]
 pub async fn read_session_messages(session_path: String) -> Result<Vec<SessionMessage>, String> {
-    // 读全文件 + 解析是阻塞活，别压在异步运行时上
+    // 读文件 + 解析是阻塞活，别压在异步运行时上
     tokio::task::spawn_blocking(move || {
-        let content = std::fs::read_to_string(&session_path).map_err(|e| e.to_string())?;
-        Ok(parse_session_messages(&content))
+        let file = File::open(&session_path).map_err(|e| e.to_string())?;
+        let lines = BufReader::new(file).lines().map_while(Result::ok);
+        Ok(parse_session_messages(lines))
     })
     .await
     .map_err(|e| format!("read_session_messages panicked: {e}"))?
@@ -834,7 +847,7 @@ fn read_session_search_text(path: &str) -> Option<String> {
         Some(idx) => &text[..idx],
         None => text.as_ref(),
     };
-    let messages = parse_session_messages(content);
+    let messages = parse_session_messages(content.lines());
     let joined = messages
         .iter()
         .flat_map(|message| message.content.iter())
@@ -931,12 +944,15 @@ fn push_claude_message(
     }
 }
 
-fn parse_claude_session(lines: &[&str]) -> Vec<SessionMessage> {
+fn parse_claude_session<S: AsRef<str>>(
+    lines: impl IntoIterator<Item = S>,
+) -> Vec<SessionMessage> {
     let mut messages = Vec::new();
     let mut seen: std::collections::HashMap<(String, String), usize> =
         std::collections::HashMap::new();
 
     for line in lines {
+        let line = line.as_ref();
         let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
@@ -1084,10 +1100,13 @@ fn claude_assistant_blocks(blocks: &[serde_json::Value]) -> Vec<SessionContent> 
     parts
 }
 
-fn parse_codex_session(lines: &[&str]) -> Vec<SessionMessage> {
+fn parse_codex_session<S: AsRef<str>>(
+    lines: impl IntoIterator<Item = S>,
+) -> Vec<SessionMessage> {
     let mut messages: Vec<SessionMessage> = Vec::new();
 
     for line in lines {
+        let line = line.as_ref();
         let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
@@ -1232,11 +1251,14 @@ fn is_kimi_format(lines: &[&str]) -> bool {
 /// - assistant 侧把 `content.part` 的 text 分片**累积**起来，到 `step.end` 才成一条：
 ///   同一段回复会被拆成多个分片，不合并就会碎成几十条。
 /// - 工具调用与思考块在这里保留、到 `read_session_messages` 出口统一丢掉，与另两种格式一致。
-fn parse_kimi_session(lines: &[&str]) -> Vec<SessionMessage> {
+fn parse_kimi_session<S: AsRef<str>>(
+    lines: impl IntoIterator<Item = S>,
+) -> Vec<SessionMessage> {
     let mut messages: Vec<SessionMessage> = Vec::new();
     let mut pending: Vec<(String, String)> = Vec::new();
 
     for line in lines {
+        let line = line.as_ref();
         let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
             continue;
         };
@@ -2189,9 +2211,8 @@ fn export_session_markdown_inner(
         ));
     }
 
-    // 按行读取 JSONL：避免 `read_to_string` + `lines().collect()` 的临时双份持有
-    // （整段 String + 切片 Vec<&str>）。真正的流式解析需要重写 parse_*_session
-    // （它们消费 &[&str]），收益不抵复杂度。
+    // 按行读取 JSONL：避免 `read_to_string` 的整段 String 与行切片双份持有。
+    // 导出文件有大小上限，这里保留逐行 I/O 错误并集中收集，内存占用有界。
     let session_file = File::open(&canonical)
         .map_err(|e| format!("Cannot open session file: {}", e))?;
     let mut lines: Vec<String> = Vec::new();
