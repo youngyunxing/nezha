@@ -8,7 +8,13 @@ afterEach(cleanup);
 
 const NOW = Date.now();
 
-function task(id: string, title: string, status: TaskStatus, updatedAt: number): Task {
+function task(
+  id: string,
+  title: string,
+  status: TaskStatus,
+  updatedAt: number,
+  order?: number,
+): Task {
   return {
     id,
     projectId: "p1",
@@ -19,6 +25,7 @@ function task(id: string, title: string, status: TaskStatus, updatedAt: number):
     status,
     createdAt: updatedAt,
     updatedAt,
+    ...(order === undefined ? {} : { order }),
   };
 }
 
@@ -91,5 +98,33 @@ describe("任务列表排序：结束态沉底", () => {
       task("b", "晚一点的", "running", NOW - 60_000),
     ]);
     expect(at("晚一点的")).toBeLessThan(at("早一点的"));
+  });
+});
+
+describe("拖动排序与「展示范围」共存", () => {
+  it("窗口外那些更旧的任务，切到「所有任务」后不会压到手排结果上面", () => {
+    // 场景：用户在某个分组里拖过顺序（order 0）；另一个更旧的任务之前被展示范围挡住、
+    // 没有 order。切到「所有任务」后，旧任务不该跑到手排结果前面 —— 它只是刚才没显示。
+    const { at } = renderOrder([
+      task("hidden", "窗口外的旧任务", "running", NOW - 900_000),
+      task("ordered", "手排过的任务", "running", NOW - 600_000, 0),
+    ]);
+    expect(at("手排过的任务")).toBeLessThan(at("窗口外的旧任务"));
+  });
+
+  it("没排过的新任务仍在手排结果上面（新活别沉底）", () => {
+    const { at } = renderOrder([
+      task("new", "刚来的新任务", "running", NOW),
+      task("ordered", "手排过的任务", "running", NOW - 600_000, 0),
+    ]);
+    expect(at("刚来的新任务")).toBeLessThan(at("手排过的任务"));
+  });
+
+  it("两边都排过时按手排位次，时间不参与", () => {
+    const { at } = renderOrder([
+      task("second", "位次第二", "running", NOW, 1),
+      task("first", "位次第一", "running", NOW - 600_000, 0),
+    ]);
+    expect(at("位次第一")).toBeLessThan(at("位次第二"));
   });
 });

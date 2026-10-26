@@ -227,13 +227,20 @@ export function TaskList({
     const isFinished = (task: Task) =>
       task.status === "done" || task.status === "failed" || task.status === "cancelled";
     const rank = (task: Task) => (needsAttention(task) ? 0 : isFinished(task) ? 2 : 1);
+    // 「没排过」的任务拿什么跟排过的比新旧：等你 / 待恢复那一档本来就按 attentionRequestedAt 排。
+    const recencyKey = (task: Task) =>
+      rank(task) === 0 ? (task.attentionRequestedAt ?? sortKey(task)) : sortKey(task);
     return [...filtered].sort((a, b) => {
       const rankDiff = rank(a) - rank(b);
       if (rankDiff !== 0) return rankDiff;
-      // 同一档里：拖动排过的按手排位次；没排过的（新任务）在最上面 —— 新活别沉到你的安排底下
+      // 同一档里：两边都排过 → 按手排位次
       if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-      if (a.order !== undefined) return 1;
-      if (b.order !== undefined) return -1;
+      // 只有一边排过：按新旧把它插进去 ——
+      // - 比排过的**新** → 排在上面（新任务别沉到你安排好的底下）；
+      // - 比排过的**旧** → 排在下面（「展示范围」窗口外那些更旧的任务，切到「所有任务」
+      //   时不该压到手排结果上面：它们只是刚才没显示，不是新活）。
+      if (a.order !== undefined) return recencyKey(b) > recencyKey(a) ? 1 : -1;
+      if (b.order !== undefined) return recencyKey(a) > recencyKey(b) ? -1 : 1;
       if (rank(a) === 0) {
         return (b.attentionRequestedAt ?? sortKey(b)) - (a.attentionRequestedAt ?? sortKey(a));
       }
