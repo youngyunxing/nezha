@@ -88,7 +88,7 @@ import {
   unregisterActiveTerminal,
   attachTerminalScrollShortcuts,
   TERMINAL_INPUT_MODE_RESET,
-  isMouseReport,
+  shouldDropShellMouseInput,
 } from "./terminalShared";
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
@@ -318,9 +318,17 @@ export function TerminalView({
     const disposeCopyOnSelect = attachCopyOnSelect(term, container);
     const linuxIME = term.onData((data) => {
       // shell 拥有的终端里，鼠标上报只会被 shell 的行编辑器画成 `35;42;13M` 那样的垃圾
-      // （探针实测：这些序列全在 IN 侧）。xterm 还在发是因为鼠标模式被某个 TUI 开过没关 ——
-      // 拦在输入侧是确定性生效的兜底；agent 任务不过滤，TUI 自己要鼠标。
-      if (shellOwned && isMouseReport(data)) return;
+      // （探针实测：这些序列全在 IN 侧）。xterm 还在发是因为鼠标模式被某个 TUI 开过没关。
+      // 判据见 shouldDropShellMouseInput：备用缓冲区里的全屏程序（vim / htop / tmux）
+      // 自己要用鼠标，那里不能丢。
+      if (
+        shouldDropShellMouseInput(data, {
+          shellOwned,
+          alternateBuffer: term.buffer.active.type === "alternate",
+        })
+      ) {
+        return;
+      }
       onInputRef.current(data);
     });
     const disposeOnData = { dispose: () => linuxIME.dispose() };

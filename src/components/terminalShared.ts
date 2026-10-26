@@ -27,6 +27,22 @@ export function isMouseReport(data: string): boolean {
   return /^(?:\x1b\[<\d+(;\d+)*[Mm]|\x1b\[M[\x20-\x7f]{3})+$/.test(data);
 }
 
+/**
+ * shell 拥有的终端要不要丢弃这段鼠标上报。
+ *
+ * - 只丢「整段都是上报」的（见 isMouseReport），混进用户输入一律放行；
+ * - **备用缓冲区不丢**：vim / htop / tmux / less 这类全屏程序会自己打开鼠标上报，
+ *   那是它要用的输入，无条件丢会把它们的鼠标一起打死（也包括在纯终端任务里手敲起来的
+ *   agent）；shell 提示符本身永远在普通缓冲区；
+ * - agent 任务不丢：TUI 自己要鼠标。
+ */
+export function shouldDropShellMouseInput(
+  data: string,
+  options: { shellOwned: boolean; alternateBuffer: boolean },
+): boolean {
+  return options.shellOwned && !options.alternateBuffer && isMouseReport(data);
+}
+
 export const RESET_MOUSE_REPORTING =
   "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l";
 
