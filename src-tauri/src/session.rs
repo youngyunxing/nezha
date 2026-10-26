@@ -868,6 +868,49 @@ fn read_session_search_text(path: &str) -> Option<String> {
     Some(joined)
 }
 
+fn is_allowed_session_search_path(canonical: &Path) -> bool {
+    if canonical.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+        return false;
+    }
+    // Codex 既可能在家目录，也可能在项目内的 .codex/sessions 下。
+    if canonical.ancestors().any(|dir| {
+        dir.file_name().and_then(|name| name.to_str()) == Some("sessions")
+            && dir
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                == Some(".codex")
+    }) {
+        return true;
+    }
+    let global_roots = [
+        crate::platform::home_dir().map(|home| home.join(".claude").join("projects")),
+        kimi_sessions_root(),
+    ];
+    global_roots.into_iter().flatten().any(|root| {
+        root.canonicalize()
+            .map(|root| canonical.starts_with(root))
+            .unwrap_or(false)
+    })
+}
+
+fn validate_session_search_path(session_path: &str) -> Result<PathBuf, String> {
+    let path = Path::new(session_path);
+    if !path.is_absolute() {
+        return Err("Session path must be absolute".into());
+    }
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Cannot resolve session path: {}", e))?;
+    if !canonical.is_file() || !is_allowed_session_search_path(&canonical) {
+        return Err(format!(
+            "Session path is outside allowed session roots: {}",
+            canonical.display()
+        ));
+    }
+    Ok(canonical)
+}
+
 /// 在若干会话文件里找 query（大小写不敏感），返回命中的会话文件路径。
 /// 一次调用扫一批（前端敲字时只发一条 IPC），整段跑在 spawn_blocking 里。
 #[tauri::command]
@@ -882,15 +925,16 @@ pub async fn search_session_texts(
     tokio::task::spawn_blocking(move || {
         let mut hits = Vec::new();
         for path in session_paths {
-            match read_session_search_text(&path) {
+            let canonical = validate_session_search_path(&path)?;
+            match read_session_search_text(&canonical.to_string_lossy()) {
                 Some(text) if text.contains(&needle) => hits.push(path),
                 _ => {}
             }
         }
-        hits
+        Ok::<Vec<String>, String>(hits)
     })
     .await
-    .map_err(|e| format!("search_session_texts panicked: {e}"))
+    .map_err(|e| format!("search_session_texts panicked: {e}"))?
 }
 
 fn is_codex_format(lines: &[&str]) -> bool {
@@ -2423,6 +2467,19 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("")
+    }
+
+    #[test]
+    fn session_search_path_requires_agent_session_directory() {
+        assert!(is_allowed_session_search_path(Path::new(
+            "/tmp/project/.codex/sessions/2026/10/session.jsonl"
+        )));
+        assert!(!is_allowed_session_search_path(Path::new(
+            "/tmp/project/.codex/other/session.jsonl"
+        )));
+        assert!(!is_allowed_session_search_path(Path::new(
+            "/tmp/project/.codex/sessions/session.txt"
+        )));
     }
 
     #[test]
