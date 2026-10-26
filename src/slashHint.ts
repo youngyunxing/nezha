@@ -85,6 +85,10 @@ export function detectSlashHint(
   commands: readonly SlashCommand[],
 ): SlashHintMatch | null {
   if (commands.length === 0) return null;
+  const buf = term.buffer.active;
+  // 上滚读历史时（viewportY < baseY）光标行早就不在输入框上了 —— 那时读出来的
+  // 「光标行」是历史里的一行，可能正好以斜杠开头（比如一条路径），会把提示条误弹出来。
+  if (buf.viewportY !== buf.baseY) return null;
   return matchSlashHint(readLineBeforeCursor(term), commands);
 }
 

@@ -206,6 +206,16 @@ describe("从真实 xterm buffer 里读光标行", () => {
     await write("\x1b[2;5H\x1b[K"); // 回到行首、擦掉这一行
     expect(detectSlashHint(term, claude)).toBeNull();
   });
+
+  it("上滚读历史时不弹（viewportY < baseY：光标行已经不是输入框了）", async () => {
+    const { term, write } = makeTerm(40, 8);
+    await write("填充行\r\n".repeat(20));
+    await write(`${BOX}\x1b[7;10H`);
+    expect(detectSlashHint(term, claude)).not.toBeNull();
+    term.scrollLines(-3); // 用户上滚读历史
+    expect(term.buffer.active.viewportY).toBeLessThan(term.buffer.active.baseY);
+    expect(detectSlashHint(term, claude)).toBeNull();
+  });
 });
 
 describe("hintBottomOffset：提示条浮在光标行的上一行", () => {
