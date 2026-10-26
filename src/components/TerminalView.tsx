@@ -352,12 +352,6 @@ export function TerminalView({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    // 尺寸变化分两种情况处理（实测：双击标题栏把窗口变小再放大，任务会被推进 39 列的
-    // 窄宽度，TUI 按那个宽度打印出来的行是**硬换行**，xterm 之后重排不回来 —— 于是那几行
-    // 永远是窄的）：
-    //   - 变大：立刻生效（150ms 防抖只是躲开缩放动画的中间帧）；
-    //   - 变小：先不告诉 PTY，只有小尺寸持续 SHRINK_DELAY_MS 之后才真的缩。
-    // 于是"双击缩放"这种短暂变小不会污染 TUI 的输出，而真的把窗口拖小住手不动，终端照旧会缩。
     const applySize = (cols: number, rows: number) => {
       notifiedSizeRef.current = { cols, rows };
       notifyResize(cols, rows);
@@ -369,21 +363,15 @@ export function TerminalView({
       // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
       if (!isActiveRef.current) return;
 
-      // 容器变小：**整体不动**，PTY 和网格都保持原尺寸。这样 CLI 永远不会在窄宽度下重排，
-      // 也就不会往历史里写下"窄行"—— TUI 在窄宽度下逐行输出的是独立行（硬断行），滚进历史
-      // 后 serialize / reflow 都合并不回来（见 terminal-reflow.test.ts 的实测：3 行仍是 3 行）。
-      // 代价：小窗口下只能看到左边一部分（布局正确、只是被裁掉），而不是让 CLI 重排一遍。
-      // 想让终端真的缩下去：改一次字号即可（那条路径会重新 fit）。
-      const proposed = fitAddon.proposeDimensions?.();
-      const prev = notifiedSizeRef.current;
-      if (proposed && prev && (proposed.cols < prev.cols || proposed.rows < prev.rows)) {
-        return;
-      }
-
       if (resizeTimer) clearTimeout(resizeTimer);
-      const s = safeFit(fitAddon, term, container);
-      if (!s) return;
-      resizeTimer = setTimeout(() => applySize(s.cols, s.rows), 150);
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
+        // fit 和 PTY 通知必须在同一次提交里完成。先 fit、150ms 后才 resize_pty 会留下
+        // 尺寸失配窗口，TUI 的整屏重画可能因此折行并不断堆进 scrollback。
+        // 放大和缩小都走这里：稳定后同步缩容才能保住最底部的 Claude 输入框。
+        const s = safeFit(fitAddon, term, container);
+        if (s) applySize(s.cols, s.rows);
+      }, 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
@@ -454,18 +442,11 @@ export function TerminalView({
       const term = terminalRef.current;
       const container = containerRef.current;
       if (!fitAddon || !term || !container) return;
-      // 同样遵守「不缩窄」：隐藏期间容器变小了也不缩 —— 缩了就会让 CLI 在窄宽度下重排，
-      // 那正是产生窄行的原因。只有变大（或这个面板还没量过尺寸）才重新 fit。
-      const proposed = fitAddon.proposeDimensions?.();
-      const prev = notifiedSizeRef.current;
-      const wouldShrink =
-        !!proposed && !!prev && (proposed.cols < prev.cols || proposed.rows < prev.rows);
-      if (!wouldShrink) {
-        const s = safeFit(fitAddon, term, container);
-        if (s) {
-          notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
-          notifyResize(s.cols, s.rows);
-        }
+      // 切回可见面板时按当前容器恢复网格；隐藏期间发生过的缩容也在这里补齐。
+      const s = safeFit(fitAddon, term, container);
+      if (s) {
+        notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
+        notifyResize(s.cols, s.rows);
       }
       refreshTerminalDisplay(term);
       term.focus();
