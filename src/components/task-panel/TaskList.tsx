@@ -17,6 +17,7 @@ import {
 } from "./taskDrag";
 import { useSessionSearch } from "../../hooks/useSessionSearch";
 import { taskSessionPath } from "../../types";
+import { sortTasks } from "./taskSort";
 import { LocalSessionRow } from "./LocalSessionRow";
 import { useI18n } from "../../i18n";
 import s from "../../styles";
@@ -216,37 +217,9 @@ export function TaskList({
     );
   }, [localSessions, query, matchedPaths]);
 
-  const sorted = useMemo(() => {
-    const sortKey = (task: Task) => task.updatedAt ?? task.createdAt;
-    const needsAttention = (task: Task) =>
-      task.status === "input_required" ||
-      task.status === "awaiting_review" ||
-      task.status === "interrupted";
-    // 结束态（已完成 / 失败 / 已取消）沉到后面：它们刚刚更新过，按时间排会顶到最上面，
-    // 把还在跑、还等着你的挤下去。同一档里再按时间倒序。
-    const isFinished = (task: Task) =>
-      task.status === "done" || task.status === "failed" || task.status === "cancelled";
-    const rank = (task: Task) => (needsAttention(task) ? 0 : isFinished(task) ? 2 : 1);
-    // 「没排过」的任务拿什么跟排过的比新旧：等你 / 待恢复那一档本来就按 attentionRequestedAt 排。
-    const recencyKey = (task: Task) =>
-      rank(task) === 0 ? (task.attentionRequestedAt ?? sortKey(task)) : sortKey(task);
-    return [...filtered].sort((a, b) => {
-      const rankDiff = rank(a) - rank(b);
-      if (rankDiff !== 0) return rankDiff;
-      // 同一档里：两边都排过 → 按手排位次
-      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-      // 只有一边排过：按新旧把它插进去 ——
-      // - 比排过的**新** → 排在上面（新任务别沉到你安排好的底下）；
-      // - 比排过的**旧** → 排在下面（「展示范围」窗口外那些更旧的任务，切到「所有任务」
-      //   时不该压到手排结果上面：它们只是刚才没显示，不是新活）。
-      if (a.order !== undefined) return recencyKey(b) > recencyKey(a) ? 1 : -1;
-      if (b.order !== undefined) return recencyKey(a) > recencyKey(b) ? -1 : 1;
-      if (rank(a) === 0) {
-        return (b.attentionRequestedAt ?? sortKey(b)) - (a.attentionRequestedAt ?? sortKey(a));
-      }
-      return sortKey(b) - sortKey(a);
-    });
-  }, [filtered]);
+  // 排序规则抽在 taskSort.ts（纯函数，可单测）：等你/待恢复 > 正常 > 结束态；
+  // 同档内没排过的按新旧分顶部/底部两档，排过的按手排位次 —— 详见该文件头部注释。
+  const sorted = useMemo(() => sortTasks(filtered), [filtered]);
 
   const { todayTs, cutoffTs } = useMemo(() => {
     const d = new Date();
