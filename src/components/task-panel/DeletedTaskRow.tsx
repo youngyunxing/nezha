@@ -21,7 +21,8 @@ function formatDeletedTime(ms: number): string {
  * 删除只是打了 `deleted` 标记 —— 名字、状态、会话 id、worktree 信息、终端屏幕记录
  * **全都还在磁盘上**，所以这一行能把名字原样显示出来，恢复就是把标记抹掉。
  *
- * 故意**点它不做事**（只给右键菜单）：恢复是个改数据的动作，误触比多点一下烦。
+ * 点开**不恢复**（恢复只在右键菜单里）：有会话的点开 = 预览（和本地会话一致）；
+ * 纯终端任务点开 = 选中它，主区域显示上次那块屏幕。
  * 时间显示的是删除时间（`softDeleteTasks` 会把 `updatedAt` 刷成那一刻）。
  */
 export function DeletedTaskRow({
@@ -35,15 +36,15 @@ export function DeletedTaskRow({
   /** 能预览时给的「本地会话」形状（预览走同一套 LocalSessionView）；纯终端任务没有 */
   session: LocalClaudeSession | null;
   selected: boolean;
-  /** 有会话的点开 = 预览；纯终端任务点开 = 恢复（它的"内容"就是上次那块屏幕） */
+  /** 有会话的点开 = 预览；纯终端任务点开 = 选中（主区域显示上次那块屏幕），不恢复 */
   onClick: () => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const title = task.name ?? task.prompt;
-  // 有会话的能点开预览（和本地会话一致）；纯终端任务没有会话文件，点开就是恢复它
-  // ——它的"内容"就是那块上次屏幕，恢复出来才看得到
+  // 有会话的能点开预览（和本地会话一致）；纯终端任务没有会话文件，点开是选中它、
+  // 看主区域里那块上次屏幕 —— 两种都不恢复，恢复只在右键菜单
   const previewable = session !== null;
   const Row = "button" as const;
 
@@ -54,7 +55,7 @@ export function DeletedTaskRow({
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={previewable ? `${title}（点开预览）` : `${title}（点开恢复，看上次屏幕）`}
+      title={previewable ? `${title}（点开预览）` : `${title}（点开看上次屏幕）`}
       style={{
         ...s.taskCard,
         width: "100%",
@@ -79,7 +80,7 @@ export function DeletedTaskRow({
         <div style={s.taskCardTitle}>{title}</div>
         <div style={s.taskCardSub}>
           {agentLabel(task.agent)} · {formatDeletedTime(task.updatedAt ?? task.createdAt)} ·{" "}
-          {previewable ? t("task.restore") : t("task.restore")}
+          {t("task.restore")}
         </div>
       </div>
     </Row>

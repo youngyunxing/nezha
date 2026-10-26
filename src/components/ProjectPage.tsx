@@ -248,8 +248,9 @@ export function ProjectPage({
   const selectedTask = projectTasks.find((t) => t.id === selectedTaskId) ?? null;
 
   // 本机 Claude Code 直接在该目录产生的会话。已被 Nezha 接管的（任务里带 session id）
-  // 排除掉，同一条会话不会既当任务又当本地记录出现两次 —— 但**删掉的任务不排除**：
-  // 它的会话文件还在磁盘上，删过之后应该重新出现在这里，能捞回来（见 taskDeletion.ts）。
+  // 排除掉，同一条会话不会既当任务又当本地记录出现两次 —— **删掉的任务也算接管**
+  // （claimedClaudeSessionIds 不过滤 deleted）：它有「历史」组那个家，那儿显示的是任务名；
+  // 本地会话组只留「真没人认领」的（见 taskDeletion.ts）。
   const [localSessions, setLocalSessions] = useState<LocalClaudeSession[]>([]);
   const knownClaudeSessionIds = useMemo(
     () => claimedClaudeSessionIds(projectTasks).join(","),
