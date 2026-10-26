@@ -6,19 +6,19 @@ import s from "../styles";
 /** 菜单挂在哪：光标位置。 */
 export type ContextMenuAnchor = { x: number; y: number };
 
-export type ContextMenuItem = {
-  label: string;
-  onSelect: () => void;
-  disabled?: boolean;
-  /** 破坏性动作：红字 + 悬停红底 */
-  destructive?: boolean;
-};
+export type ContextMenuItem =
+  | {
+      label: string;
+      onSelect: (event: React.MouseEvent) => void;
+      disabled?: boolean;
+      /** 破坏性动作：红字 + 悬停红底 */
+      destructive?: boolean;
+    }
+  | { separator: true };
 
 /**
  * 通用右键菜单：遮罩 + 贴着光标的浮层 + 夹进视口（按量出来的真实尺寸，不是猜的）。
- *
- * 抽出来的原因：任务列表、文件树、本地会话三处各有一份同构实现（issue #234 说的"无法复用"
- * 就是这个）。新入口一律用它；文件树那份还没迁（`file-explorer/ContextMenu.tsx`）。
+ * 任务列表、文件树、本地会话共用；新入口也一律用它。
  */
 export function ContextMenu({
   anchor,
@@ -87,7 +87,10 @@ export function ContextMenu({
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {items.map((item) => {
+        {items.map((item, index) => {
+          if ("separator" in item) {
+            return <div key={`separator-${index}`} style={s.ctxMenuSeparator} />;
+          }
           const baseColor = item.destructive
             ? "var(--danger-action-bg, #d23f3f)"
             : "var(--text-primary)";
@@ -117,7 +120,7 @@ export function ContextMenu({
                 event.preventDefault();
                 event.stopPropagation();
                 if (item.disabled) return;
-                item.onSelect();
+                item.onSelect(event);
               }}
             >
               {item.label}
