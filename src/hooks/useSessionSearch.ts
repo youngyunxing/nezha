@@ -35,6 +35,8 @@ export function useSessionSearch(
     }
     const request = ++requestRef.current;
     setSearching(true);
+    // 注意：新请求在飞期间**不清** matchedPaths —— 继续显示上一轮结果，等结果回来再换，
+    // 否则每敲一个键列表里靠会话正文命中的行就先消失再闪回来。出错同理，保留旧结果。
     const timer = window.setTimeout(() => {
       invoke<string[]>("search_session_texts", {
         sessionPaths: pathsRef.current,
@@ -45,8 +47,7 @@ export function useSessionSearch(
           setMatchedPaths(new Set(hits));
         })
         .catch(() => {
-          if (requestRef.current !== request) return;
-          setMatchedPaths(new Set());
+          // 保留上一轮结果；下次输入会触发新请求覆盖
         })
         .finally(() => {
           if (requestRef.current !== request) return;
