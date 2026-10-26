@@ -362,12 +362,16 @@ export function TaskList({
   const dragRef = useRef<{
     draggedIndex: number;
     startClientY: number;
+    clientY: number;
     moved: boolean;
     dropIndex: number;
     pointerY: number;
     rowTop: number;
   } | null>(null);
   const dragRafRef = useRef(0);
+  // 自动滚动只在 pointermove 里步进的话，指针停在边缘不动列表就不滚了 —— 拖动期间
+  // 跑一个 rAF 循环，按最后一次指针位置持续滚。
+  const autoscrollRafRef = useRef(0);
   // 拖完松手那一下别把行点击也触发了（否则一拖就顺带切了任务）
   const suppressClickRef = useRef(false);
   const rowsRef = useRef(rows);
@@ -389,31 +393,53 @@ export function TaskList({
     });
   }, []);
 
+  /** 按最后一次指针位置重算内容坐标与落点（列表滚动后指针不动、落点也要跟着变）。 */
+  const updateDropFromPointer = useCallback((clientY: number) => {
+    const session = dragRef.current;
+    const el = scrollRef.current;
+    if (!session || !el) return;
+    const rect = el.getBoundingClientRect();
+    session.clientY = clientY;
+    session.pointerY = clientY - rect.top + el.scrollTop;
+    const run = taskRunRange(rowsRef.current, session.draggedIndex);
+    session.dropIndex = clampDropToRun(dropIndexAtOffset(offsetsRef.current, session.pointerY), run);
+  }, []);
+
+  /** 拖动期间的持续自动滚动：指针停在上下边缘附近时每帧滚一步。 */
+  const autoscrollTick = useCallback(() => {
+    autoscrollRafRef.current = 0;
+    const session = dragRef.current;
+    const el = scrollRef.current;
+    if (!session?.moved || !el) return;
+    const rect = el.getBoundingClientRect();
+    if (session.clientY < rect.top + TASK_DRAG_AUTOSCROLL_EDGE_PX) {
+      el.scrollTop -= TASK_DRAG_AUTOSCROLL_STEP_PX;
+      updateDropFromPointer(session.clientY);
+      if (!dragRafRef.current) dragRafRef.current = requestAnimationFrame(flushDrag);
+    } else if (session.clientY > rect.bottom - TASK_DRAG_AUTOSCROLL_EDGE_PX) {
+      el.scrollTop += TASK_DRAG_AUTOSCROLL_STEP_PX;
+      updateDropFromPointer(session.clientY);
+      if (!dragRafRef.current) dragRafRef.current = requestAnimationFrame(flushDrag);
+    }
+    autoscrollRafRef.current = requestAnimationFrame(autoscrollTick);
+  }, [flushDrag, updateDropFromPointer]);
+
   const handleDragMove = useCallback(
     (event: PointerEvent) => {
       const session = dragRef.current;
-      const el = scrollRef.current;
-      if (!session || !el) return;
+      if (!session) return;
       // 没越过阈值就当点击：手滑几像素不该把行拖走
       if (!session.moved && Math.abs(event.clientY - session.startClientY) < TASK_DRAG_THRESHOLD_PX) {
         return;
       }
       session.moved = true;
-      const rect = el.getBoundingClientRect();
-      // 内容坐标：列表自己滚动时指针不动，落点也得跟着变
-      const pointerY = event.clientY - rect.top + el.scrollTop;
-      const run = taskRunRange(rowsRef.current, session.draggedIndex);
-      session.pointerY = pointerY;
-      session.dropIndex = clampDropToRun(dropIndexAtOffset(offsetsRef.current, pointerY), run);
-      // 拖到上下边附近自动滚动，长列表才拖得到远处
-      if (event.clientY < rect.top + TASK_DRAG_AUTOSCROLL_EDGE_PX) {
-        el.scrollTop -= TASK_DRAG_AUTOSCROLL_STEP_PX;
-      } else if (event.clientY > rect.bottom - TASK_DRAG_AUTOSCROLL_EDGE_PX) {
-        el.scrollTop += TASK_DRAG_AUTOSCROLL_STEP_PX;
+      updateDropFromPointer(event.clientY);
+      if (!autoscrollRafRef.current) {
+        autoscrollRafRef.current = requestAnimationFrame(autoscrollTick);
       }
       if (!dragRafRef.current) dragRafRef.current = requestAnimationFrame(flushDrag);
     },
-    [flushDrag],
+    [autoscrollTick, flushDrag, updateDropFromPointer],
   );
 
   const endDrag = useCallback(() => {
@@ -423,6 +449,10 @@ export function TaskList({
     if (dragRafRef.current) {
       cancelAnimationFrame(dragRafRef.current);
       dragRafRef.current = 0;
+    }
+    if (autoscrollRafRef.current) {
+      cancelAnimationFrame(autoscrollRafRef.current);
+      autoscrollRafRef.current = 0;
     }
     const session = dragRef.current;
     dragRef.current = null;
@@ -456,6 +486,7 @@ export function TaskList({
       dragRef.current = {
         draggedIndex: rowIndex,
         startClientY: event.clientY,
+        clientY: event.clientY,
         moved: false,
         dropIndex: rowIndex,
         pointerY: rowTop,
@@ -469,11 +500,17 @@ export function TaskList({
   );
 
   const totalHeight = offsets[offsets.length - 1] ?? 0;
-  const startIndex = Math.max(0, findRowIndex(offsets, scrollTop) - OVERSCAN_ROWS);
-  const endIndex = Math.min(
+  let startIndex = Math.max(0, findRowIndex(offsets, scrollTop) - OVERSCAN_ROWS);
+  let endIndex = Math.min(
     rows.length,
     findRowIndex(offsets, scrollTop + viewportHeight) + OVERSCAN_ROWS + 1,
   );
+  // 拖动中被拖的行可能滚出渲染窗（尤其自动滚动把它甩出视野时）——渲染窗要把它和
+  // 落点都包进来，否则行会从 DOM 里消失、拖动视觉直接断掉。
+  if (drag) {
+    startIndex = Math.min(startIndex, drag.draggedIndex, drag.dropIndex);
+    endIndex = Math.max(endIndex, drag.draggedIndex + 1, drag.dropIndex + 1);
+  }
   const visibleRows = rows.slice(startIndex, endIndex);
 
   return (
