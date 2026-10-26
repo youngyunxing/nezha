@@ -57,12 +57,14 @@ const messages = [
 
 async function renderSession(active = true) {
   invokeMock.mockResolvedValue(messages);
-  const { container } = render(
+  const view = (isActive: boolean) => (
     <I18nProvider>
-      <SessionView sessionPath="/tmp/session.jsonl" themeVariant="dark" active={active} />
-    </I18nProvider>,
+      <SessionView sessionPath="/tmp/session.jsonl" themeVariant="dark" active={isActive} />
+    </I18nProvider>
   );
+  const { container, rerender } = render(view(true));
   await waitFor(() => expect(screen.getByText("最新一条回复")).toBeTruthy());
+  if (!active) rerender(view(false));
   return container.querySelector(".session-scroll-pane") as HTMLElement;
 }
 
@@ -99,6 +101,23 @@ describe("历史会话的滚动", () => {
     fireEvent.scroll(pane);
     fireResize();
     expect(pane.scrollTop).toBe(300);
+  });
+});
+
+describe("会话加载时机", () => {
+  it("不可见时不读文件，变为可见后再加载", async () => {
+    invokeMock.mockResolvedValue(messages);
+    const view = (active: boolean) => (
+      <I18nProvider>
+        <SessionView sessionPath="/tmp/session.jsonl" themeVariant="dark" active={active} />
+      </I18nProvider>
+    );
+    const { rerender } = render(view(false));
+    expect(invokeMock).not.toHaveBeenCalled();
+
+    rerender(view(true));
+    await waitFor(() => expect(screen.getByText("最新一条回复")).toBeTruthy());
+    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 });
 

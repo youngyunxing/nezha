@@ -89,9 +89,7 @@ function UserMessageBubble({ text }: { text: string }) {
   );
 }
 
-type MarkdownBlock =
-  | { kind: "html"; html: string }
-  | { kind: "code"; code: string; lang?: string };
+type MarkdownBlock = { kind: "html"; html: string } | { kind: "code"; code: string; lang?: string };
 
 /** 把 markdown 按「代码块 / 其余」切开：代码块要异步高亮，其余整段同步渲染。 */
 function splitMarkdown(text: string): MarkdownBlock[] {
@@ -225,20 +223,29 @@ export function SessionView({
   const pinnedRef = useRef(true);
 
   useEffect(() => {
+    // 所有项目页和已结束任务都保持挂载；不可见实例不能一启动就把各自的
+    // JSONL 全读一遍。等真正显示时再加载，也避免旧会话的慢响应覆盖新会话。
+    if (!active) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     // 换会话重新钉回底部
     pinnedRef.current = true;
     invoke<SessionMessage[]>("read_session_messages", { sessionPath })
       .then((msgs) => {
+        if (cancelled) return;
         setMessages(msgs);
         setLoading(false);
       })
       .catch((err) => {
+        if (cancelled) return;
         setError(String(err));
         setLoading(false);
       });
-  }, [sessionPath]);
+    return () => {
+      cancelled = true;
+    };
+  }, [active, sessionPath]);
 
   const jumpToTop = useCallback(() => {
     const el = scrollRef.current;
@@ -305,9 +312,7 @@ export function SessionView({
         onScroll={handleScroll}
       >
         <div ref={contentRef}>
-          {loading && (
-            <div style={s.sessionPaneHint}>{t("session.loading")}</div>
-          )}
+          {loading && <div style={s.sessionPaneHint}>{t("session.loading")}</div>}
           {error && (
             <div style={{ ...s.sessionPaneHint, color: "var(--text-muted)" }}>
               {t("session.unableToLoad", { error })}

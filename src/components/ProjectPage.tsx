@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Project,
@@ -21,10 +21,8 @@ import type { HandoffOptions } from "./running-view/FlowHandoff";
 import type { ProjectRenameResult } from "../projectName";
 import { TaskPanel } from "./TaskPanel";
 import { NewTaskDialog } from "./new-task/NewTaskDialog";
-import { LocalSessionView } from "./LocalSessionView";
 import { RunningView } from "./RunningView";
 import { FileExplorer } from "./FileExplorer";
-import { FileViewer } from "./FileViewer";
 import { GitChanges } from "./GitChanges";
 import { BranchBar } from "./task-panel/BranchBar";
 import { RepoSelector } from "./task-panel/RepoSelector";
@@ -48,6 +46,13 @@ import { resolveProjectGitContext, useGitRoots } from "../hooks/useGitRoots";
 import { isMarkdownFile } from "../utils";
 import { useI18n } from "../i18n";
 import s from "../styles";
+
+const FileViewer = lazy(() =>
+  import("./FileViewer").then((module) => ({ default: module.FileViewer })),
+);
+const LocalSessionView = lazy(() =>
+  import("./LocalSessionView").then((module) => ({ default: module.LocalSessionView })),
+);
 
 export function ProjectPage({
   project,
@@ -334,7 +339,7 @@ export function ProjectPage({
   const sessionTabLabel = localSession
     ? t("mainTabs.localSession")
     : selectedTask
-      ? selectedTask.name ?? selectedTask.prompt
+      ? (selectedTask.name ?? selectedTask.prompt)
       : isNewTask
         ? t("task.newTask")
         : null;
@@ -477,53 +482,55 @@ export function ProjectPage({
               </div>
             )}
           >
-            {openDiff ? (
-              openDiff.kind === "file" ? (
-                <GitDiffViewer
-                  projectRoot={project.path}
-                  repoPath={gitContextPath}
-                  mode="file"
-                  filePath={openDiff.filePath}
-                  staged={openDiff.staged}
-                  title={openDiff.label}
-                  onClose={() => setOpenDiff(null)}
+            <Suspense fallback={null}>
+              {openDiff ? (
+                openDiff.kind === "file" ? (
+                  <GitDiffViewer
+                    projectRoot={project.path}
+                    repoPath={gitContextPath}
+                    mode="file"
+                    filePath={openDiff.filePath}
+                    staged={openDiff.staged}
+                    title={openDiff.label}
+                    onClose={() => setOpenDiff(null)}
+                  />
+                ) : openDiff.kind === "commit-file" ? (
+                  <GitDiffViewer
+                    projectRoot={project.path}
+                    repoPath={gitContextPath}
+                    mode="commit-file"
+                    commitHash={openDiff.hash}
+                    filePath={openDiff.filePath}
+                    title={openDiff.label}
+                    onClose={() => setOpenDiff(null)}
+                  />
+                ) : (
+                  <GitDiffViewer
+                    projectRoot={project.path}
+                    repoPath={gitContextPath}
+                    mode="commit"
+                    commitHash={openDiff.hash}
+                    title={openDiff.message}
+                    onClose={() => setOpenDiff(null)}
+                  />
+                )
+              ) : showingFile ? (
+                <FileViewer
+                  tabs={openFiles}
+                  activeFilePath={activeFilePath}
+                  projectPath={project.path}
+                  themeVariant={themeVariant}
+                  previewModes={previewModes}
                 />
-              ) : openDiff.kind === "commit-file" ? (
-                <GitDiffViewer
-                  projectRoot={project.path}
-                  repoPath={gitContextPath}
-                  mode="commit-file"
-                  commitHash={openDiff.hash}
-                  filePath={openDiff.filePath}
-                  title={openDiff.label}
-                  onClose={() => setOpenDiff(null)}
+              ) : localSession ? (
+                <LocalSessionView
+                  session={localSession}
+                  themeVariant={themeVariant}
+                  onResume={() => onResumeLocalSession(localSession)}
+                  active={visible}
                 />
-              ) : (
-                <GitDiffViewer
-                  projectRoot={project.path}
-                  repoPath={gitContextPath}
-                  mode="commit"
-                  commitHash={openDiff.hash}
-                  title={openDiff.message}
-                  onClose={() => setOpenDiff(null)}
-                />
-              )
-            ) : showingFile ? (
-              <FileViewer
-                tabs={openFiles}
-                activeFilePath={activeFilePath}
-                projectPath={project.path}
-                themeVariant={themeVariant}
-                previewModes={previewModes}
-              />
-            ) : localSession ? (
-              <LocalSessionView
-                session={localSession}
-                themeVariant={themeVariant}
-                onResume={() => onResumeLocalSession(localSession)}
-                active={visible}
-              />
-            ) : null}
+              ) : null}
+            </Suspense>
           </ErrorBoundary>
 
           {/* Background terminals */}
@@ -610,7 +617,11 @@ export function ProjectPage({
                         disabled={repoSelectionLocked}
                       />
                     )}
-                    <BranchBar projectRoot={project.path} repoPath={gitContextPath} active={visible} />
+                    <BranchBar
+                      projectRoot={project.path}
+                      repoPath={gitContextPath}
+                      active={visible}
+                    />
                   </>
                 }
               />
@@ -676,10 +687,7 @@ export function ProjectPage({
         />
       )}
 
-      <RightToolbar
-        activePanel={rightPanel}
-        onToggle={handleTogglePanel}
-      />
+      <RightToolbar activePanel={rightPanel} onToggle={handleTogglePanel} />
     </div>
   );
 }

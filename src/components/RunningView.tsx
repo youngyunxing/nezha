@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import type {
@@ -10,7 +10,10 @@ import type {
 } from "../types";
 import { StatusIcon } from "./StatusIcon";
 import { TerminalView } from "./TerminalView";
-import { SessionView } from "./SessionView";
+
+const SessionView = lazy(() =>
+  import("./SessionView").then((module) => ({ default: module.SessionView })),
+);
 import { buildDefaultForkTaskName, ForkTaskDialog } from "./running-view/SessionActionsMenu";
 import { QuickInput } from "./running-view/QuickInput";
 import { agentLabel, canForkAgent, taskSessionId, taskSessionPath } from "../types";
@@ -21,13 +24,7 @@ import { useToast } from "./Toast";
 import { writeClipboardText } from "./file-explorer/clipboard";
 import { useI18n } from "../i18n";
 import s from "../styles";
-import {
-  RotateCcw,
-  GitMerge,
-  Trash2,
-  AlertTriangle,
-  History,
-} from "lucide-react";
+import { RotateCcw, GitMerge, Trash2, AlertTriangle, History } from "lucide-react";
 
 interface SessionMetrics {
   duration_secs: number;
@@ -200,12 +197,20 @@ export function RunningView({
   const canExport = Boolean(sessionPath);
   // 头部那行只剩动作按钮了（任务名在标签条上）。一个按钮都没有的终端（纯终端任务）
   // 就不占这 36px —— 那点高度留给终端自己。
-  const canResumeHere = !isActive && !isInterrupted && Boolean(onResume) && canResume && !task.worktreeDiscarded;
+  const canResumeHere =
+    !isActive && !isInterrupted && Boolean(onResume) && canResume && !task.worktreeDiscarded;
   const canMergeWorktree =
-    !isActive && task.status === "done" && Boolean(task.worktreePath) && Boolean(task.worktreeBranch) &&
-    !task.worktreeDiscarded && Boolean(onMergeWorktree);
+    !isActive &&
+    task.status === "done" &&
+    Boolean(task.worktreePath) &&
+    Boolean(task.worktreeBranch) &&
+    !task.worktreeDiscarded &&
+    Boolean(onMergeWorktree);
   const canDiscardWorktree =
-    !isActive && Boolean(task.worktreePath) && Boolean(task.worktreeBranch) && !task.worktreeDiscarded &&
+    !isActive &&
+    Boolean(task.worktreePath) &&
+    Boolean(task.worktreeBranch) &&
+    !task.worktreeDiscarded &&
     Boolean(onDiscardWorktree);
   // fork / 导出搬到右下角那一排之后，头部只剩工作树这三个按钮 —— 跑着的任务（isActive）
   // 一个按钮都没有，于是头部整行不出现，指标行直接贴着标签条。
@@ -379,16 +384,16 @@ export function RunningView({
       {/* 快捷输入 = 往终端里打字。PTY 已经没了的（完成/失败/取消/中断）就别给 ——
           插进去也没人接，只会让人以为还能输入。管快捷指令去活着的会话里管。 */}
       {isActive && (
-      <QuickInput
-        items={quickInputs}
-        sessionKind={task.agent === "shell" ? "command" : "prompt"}
-        projectId={task.projectId}
-        autoEnter={quickAutoEnter}
-        onAutoEnterChange={onQuickAutoEnterChange}
-        onInsert={onInput}
-        onSave={onSaveQuickInput}
-        onDelete={onDeleteQuickInput}
-      />
+        <QuickInput
+          items={quickInputs}
+          sessionKind={task.agent === "shell" ? "command" : "prompt"}
+          projectId={task.projectId}
+          autoEnter={quickAutoEnter}
+          onAutoEnterChange={onQuickAutoEnterChange}
+          onInsert={onInput}
+          onSave={onSaveQuickInput}
+          onDelete={onDeleteQuickInput}
+        />
       )}
 
       {/* 会话记录：把它开成主区域的另一个标签（点了才开，能切走能关掉）。
@@ -435,38 +440,39 @@ export function RunningView({
   );
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        visibility: visible ? "visible" : "hidden",
-        pointerEvents: visible ? "auto" : "none",
-        zIndex: visible ? 1 : 0,
-      }}
-    >
-      {/* 头部：任务名已移到主区域标签条，这里只剩动作按钮 */}
-      {showHeaderActions && (
-        <div
-          style={{
-            ...s.runHeader,
-            // 动作按钮那一行的下沿线：底下没有指标行时（纯终端）由这一行自己画。
-            ...(metrics || sessionPath ? null : { borderBottom: "1px solid var(--border-dim)" }),
-          }}
-        >
-          {/* 任务名不在这儿了 —— 主区域标签条上已经有（components/main-tabs/MainTabBar）。
+    <Suspense fallback={null}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          visibility: visible ? "visible" : "hidden",
+          pointerEvents: visible ? "auto" : "none",
+          zIndex: visible ? 1 : 0,
+        }}
+      >
+        {/* 头部：任务名已移到主区域标签条，这里只剩动作按钮 */}
+        {showHeaderActions && (
+          <div
+            style={{
+              ...s.runHeader,
+              // 动作按钮那一行的下沿线：底下没有指标行时（纯终端）由这一行自己画。
+              ...(metrics || sessionPath ? null : { borderBottom: "1px solid var(--border-dim)" }),
+            }}
+          >
+            {/* 任务名不在这儿了 —— 主区域标签条上已经有（components/main-tabs/MainTabBar）。
               这里只留占位，让右边的动作按钮继续靠右。 */}
-          <div style={{ flex: 1, minWidth: 0 }} />
-          {canResumeHere && (
-            <button style={s.resumeBtn} onClick={() => onResume?.()}>
+            <div style={{ flex: 1, minWidth: 0 }} />
+            {canResumeHere && (
+              <button style={s.resumeBtn} onClick={() => onResume?.()}>
                 <RotateCcw size={12} strokeWidth={2.5} />
                 <span>{t("running.resume")}</span>
               </button>
             )}
-          {canMergeWorktree && (
-            <button
+            {canMergeWorktree && (
+              <button
                 style={{
                   ...s.resumeBtn,
                   opacity: worktreeBusy ? 0.6 : 1,
@@ -490,8 +496,8 @@ export function RunningView({
                 </span>
               </button>
             )}
-          {canDiscardWorktree && (
-            <button
+            {canDiscardWorktree && (
+              <button
                 style={{
                   ...s.cancelBtn,
                   opacity: worktreeBusy ? 0.6 : 1,
@@ -515,198 +521,199 @@ export function RunningView({
                 </span>
               </button>
             )}
-        </div>
-      )}
-      <FlowHandoff
-        open={handoffOpen}
-        sourceLabel={agentLabel(task.agent)}
-        defaultTarget={task.agent === "codex" ? "claude" : "codex"}
-        onOpenChange={setHandoffOpen}
-        onHandoff={onHandoff}
-      />
-      <ForkTaskDialog
-        open={forkDialogOpen}
-        defaultName={defaultForkName}
-        onOpenChange={setForkDialogOpen}
-        onFork={(name) => onFork?.(name)}
-      />
-      {(metrics || sessionPath) && (
-        <div
-          style={{
-            // 头部在时它自己是 36px 高、内容居中，按钮下方本来就空着 ~8px，所以这里顶部不用再给；
-            // 头部不在时（跑着的任务）直接把上边距补上，别让指标贴到标签条上。
-            // 左边距 10 = 终端容器自己的左内边距，指标和终端正文左边对齐。
-            padding: showHeaderActions ? "0 20px 8px 10px" : "8px 20px 8px 10px",
-            borderBottom: "1px solid var(--border-dim)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={s.runMetricsRow}>
-            {metrics && (
-              <>
-                <MetricPill
-                  label={t("running.duration")}
-                  value={formatDuration(metrics.duration_secs)}
-                />
-              </>
-            )}
-            {sessionPath && (
-              <SessionFilePill
-                label={t("running.sessionFileLabel")}
-                value={
-                  currentMetricsState?.status === "ready" && metrics
-                    ? formatFileSize(metrics.session_file_bytes)
-                    : currentMetricsState?.status === "failed"
-                      ? "0B"
-                      : "..."
-                }
-                tone={
-                  currentMetricsState?.status === "ready" && metrics
-                    ? metrics.session_file_bytes > 0
-                      ? "success"
-                      : "error"
-                    : currentMetricsState?.status === "failed"
-                      ? "error"
-                      : "warning"
-                }
-                copiedLabel={t("running.sessionFilePathCopied")}
-                onCopy={handleCopySessionPath}
-              />
-            )}
-            {metrics && (
-              <>
-                <MetricPill
-                  label={t("running.tokens")}
-                  value={formatTokens(metrics.total_tokens)}
-                />
-                {/* 只看 5 小时平均：实时值抖动大、参考价值低，已去掉 */}
-                {metrics.tps_5h > 0 && (
-                  <MetricPill label={t("running.tps5h")} value={formatTps(metrics.tps_5h)} />
-                )}
-                {metrics.context_window > 0 && metrics.context_tokens > 0 && (
+          </div>
+        )}
+        <FlowHandoff
+          open={handoffOpen}
+          sourceLabel={agentLabel(task.agent)}
+          defaultTarget={task.agent === "codex" ? "claude" : "codex"}
+          onOpenChange={setHandoffOpen}
+          onHandoff={onHandoff}
+        />
+        <ForkTaskDialog
+          open={forkDialogOpen}
+          defaultName={defaultForkName}
+          onOpenChange={setForkDialogOpen}
+          onFork={(name) => onFork?.(name)}
+        />
+        {(metrics || sessionPath) && (
+          <div
+            style={{
+              // 头部在时它自己是 36px 高、内容居中，按钮下方本来就空着 ~8px，所以这里顶部不用再给；
+              // 头部不在时（跑着的任务）直接把上边距补上，别让指标贴到标签条上。
+              // 左边距 10 = 终端容器自己的左内边距，指标和终端正文左边对齐。
+              padding: showHeaderActions ? "0 20px 8px 10px" : "8px 20px 8px 10px",
+              borderBottom: "1px solid var(--border-dim)",
+              flexShrink: 0,
+            }}
+          >
+            <div style={s.runMetricsRow}>
+              {metrics && (
+                <>
                   <MetricPill
-                    label={t("running.context")}
-                    value={`${formatTokens(metrics.context_tokens)} / ${formatTokens(metrics.context_window)} (${Math.round(
-                      (metrics.context_tokens / metrics.context_window) * 100,
-                    )}%)`}
+                    label={t("running.duration")}
+                    value={formatDuration(metrics.duration_secs)}
                   />
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Main content: terminal when active, session view when done/failed. */}
-      {isInterrupted ? (
-        <div style={s.interruptedSessionWrap}>
-          <div ref={interruptedBannerRef} style={s.interruptedBanner}>
-            <div style={s.interruptedBannerIcon}>
-              <AlertTriangle size={14} strokeWidth={2.1} />
+                </>
+              )}
+              {sessionPath && (
+                <SessionFilePill
+                  label={t("running.sessionFileLabel")}
+                  value={
+                    currentMetricsState?.status === "ready" && metrics
+                      ? formatFileSize(metrics.session_file_bytes)
+                      : currentMetricsState?.status === "failed"
+                        ? "0B"
+                        : "..."
+                  }
+                  tone={
+                    currentMetricsState?.status === "ready" && metrics
+                      ? metrics.session_file_bytes > 0
+                        ? "success"
+                        : "error"
+                      : currentMetricsState?.status === "failed"
+                        ? "error"
+                        : "warning"
+                  }
+                  copiedLabel={t("running.sessionFilePathCopied")}
+                  onCopy={handleCopySessionPath}
+                />
+              )}
+              {metrics && (
+                <>
+                  <MetricPill
+                    label={t("running.tokens")}
+                    value={formatTokens(metrics.total_tokens)}
+                  />
+                  {/* 只看 5 小时平均：实时值抖动大、参考价值低，已去掉 */}
+                  {metrics.tps_5h > 0 && (
+                    <MetricPill label={t("running.tps5h")} value={formatTps(metrics.tps_5h)} />
+                  )}
+                  {metrics.context_window > 0 && metrics.context_tokens > 0 && (
+                    <MetricPill
+                      label={t("running.context")}
+                      value={`${formatTokens(metrics.context_tokens)} / ${formatTokens(metrics.context_window)} (${Math.round(
+                        (metrics.context_tokens / metrics.context_window) * 100,
+                      )}%)`}
+                    />
+                  )}
+                </>
+              )}
             </div>
-            <div style={s.interruptedBannerBody}>
-              <div style={s.interruptedBannerTitle}>
-                {t(canReconnect ? "running.detachedTitle" : "running.interruptedTitle")}
+          </div>
+        )}
+
+        {/* Main content: terminal when active, session view when done/failed. */}
+        {isInterrupted ? (
+          <div style={s.interruptedSessionWrap}>
+            <div ref={interruptedBannerRef} style={s.interruptedBanner}>
+              <div style={s.interruptedBannerIcon}>
+                <AlertTriangle size={14} strokeWidth={2.1} />
               </div>
-            </div>
-            {/* 被删掉的任务正在被"看"（历史组点开）：不给启动类按钮 ——
+              <div style={s.interruptedBannerBody}>
+                <div style={s.interruptedBannerTitle}>
+                  {t(canReconnect ? "running.detachedTitle" : "running.interruptedTitle")}
+                </div>
+              </div>
+              {/* 被删掉的任务正在被"看"（历史组点开）：不给启动类按钮 ——
                 它还是已删除状态，跑起来在列表里也看不见。要恢复走右键菜单。 */}
-            {!task.deleted && (
-            <div style={s.interruptedBannerActions}>
-              <button
-                type="button"
-                title={!canResume ? t("running.restartHint") : undefined}
-                style={{
-                  ...s.interruptedPrimaryBtn,
-                  opacity: canResume || canRestart ? 1 : 0.45,
-                  cursor: canResume || canRestart ? "pointer" : "not-allowed",
-                }}
-                disabled={!canResume && !canRestart}
-                onClick={canResume ? (canReconnect ? onReconnect : onResume) : onRestart}
-              >
-                <RotateCcw size={12} strokeWidth={2.1} />
-                <span>
-                  {!canResume
-                    ? t("running.restart")
-                    : canReconnect
-                      ? bannerCompact
-                        ? t("running.reconnect")
-                        : t("running.reconnectTask")
-                      : bannerCompact
-                        ? t("running.resume")
-                        : t("running.resumeTask")}
-                </span>
-              </button>
+              {!task.deleted && (
+                <div style={s.interruptedBannerActions}>
+                  <button
+                    type="button"
+                    title={!canResume ? t("running.restartHint") : undefined}
+                    style={{
+                      ...s.interruptedPrimaryBtn,
+                      opacity: canResume || canRestart ? 1 : 0.45,
+                      cursor: canResume || canRestart ? "pointer" : "not-allowed",
+                    }}
+                    disabled={!canResume && !canRestart}
+                    onClick={canResume ? (canReconnect ? onReconnect : onResume) : onRestart}
+                  >
+                    <RotateCcw size={12} strokeWidth={2.1} />
+                    <span>
+                      {!canResume
+                        ? t("running.restart")
+                        : canReconnect
+                          ? bannerCompact
+                            ? t("running.reconnect")
+                            : t("running.reconnectTask")
+                          : bannerCompact
+                            ? t("running.resume")
+                            : t("running.resumeTask")}
+                    </span>
+                  </button>
+                </div>
+              )}
             </div>
+            {sessionPath ? (
+              <div style={s.sessionPaneWrap}>
+                <SessionView
+                  sessionPath={sessionPath}
+                  themeVariant={themeVariant}
+                  topRightSlot={manageEntry}
+                  active={visible}
+                />
+                {cornerActions}
+              </div>
+            ) : task.agent === "shell" ? (
+              terminalPane
+            ) : (
+              <div style={s.interruptedNoSessionPane}>
+                {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
+              </div>
             )}
           </div>
-          {sessionPath ? (
-            <div style={s.sessionPaneWrap}>
-              <SessionView
-                sessionPath={sessionPath}
-                themeVariant={themeVariant}
-                topRightSlot={manageEntry}
-                active={visible}
-              />
-              {cornerActions}
-            </div>
-          ) : task.agent === "shell" ? (
-            terminalPane
-          ) : (
-            <div style={s.interruptedNoSessionPane}>
-              {t(canReconnect ? "running.detachedNoSession" : "running.interruptedNoSession")}
-            </div>
-          )}
-        </div>
-      ) : recordPane && sessionPath ? (
-        /* 记录视图：和终端共用右下角那一排（快捷输入 / fork / 流转 / 复制 / 导出）——
+        ) : recordPane && sessionPath ? (
+          /* 记录视图：和终端共用右下角那一排（快捷输入 / fork / 流转 / 复制 / 导出）——
            之前它挂在 ProjectPage 上，那一排就整个丢了，用户报的"快捷输入不可见"就是这个 */
-        <div style={s.sessionPaneWrap}>
-          <SessionView
-            sessionPath={sessionPath}
-            themeVariant={themeVariant}
-            topRightSlot={manageEntry}
-            active={visible}
-          />
-          {cornerActions}
-        </div>
-      ) : isActive || !sessionPath ? (
-        terminalPane
-      ) : (
-        <div style={s.sessionPaneWrap}>
-          <SessionView
-            sessionPath={sessionPath}
-            themeVariant={themeVariant}
-            topRightSlot={manageEntry}
-            active={visible}
-          />
-          {cornerActions}
-        </div>
-      )}
+          <div style={s.sessionPaneWrap}>
+            <SessionView
+              sessionPath={sessionPath}
+              themeVariant={themeVariant}
+              topRightSlot={manageEntry}
+              active={visible}
+            />
+            {cornerActions}
+          </div>
+        ) : isActive || !sessionPath ? (
+          terminalPane
+        ) : (
+          <div style={s.sessionPaneWrap}>
+            <SessionView
+              sessionPath={sessionPath}
+              themeVariant={themeVariant}
+              topRightSlot={manageEntry}
+              active={visible}
+            />
+            {cornerActions}
+          </div>
+        )}
 
-      {/* Status bar when task is done and no session path (terminal fallback) */}
-      {!isActive && !isInterrupted && !sessionPath && (
-        <div
-          style={{
-            padding: "10px 20px",
-            borderTop: "1px solid var(--border-dim)",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <StatusIcon status={task.status} />
-          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {task.status === "done"
-              ? t("task.completed")
-              : task.status === "failed"
-                ? (task.failureReason ?? t("task.failed"))
-                : t("task.cancelled")}
-          </span>
-        </div>
-      )}
-    </div>
+        {/* Status bar when task is done and no session path (terminal fallback) */}
+        {!isActive && !isInterrupted && !sessionPath && (
+          <div
+            style={{
+              padding: "10px 20px",
+              borderTop: "1px solid var(--border-dim)",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <StatusIcon status={task.status} />
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              {task.status === "done"
+                ? t("task.completed")
+                : task.status === "failed"
+                  ? (task.failureReason ?? t("task.failed"))
+                  : t("task.cancelled")}
+            </span>
+          </div>
+        )}
+      </div>
+    </Suspense>
   );
 }
 
