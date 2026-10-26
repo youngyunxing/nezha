@@ -156,7 +156,10 @@ const translations: Record<string, string> = {
   "project.appearance.image": "自定义图片",
   "project.appearance.imagePick": "选择图片",
   "project.appearance.imageRemove": "移除图片",
-  "project.appearance.imageHint": "支持 png / jpg / webp / gif，4MB 以内；图片会内联保存，原图挪走也不受影响",
+  "project.appearance.imageHint":
+    "支持 png / jpg / webp / gif，{max}MB 以内；图片会内联保存，原图挪走也不受影响",
+  "project.appearance.imageTooLarge": "图片太大：请选择 {max}MB 以内的图片",
+  "project.appearance.imageFailed": "读取图片失败，请换一张试试",
   "project.appearance.icon": "图标",
   "project.appearance.modeInitials": "缩写",
   "project.appearance.modeImage": "图片",

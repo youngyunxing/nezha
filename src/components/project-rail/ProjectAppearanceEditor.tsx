@@ -9,7 +9,9 @@ import { useProjectAppearance } from "../../hooks/useProjectAppearance";
 import {
   PROJECT_AVATAR_COLORS,
   PROJECT_AVATAR_EMOJI_PRESETS,
+  PROJECT_AVATAR_IMAGE_MAX_MB,
   firstGrapheme,
+  normalizeAvatarImage,
   normalizeProjectAvatar,
   takeLabel,
 } from "../../projectAvatar";
@@ -40,6 +42,8 @@ export function ProjectAppearanceEditor({
   );
   const [labelDraft, setLabelDraft] = useState(avatar?.label ?? "");
   const [emojiDraft, setEmojiDraft] = useState(avatar?.emoji ?? "");
+  // 选图失败（太大 / 读不出来）时给一行可见提示，不再只写 console 让用户以为没反应
+  const [imageError, setImageError] = useState<string | null>(null);
 
   // 恢复默认 / 其他入口改动时把草稿同步回来
   useEffect(() => {
@@ -94,6 +98,7 @@ export function ProjectAppearanceEditor({
   // 切到「Emoji」/「图片」不立刻改动,选中一个才生效。
   const switchMode = (next: IconMode) => {
     setMode(next);
+    setImageError(null);
     if (next === "label") {
       const patch: ProjectAvatarStyle = {};
       if (avatar?.emoji) {
@@ -108,18 +113,31 @@ export function ProjectAppearanceEditor({
   };
 
   // 选一张本机图片 → 读成 data URL 存进项目（原图挪走/删掉都不会变破图）。
-  // 失败只写 console：这个编辑器没有 toast 通道，硬塞会把 props 链拉长，另开一刀再说。
+  // 失败在图片区块里给一行可见提示 —— 以前只写 console，用户点了「选择图片」却没反应。
   const handlePickImage = async () => {
     const picked = await open({
       multiple: false,
       filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
     });
     if (typeof picked !== "string") return;
+    setImageError(null);
     try {
       const dataUrl = await invoke<string>("read_image_as_data_url", { path: picked });
+      // 后端上限调大 / 前端上限调小时，归一化会把它丢掉 —— 这里先判一次，给个说法
+      if (!normalizeAvatarImage(dataUrl)) {
+        setImageError(
+          t("project.appearance.imageTooLarge", { max: PROJECT_AVATAR_IMAGE_MAX_MB }),
+        );
+        return;
+      }
       commit({ image: dataUrl });
     } catch (err) {
       console.error("读取头像图片失败：", err);
+      setImageError(
+        String(err).includes("too large")
+          ? t("project.appearance.imageTooLarge", { max: PROJECT_AVATAR_IMAGE_MAX_MB })
+          : t("project.appearance.imageFailed"),
+      );
     }
   };
 
@@ -303,7 +321,10 @@ export function ProjectAppearanceEditor({
               <button
                 type="button"
                 className="avatar-editor-image-btn"
-                onClick={() => commit({ image: undefined })}
+                onClick={() => {
+                  setImageError(null);
+                  commit({ image: undefined });
+                }}
               >
                 {t("project.appearance.imageRemove")}
               </button>
@@ -319,7 +340,14 @@ export function ProjectAppearanceEditor({
             </button>
           )}
         </div>
-        <span className="avatar-editor-hint">{t("project.appearance.imageHint")}</span>
+        <span className="avatar-editor-hint">
+          {t("project.appearance.imageHint", { max: PROJECT_AVATAR_IMAGE_MAX_MB })}
+        </span>
+        {imageError && (
+          <span className="avatar-editor-hint" data-error="true" role="alert">
+            {imageError}
+          </span>
+        )}
         </div>
       ) : null}
 

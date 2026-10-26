@@ -777,8 +777,9 @@ mod tests {
 /// 把用户挑选的图片读成 data URL，给「项目图标自定义」用。
 ///
 /// 为什么存 data URL 而不是图片路径：用户把原图挪走/删掉，头像不该变成破图 —— 图片就内联
-/// 在 projects.json 里。代价是文件变大，所以这里卡两道：只认图片扩展名、单文件 ≤ 4MB
-/// （前端还有一道 3MB 的 data URL 长度上限）。
+/// 在 projects.json 里。代价是文件变大，所以这里卡两道：只认图片扩展名、单文件 ≤ 2MB
+/// （base64 膨胀 4/3 后约 2.8MB，仍在前端 3MB 的 data URL 上限内 —— 两道必须对得上，
+/// 否则后端收下了、前端归一化时又静默丢掉）。
 #[tauri::command]
 pub async fn read_image_as_data_url(path: String) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
@@ -822,5 +823,6 @@ pub async fn read_image_as_data_url(path: String) -> Result<String, String> {
     .map_err(|e| format!("read_image_as_data_url join error: {}", e))?
 }
 
-/// 头像原图上限。前端另有一道 3MB 的 data URL 长度限制。
-const MAX_AVATAR_IMAGE_BYTES: u64 = 4 * 1024 * 1024;
+/// 头像原图上限。前端另有一道 3MB 的 data URL 长度限制：2MB 原图 base64 后 ≈ 2.8MB，
+/// 能过；再大就会被前端丢掉。改这里要同步前端 PROJECT_AVATAR_IMAGE_MAX_MB。
+const MAX_AVATAR_IMAGE_BYTES: u64 = 2 * 1024 * 1024;

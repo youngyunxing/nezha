@@ -194,6 +194,11 @@ export function normalizeProjectAvatar(
 /** 头像图上限：data URL 的字符数。约合 2.2MB 原图 —— 够用，又不至于把 projects.json 撑爆。 */
 export const PROJECT_AVATAR_IMAGE_MAX_CHARS = 3 * 1024 * 1024;
 
+/** 原图上限（MB）。**必须与 src-tauri/src/fs.rs 的 MAX_AVATAR_IMAGE_BYTES 对得上**：
+ *  base64 膨胀 4/3，2MB 原图 ≈ 2.8MB data URL，仍在前面的 3MB 字符上限内。
+ *  两边不一致时，后端收下了、前端归一化时又静默丢掉（用户点了选图却什么都没发生）。 */
+export const PROJECT_AVATAR_IMAGE_MAX_MB = 2;
+
 /** 只认内联图片 data URL，顺带卡大小；其它一律当作没设置。 */
 export function normalizeAvatarImage(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;

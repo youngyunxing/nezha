@@ -570,6 +570,11 @@
   line-height: 1.5;
 }
 
+/* 选图失败（太大 / 读不出来）：同一行排版，换成危险色 */
+.avatar-editor-hint[data-error="true"] {
+  color: var(--danger);
+}
+
 .project-avatar-img {
   width: 100%;
   height: 100%;
