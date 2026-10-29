@@ -23,6 +23,7 @@ use session::{ClaudeSessionInfo, CodexSessionInfo};
 pub struct TaskManager {
     pub(crate) pty_masters: Mutex<HashMap<String, Box<dyn portable_pty::MasterPty + Send>>>,
     pub(crate) pty_writers: Mutex<HashMap<String, Box<dyn Write + Send>>>,
+    pub(crate) pty_sizes: Mutex<HashMap<String, (u16, u16)>>,
     pub(crate) child_handles:
         Mutex<HashMap<String, Arc<std::sync::Mutex<Box<dyn portable_pty::Child + Send + Sync>>>>>,
     pub(crate) cancelled_tasks: Mutex<HashSet<String>>,
@@ -39,9 +40,11 @@ impl TaskManager {
         let mut masters = self.pty_masters.lock();
         let mut writers = self.pty_writers.lock();
         let mut children = self.child_handles.lock();
+        let mut sizes = self.pty_sizes.lock();
         masters.remove(id);
         writers.remove(id);
         children.remove(id);
+        sizes.remove(id);
     }
 
     /// 退出前终止所有仍在运行的任务/Shell 子进程。
@@ -156,6 +159,7 @@ pub fn run() {
         .manage(TaskManager {
             pty_masters: Mutex::new(HashMap::new()),
             pty_writers: Mutex::new(HashMap::new()),
+            pty_sizes: Mutex::new(HashMap::new()),
             child_handles: Mutex::new(HashMap::new()),
             cancelled_tasks: Mutex::new(HashSet::new()),
             codex_sessions: Mutex::new(HashMap::new()),

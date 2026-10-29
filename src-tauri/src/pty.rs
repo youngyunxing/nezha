@@ -289,6 +289,7 @@ fn register_pty_handles(
     master: Box<dyn portable_pty::MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
+    size: PtySize,
 ) -> Result<(), String> {
     task_manager
         .pty_masters
@@ -302,6 +303,10 @@ fn register_pty_handles(
         .child_handles
         .lock()
         .insert(id.to_string(), Arc::new(std::sync::Mutex::new(child)));
+    task_manager
+        .pty_sizes
+        .lock()
+        .insert(id.to_string(), (size.cols, size.rows));
     Ok(())
 }
 
@@ -748,13 +753,14 @@ pub async fn run_task(
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().remove(&task_id);
 
+    let size = PtySize {
+        rows: rows.unwrap_or(50),
+        cols: cols.unwrap_or(220),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
     let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: rows.unwrap_or(50),
-            cols: cols.unwrap_or(220),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .openpty(size)
         .map_err(|e| e.to_string())?;
 
     // 将图片保存至 .nezha/attachments/ 并获取文件路径
@@ -908,7 +914,7 @@ pub async fn run_task(
     drop(pair.slave);
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
+    register_pty_handles(&task_manager, &task_id, pair.master, writer, child, size)?;
 
     // kimi 没有预置 id 的入口：装了 hook 就靠 SessionStart 的 payload 立刻拿到会话 id
     // （见 event_watcher::handle_session_start），只有 hook 不可用时才退回轮询索引。
@@ -1017,8 +1023,10 @@ pub async fn reset_task_process(
         let mut masters = task_manager.pty_masters.lock();
         let mut writers = task_manager.pty_writers.lock();
         let mut children = task_manager.child_handles.lock();
+        let mut sizes = task_manager.pty_sizes.lock();
         masters.remove(&task_id);
         writers.remove(&task_id);
+        sizes.remove(&task_id);
         children.remove(&task_id)
     };
 
@@ -1045,13 +1053,14 @@ pub async fn resume_task(
 ) -> Result<(), String> {
     task_manager.cancelled_tasks.lock().remove(&task_id);
 
+    let size = PtySize {
+        rows: rows.unwrap_or(50),
+        cols: cols.unwrap_or(220),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
     let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: rows.unwrap_or(50),
-            cols: cols.unwrap_or(220),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
+        .openpty(size)
         .map_err(|e| e.to_string())?;
 
     let launch = crate::app_settings::get_agent_launch_spec(&agent);
@@ -1149,7 +1158,7 @@ pub async fn resume_task(
     drop(pair.slave);
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    register_pty_handles(&task_manager, &task_id, pair.master, writer, child)?;
+    register_pty_handles(&task_manager, &task_id, pair.master, writer, child, size)?;
 
     crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
@@ -1209,6 +1218,12 @@ pub async fn fork_task(
     let launch_project_path = project_path.clone();
     let launch_task_id = task_id.clone();
     let launch_agent = agent.clone();
+    let size = PtySize {
+        rows: rows.unwrap_or(50),
+        cols: cols.unwrap_or(220),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
     let spawned = tokio::task::spawn_blocking(move || {
         spawn_fork_task_process(
             &launch_project_path,
@@ -1216,8 +1231,8 @@ pub async fn fork_task(
             &launch_agent,
             &source_session_id,
             &permission_mode,
-            cols.unwrap_or(220),
-            rows.unwrap_or(50),
+            size.cols,
+            size.rows,
         )
     })
     .await
@@ -1233,7 +1248,7 @@ pub async fn fork_task(
         is_codex,
         use_hooks,
     } = spawned;
-    register_pty_handles(&task_manager, &task_id, master, writer, child)?;
+    register_pty_handles(&task_manager, &task_id, master, writer, child, size)?;
 
     crate::event_watcher::note_status(&task_id, "idle");
     let _ = app.emit(
@@ -1287,6 +1302,10 @@ pub async fn send_input(
     Ok(())
 }
 
+fn should_apply_pty_resize(current: Option<(u16, u16)>, next: (u16, u16)) -> bool {
+    current != Some(next)
+}
+
 #[tauri::command]
 pub async fn resize_pty(
     task_manager: State<'_, TaskManager>,
@@ -1302,11 +1321,39 @@ pub async fn resize_pty(
     }
     let masters = task_manager.pty_masters.lock();
     if let Some(master) = masters.get(&task_id) {
+        let next = (cols, rows);
+        let current = task_manager.pty_sizes.lock().get(&task_id).copied();
+        if !should_apply_pty_resize(current, next) {
+            return Ok(());
+        }
         master
-            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|e| e.to_string())?;
+        task_manager.pty_sizes.lock().insert(task_id, next);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod pty_resize_tests {
+    use super::should_apply_pty_resize;
+
+    #[test]
+    fn same_size_does_not_trigger_another_tui_redraw() {
+        assert!(!should_apply_pty_resize(Some((87, 50)), (87, 50)));
+    }
+
+    #[test]
+    fn changed_or_unknown_size_is_applied() {
+        assert!(should_apply_pty_resize(None, (87, 50)));
+        assert!(should_apply_pty_resize(Some((87, 50)), (80, 50)));
+        assert!(should_apply_pty_resize(Some((87, 50)), (87, 40)));
+    }
 }
 
 #[cfg(test)]
