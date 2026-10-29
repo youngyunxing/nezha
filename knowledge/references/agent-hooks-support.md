@@ -82,7 +82,7 @@ Claude 当前版本的 hook 事件远超 Nezha 所需（含 `PostToolBatch`、`F
 | `UserPromptSubmit` | 复位 `input_required` → `running` | 用户提交 prompt，Claude 处理前 |
 | `Notification` | 置 `input_required`（仅工具审批时即时） | matcher: `permission_prompt`/`idle_prompt`/`auth_success`。**`idle_prompt` 约空闲 60s 才触发**（见 §5 与 [[hook_claude_stop_badge_delay]]） |
 | `PostToolUse` | 复位 `input_required` → `running` | 工具成功后；工具审批不触发 `UserPromptSubmit`，必须靠它复位 |
-| `Stop` | 置 `input_required`（本轮结束、等输入） | AI 完成一轮响应。**Nezha 主要依赖项**，不靠 `Notification` 兜底 |
+| `Stop` | 置 `awaiting_review`（本轮结束、等待查看） | AI 完成一轮响应。**Nezha 主要依赖项**，不靠 `Notification` 兜底 |
 | `SubagentStop` | 不主动 emit，交 PTY exit monitor | 子代理结束，主代理仍在工作 |
 
 Claude 端关键能力：
@@ -138,7 +138,7 @@ Stop                               → awaiting_review (本轮结束、进程不
 SubagentStop | 其它                → 不处理 (终态交 PTY exit monitor，覆写 done/failed)
 ```
 
-> 除 hook 之外还有两处会写活动态：PTY spawn 成功时无条件发一次 `running`
+> 除 hook 之外还有两处会写活动态：PTY spawn 成功时发一次 `idle`
 > （run_task / resume_task / fork_task），以及非 hook 回退路径盯 session 文件的
 > `sync_waiting_for_user`（有待确认的工具调用 / 在等用户回复 → input_required，否则 running）。
 
@@ -236,6 +236,5 @@ Nezha 早期版本曾直接向用户 `~/.claude/settings.json` 内联注入带 `
 
 **相关文档：**
 
-- [终端渲染与选区卡顿排查](../xterm/rendering-and-selection-lag.md) — 同属 Nezha 桌面壳的独立技术线（无直接依赖）
 - 记忆 [[feat_hooks_codex_gaps]] — Codex hook 三处历史隐性 bug（trust / 字段名 / 环境变量）+ cmux 两套参考实现
-- 记忆 [[hook_claude_stop_badge_delay]] — Claude 等输入角标晚 60s 真因：必须用 Stop 而非 Notification(idle_prompt) 置 input_required
+- 记忆 [[hook_claude_stop_badge_delay]] — Claude 等输入角标晚 60s 真因：必须用 Stop 而非 Notification(idle_prompt) 驱动结束态

@@ -116,17 +116,18 @@ ErrorBoundary  (全局兜底)
 
 ```typescript
 // 任务状态（TaskStatus）：
-//   pending | running | input_required | detached | interrupted
-//   | done | failed | cancelled
-// 典型生命周期：pending → running ↔ input_required → done | failed | cancelled
-// 例外路径：running → detached（断开但保留 PTY） / running → interrupted（中断挂起）
+//   pending | idle | running | input_required | awaiting_review
+//   | interrupted | done | failed | cancelled
+// 典型生命周期：pending → idle → running ↔ input_required
+//   running → awaiting_review → idle；进程退出 → done | failed | cancelled
+// 中断统一为 interrupted，processAlive 区分「重连」与「恢复」。详见 docs/状态机.md。
 
 interface Task {
   id: string;
   projectId: string;
   name?: string;
   prompt: string;
-  agent: "claude" | "codex";
+  agent: "claude" | "codex" | "kimi";
   permissionMode: "ask" | "auto_edit" | "full_access";
   status: TaskStatus;
   createdAt: number;
@@ -134,10 +135,13 @@ interface Task {
   attentionRequestedAt?: number;
   starred?: boolean;
   failureReason?: string;
+  processAlive?: boolean;    // interrupted 时区分重连（true）与恢复（false）
   claudeSessionId?: string;
   claudeSessionPath?: string;
   codexSessionId?: string;
   codexSessionPath?: string;
+  kimiSessionId?: string;
+  kimiSessionPath?: string;
   // Worktree 集成（一任务一分支一 worktree）
   worktreePath?: string;
   worktreeBranch?: string;
@@ -203,13 +207,13 @@ interface Task {
 - **长列表必须虚拟化**——SessionView（会话消息）、GitChanges（文件列表）在数据量大时（5000+ 消息、1000+ 文件变更）会因 DOM 节点过多导致滚动卡顿。新增类似列表时必须考虑虚拟滚动。
 - **`marked()` 禁止同步调用大文本**——SessionView 中 `marked(text, { async: false })` 会阻塞主线程。对单条消息超过 10KB 的文本应使用异步渲染或 memoize 结果。
 - **@提及搜索必须防抖**——NewTaskView 中的文件搜索（`mentionItems` useMemo）在万级文件项目中每次按键都全量过滤，应加 200ms 防抖或使用 `startTransition`。
-- **CodeMirror / Shiki 语言包应按需加载**——当前所有语言包静态导入，导致构建主包 ~2MB。新增语言支持时必须使用动态 `import()`。
+- **CodeMirror / Shiki 语言包必须保持按需加载**——语言包与重型视图已改为动态 `import()`，新增语言或视图时不得回退成全量静态导入。
 
 ### 后端性能
 
 - **Tauri async 命令内禁止直接调用阻塞操作**——当前 `git.rs` 中所有命令（`git_status`、`git_log`、`git_push` 等）和 `fs.rs` 中的 `read_dir_entries`、`list_project_files` 虽标记为 `async fn`，但内部直接调用 `std::process::Command::output()` 等同步阻塞操作而未使用 `spawn_blocking`，会阻塞 Tokio 异步运行时。**新增 Tauri 命令凡涉及文件 I/O、进程启动、网络请求，必须包裹 `tokio::task::spawn_blocking`。**
 - **持锁期间禁止执行 I/O**——`send_input`（pty.rs）在持有 `pty_writers` 锁期间执行 `write_all` + `flush`；`resize_pty` 在持有 `pty_masters` 锁期间执行 ioctl。应先 clone/取出资源再释放锁，或缩短临界区。
-- **`read_session_messages` 禁止全文件一次性加载**——当前实现对整个 JSONL 文件调用 `fs::read_to_string`，长会话文件可达数百 MB。应改为流式逐行读取或支持分页。
+- **`read_session_messages` 必须保持流式逐行读取**——当前已在 `spawn_blocking` 中通过 `BufReader` 处理 JSONL，禁止回退为 `fs::read_to_string` 全量加载。
 - **`list_project_files` 应合并 git 命令**——当前执行两次 `git ls-files`（tracked + untracked），可合并为 `git ls-files -c -o --exclude-standard` 一次完成。
 
 ### 安全
@@ -252,6 +256,8 @@ interface Task {
   3. `cols < 2 || rows < 2` → 跳过
 - **Why**：`FitAddon` 在 0 尺寸容器上**不返回 NaN**，而是退化到 `Math.max(MINIMUM_COLS=2, Math.floor(0/cell)) = 2`。放过 → `resize_pty` → `SIGWINCH` → Claude Code / Codex 等全屏 TUI 按 `cols=2` 重排，buffer **永久打散成一字一行不可恢复**。
 - **后端 `resize_pty` 必须保留畸形尺寸兜底**——前端三层防御漏掉的话也得在这里挡住，防御纵深不允许只剩前端一层。
+- **空闲缩窄只调整 xterm，禁止调用 `resize_pty` 缩窄 PTY**——`SIGWINCH` 会让 Claude 把中间 scrollback 重写成窄宽度硬换行，放大后无法合并。放大时再同步 PTY；同尺寸请求由后端 `pty_sizes` 去重，避免冗余全屏重画。
+- **缩窄必须等待输出稳定**——基础防抖 800ms，且最近 1.5 秒内有输出时继续推迟；放大保持 150ms 并取消待执行的缩窄。不要回退成「先缩 PTY 再缩 xterm」。
 
 ### 禁止方向 / 禁止复活的死代码
 

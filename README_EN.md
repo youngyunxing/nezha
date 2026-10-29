@@ -4,6 +4,10 @@
 
 <h1 align="center">Nezha: Three Heads, Six Arms — Programming in Parallel</h1>
 
+## About this fork
+
+This repository is a fork of [hanshuaikang/nezha](https://github.com/hanshuaikang/nezha), also distributed under GPL-3.0. It adds Kimi session support and preserves terminal history during window resizing: shrinking an idle session only reflows xterm without notifying the PTY, so expanding the window restores the middle of the scrollback as well as its top and bottom.
+
 <p align="center">
 A lightweight cross-platform IDE purpose-built for AI coding.
 </p>
