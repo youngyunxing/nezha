@@ -912,6 +912,22 @@ export function terminalResizeDelayMs(
   return shouldResizePtyBeforeXterm(current, next) ? 800 : 150;
 }
 
+const TERMINAL_RESIZE_OUTPUT_QUIET_MS = 1500;
+
+export function terminalResizeOutputDeferMs(
+  current: { cols: number; rows: number },
+  next: { cols: number; rows: number },
+  outputAgeMs: number,
+): number {
+  if (
+    !shouldResizePtyBeforeXterm(current, next) ||
+    outputAgeMs >= TERMINAL_RESIZE_OUTPUT_QUIET_MS
+  ) {
+    return 0;
+  }
+  return Math.max(0, TERMINAL_RESIZE_OUTPUT_QUIET_MS - Math.max(0, outputAgeMs));
+}
+
 /**
  * 安全地执行 fitAddon.fit() 并返回 { cols, rows }，失败/容器不可见时返回 null。
  *

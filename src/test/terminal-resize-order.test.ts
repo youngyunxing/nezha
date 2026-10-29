@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 import { fitWithResizeOrder } from "../components/TerminalView";
-import { shouldResizePtyBeforeXterm, terminalResizeDelayMs } from "../components/terminalShared";
+import {
+  shouldResizePtyBeforeXterm,
+  terminalResizeDelayMs,
+  terminalResizeOutputDeferMs,
+} from "../components/terminalShared";
 
 describe("PTY 与 xterm 的缩放顺序", () => {
   it("列数缩小时先缩 PTY，避免 CLI 满宽行被 xterm 额外折行", () => {
@@ -31,6 +35,24 @@ describe("窗口缩放防抖", () => {
 
   it("放大只等 150ms，尽快按新宽度重排", () => {
     expect(terminalResizeDelayMs({ cols: 80, rows: 40 }, { cols: 100, rows: 50 })).toBe(150);
+  });
+
+  it("输出活跃时继续推迟缩窄，避免中间历史留下窄宽度硬换行", () => {
+    expect(
+      terminalResizeOutputDeferMs({ cols: 100, rows: 50 }, { cols: 80, rows: 40 }, 500),
+    ).toBe(1000);
+  });
+
+  it("输出稳定后允许缩窄", () => {
+    expect(
+      terminalResizeOutputDeferMs({ cols: 100, rows: 50 }, { cols: 80, rows: 40 }, 1500),
+    ).toBe(0);
+  });
+
+  it("输出活跃不阻塞放大恢复", () => {
+    expect(
+      terminalResizeOutputDeferMs({ cols: 80, rows: 40 }, { cols: 100, rows: 50 }, 0),
+    ).toBe(0);
   });
 });
 

@@ -75,6 +75,7 @@ import {
   safeFit,
   shouldResizePtyBeforeXterm,
   terminalResizeDelayMs,
+  terminalResizeOutputDeferMs,
   createSmartWriter,
   attachMacWebKitTerminalGuard,
   attachTerminalScrollbarAutoHide,
@@ -324,7 +325,11 @@ export function TerminalView({
       if (hintFrame !== null) return;
       hintFrame = window.requestAnimationFrame(readSlashHint);
     };
-    const disposeHintOnWrite = term.onWriteParsed(scheduleHintRead);
+    let lastOutputAt = 0;
+    const disposeHintOnWrite = term.onWriteParsed(() => {
+      lastOutputAt = Date.now();
+      scheduleHintRead();
+    });
     // 光标自己动（方向键、Tab 补全）也会改变「光标前那行」，但可能没有新输出
     const disposeHintOnCursor = term.onCursorMove(scheduleHintRead);
 
@@ -375,6 +380,27 @@ export function TerminalView({
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let resizeGeneration = 0;
+    const outputAgeMs = () =>
+      lastOutputAt === 0 ? Number.POSITIVE_INFINITY : Date.now() - lastOutputAt;
+    const runScheduledFit = (generation: number) => {
+      resizeTimer = null;
+      if (disposed || generation !== resizeGeneration || !isActiveRef.current) return;
+      const proposed = fitAddon.proposeDimensions?.();
+      const deferMs = proposed
+        ? terminalResizeOutputDeferMs(term, proposed, outputAgeMs())
+        : 0;
+      if (deferMs > 0) {
+        resizeTimer = setTimeout(() => runScheduledFit(generation), deferMs);
+        return;
+      }
+      void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => {
+        return !disposed && generation === resizeGeneration;
+      })
+        .then((size) => {
+          if (size) notifiedSizeRef.current = size;
+        })
+        .catch(console.error);
+    };
     const scheduleFit = () => {
       // 窗口/面板尺寸变了，光标那一行的像素位置也变了，提示条要跟着挪
       scheduleHintRead();
@@ -383,19 +409,15 @@ export function TerminalView({
       if (!isActiveRef.current) return;
 
       const proposed = fitAddon.proposeDimensions?.();
-      const delay = proposed ? terminalResizeDelayMs(term, proposed) : 150;
+      const delay = proposed
+        ? Math.max(
+            terminalResizeDelayMs(term, proposed),
+            terminalResizeOutputDeferMs(term, proposed, outputAgeMs()),
+          )
+        : 150;
       const generation = ++resizeGeneration;
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        resizeTimer = null;
-        void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => {
-          return !disposed && generation === resizeGeneration;
-        })
-          .then((size) => {
-            if (size) notifiedSizeRef.current = size;
-          })
-          .catch(console.error);
-      }, delay);
+      resizeTimer = setTimeout(() => runScheduledFit(generation), delay);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
