@@ -897,7 +897,7 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
   };
 }
 
-export function shouldResizePtyBeforeXterm(
+export function isTerminalShrink(
   current: { cols: number; rows: number },
   next: { cols: number; rows: number },
 ): boolean {
@@ -908,8 +908,8 @@ export function terminalResizeDelayMs(
   current: { cols: number; rows: number },
   next: { cols: number; rows: number },
 ): number {
-  // 快速缩小再放大时直接取消缩窄，避免 CLI 在过渡宽度下写出无法恢复的硬换行。
-  return shouldResizePtyBeforeXterm(current, next) ? 800 : 150;
+  // 快速缩小再放大时直接取消缩窄，避免输出落在 xterm 的过渡宽度下。
+  return isTerminalShrink(current, next) ? 800 : 150;
 }
 
 const TERMINAL_RESIZE_OUTPUT_QUIET_MS = 1500;
@@ -920,7 +920,7 @@ export function terminalResizeOutputDeferMs(
   outputAgeMs: number,
 ): number {
   if (
-    !shouldResizePtyBeforeXterm(current, next) ||
+    !isTerminalShrink(current, next) ||
     outputAgeMs >= TERMINAL_RESIZE_OUTPUT_QUIET_MS
   ) {
     return 0;

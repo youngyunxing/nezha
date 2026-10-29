@@ -3,26 +3,26 @@ import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 import { fitWithResizeOrder } from "../components/TerminalView";
 import {
-  shouldResizePtyBeforeXterm,
+  isTerminalShrink,
   terminalResizeDelayMs,
   terminalResizeOutputDeferMs,
 } from "../components/terminalShared";
 
-describe("PTY 与 xterm 的缩放顺序", () => {
-  it("列数缩小时先缩 PTY，避免 CLI 满宽行被 xterm 额外折行", () => {
-    expect(shouldResizePtyBeforeXterm({ cols: 100, rows: 50 }, { cols: 99, rows: 50 })).toBe(true);
+describe("终端缩放方向", () => {
+  it("列数缩小识别为缩窄", () => {
+    expect(isTerminalShrink({ cols: 100, rows: 50 }, { cols: 99, rows: 50 })).toBe(true);
   });
 
-  it("行数缩小时同样先缩 PTY", () => {
-    expect(shouldResizePtyBeforeXterm({ cols: 100, rows: 50 }, { cols: 100, rows: 49 })).toBe(true);
+  it("行数缩小同样识别为缩窄", () => {
+    expect(isTerminalShrink({ cols: 100, rows: 50 }, { cols: 100, rows: 49 })).toBe(true);
   });
 
-  it("放大时先扩 xterm，再扩 PTY", () => {
-    expect(shouldResizePtyBeforeXterm({ cols: 99, rows: 49 }, { cols: 100, rows: 50 })).toBe(false);
+  it("放大不属于缩窄", () => {
+    expect(isTerminalShrink({ cols: 99, rows: 49 }, { cols: 100, rows: 50 })).toBe(false);
   });
 
   it("尺寸不变不需要额外重排", () => {
-    expect(shouldResizePtyBeforeXterm({ cols: 100, rows: 50 }, { cols: 100, rows: 50 })).toBe(
+    expect(isTerminalShrink({ cols: 100, rows: 50 }, { cols: 100, rows: 50 })).toBe(
       false,
     );
   });
@@ -87,13 +87,13 @@ describe("fitWithResizeOrder 的实际调用顺序", () => {
     return { calls, term, fitAddon, container, notifyResize };
   }
 
-  it("缩小时 PTY 先于 xterm", async () => {
+  it("缩小时只重排 xterm，不触发 Claude 重写中间历史", async () => {
     const { calls, term, fitAddon, container, notifyResize } = harness(
       { cols: 100, rows: 50 },
       { cols: 99, rows: 50 },
     );
     await fitWithResizeOrder(fitAddon, term, container, notifyResize, () => true);
-    expect(calls).toEqual(["pty", "xterm", "pty"]);
+    expect(calls).toEqual(["xterm"]);
   });
 
   it("放大时 xterm 先于 PTY", async () => {

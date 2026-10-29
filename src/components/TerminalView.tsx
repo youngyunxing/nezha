@@ -73,7 +73,7 @@ import {
   initTerminal,
   loadWebglAddon,
   safeFit,
-  shouldResizePtyBeforeXterm,
+  isTerminalShrink,
   terminalResizeDelayMs,
   terminalResizeOutputDeferMs,
   createSmartWriter,
@@ -105,13 +105,11 @@ export async function fitWithResizeOrder(
     Number.isFinite(proposed.rows) &&
     proposed.cols >= 20 &&
     proposed.rows >= 5;
-  if (validProposal && shouldResizePtyBeforeXterm(term, proposed)) {
-    // 缩小时先缩 PTY，等待期间 xterm 仍较宽；放大则先 fit，再通知 PTY。
-    await notifyResize(proposed.cols, proposed.rows);
-    if (!isCurrent()) return null;
-  }
+  const shrinking = Boolean(validProposal && isTerminalShrink(term, proposed));
   const size = safeFit(fitAddon, term, container);
-  if (size && isCurrent()) await notifyResize(size.cols, size.rows);
+  // 缩窄只重排 xterm。通知 PTY 会让 Claude 收到 SIGWINCH，把中间历史重写成
+  // 无法恢复的窄宽度硬换行；放大回 PTY 原尺寸时则由后端去重，不再触发重画。
+  if (size && !shrinking && isCurrent()) await notifyResize(size.cols, size.rows);
   return size;
 }
 
