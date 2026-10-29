@@ -46,10 +46,7 @@ import { useTerminalManager } from "./hooks/useTerminalManager";
 import { loadAttentionSeen, saveAttentionSeen, type AttentionSeenMap } from "./attentionSeen";
 import { buildProjectActivityMap } from "./components/project-rail/activity";
 import { loadTaskPresets, saveTaskPresets, type TaskPreset } from "./taskPresets";
-import {
-  TaskPresetAddDialog,
-  TaskPresetEditDialog,
-} from "./components/new-task/TaskPresetDialog";
+import { TaskPresetAddDialog, TaskPresetEditDialog } from "./components/new-task/TaskPresetDialog";
 import {
   loadQuickAutoEnter,
   loadQuickInputs,
@@ -70,6 +67,7 @@ import { ProjectDrawer } from "./components/ProjectDrawer";
 import { isVisibleTask, softDeleteTasks } from "./taskDeletion";
 import {
   normalizeInterruptedTasksOnStartup,
+  prioritizeStartupAutoResumeTasks,
   runWithConcurrency,
   selectStartupAutoResumeTasks,
 } from "./taskStartup";
@@ -217,9 +215,6 @@ interface ProjectViewState {
 function createDefaultProjectViewState(): ProjectViewState {
   return { selectedTaskId: null, isNewTask: true, localSession: null };
 }
-
-
-
 
 function getSystemPrefersDark() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -615,7 +610,9 @@ function App() {
   useEffect(() => {
     if (!activeProjectId) return;
     setAttentionSeen((prev) =>
-      Date.now() - (prev[activeProjectId] ?? 0) < 1000 ? prev : { ...prev, [activeProjectId]: Date.now() },
+      Date.now() - (prev[activeProjectId] ?? 0) < 1000
+        ? prev
+        : { ...prev, [activeProjectId]: Date.now() },
     );
   }, [activeProjectId]);
 
@@ -776,7 +773,6 @@ function App() {
 
       setTasks(nextTasks);
 
-
       const touchedProjectIds = new Set(changedProjectIds);
       autoResume.forEach((item) => touchedProjectIds.add(item.task.projectId));
       touchedProjectIds.forEach((projectId) => {
@@ -800,17 +796,24 @@ function App() {
               isVisibleTask(task) &&
               isActiveTaskStatus(task.status),
           ),
-        ) ?? [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
-      if (startProject) {
+        ) ??
+        [...projectsForState].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)[0];
+      const startView = startProject ? deriveProjectView(startProject.id, nextTasks) : null;
+      if (startProject && startView) {
         setActiveProject(startProject);
         mountProject(startProject.id);
         // 落成显式状态：既是本次运行的 sticky 视图，也会被写进持久化。
-        updateProjectView(startProject.id, deriveProjectView(startProject.id, nextTasks));
+        updateProjectView(startProject.id, startView);
       }
 
-      // 全部任务仍会恢复，但不让几十个 CLI 同时读会话和重画首屏。单路等到
-      // 当前任务过了启动间隔且输出稳定后再取下一个，长会话回放也不会叠加进程。
-      await runWithConcurrency(autoResume, 1, async ({ task, project, sessionId }) => {
+      // 全部任务仍会恢复，但当前屏幕要看的会话必须最先回来；后台任务继续单路排队，
+      // 不让几十个 CLI 同时读会话和重画首屏。
+      const resumeQueue = prioritizeStartupAutoResumeTasks(
+        autoResume,
+        startView?.selectedTaskId,
+        startProject?.id,
+      );
+      await runWithConcurrency(resumeQueue, 1, async ({ task, project, sessionId }) => {
         const pendingTask = {
           ...task,
           status: "pending" as TaskStatus,
@@ -876,13 +879,15 @@ function App() {
         if (status === "done") scheduleForDoneTask(task_id);
       },
     );
-    const p2 = listen<{ task_id: string; session_id: string; session_path: string; agent?: string }>(
-      "task-session",
-      (e) => {
-        const { task_id, session_id, session_path, agent } = e.payload;
-        updateTaskSession(task_id, session_id, session_path, agent);
-      },
-    );
+    const p2 = listen<{
+      task_id: string;
+      session_id: string;
+      session_path: string;
+      agent?: string;
+    }>("task-session", (e) => {
+      const { task_id, session_id, session_path, agent } = e.payload;
+      updateTaskSession(task_id, session_id, session_path, agent);
+    });
     return () => {
       p1.then((fn) => fn());
       p2.then((fn) => fn());
@@ -925,10 +930,7 @@ function App() {
     const restored = await invoke<Task[]>("load_project_tasks", { projectId: project.id });
     if (restored.length > 0) {
       const { tasks: normalizedTasks } = normalizeInterruptedTasksOnStartup(restored, new Set());
-      setTasks((prev) => [
-        ...prev.filter((t) => t.projectId !== project.id),
-        ...normalizedTasks,
-      ]);
+      setTasks((prev) => [...prev.filter((t) => t.projectId !== project.id), ...normalizedTasks]);
       persistProjectTasks(project.id, normalizedTasks, showToast, formatSaveTasksError);
       return;
     }
@@ -1065,7 +1067,6 @@ function App() {
       isNewTask: false,
       localSession: null,
     });
-
 
     // 2) 终端 buffer 在 PTY 启动前就要建好，否则首批输出会进不来 buffer。
     tm.resetTaskTerminal(taskId);
@@ -1437,10 +1438,10 @@ function App() {
     })
       .then(() => tm.reapplyTerminalSize(task.id))
       .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
-      updateTaskStatus(task.id, "failed", undefined, msg);
-    });
+        const msg = err instanceof Error ? err.message : String(err);
+        tm.writeErrorToTerminal(task.id, `\r\nError: ${msg}\r\n`);
+        updateTaskStatus(task.id, "failed", undefined, msg);
+      });
   }
 
   function handleForkTask(sourceTaskId: string, requestedName: string) {
@@ -1636,8 +1637,7 @@ function App() {
     // status —— 等第一轮说完时用户很可能已经接着聊下一轮了，status 变了不该丢掉这次命名。
     const auto = opts?.auto === true;
     // 按 agent 选择对应字段，避免历史数据两个字段都有时取错
-    const sessionPath =
-      taskSessionPath(task) ?? null;
+    const sessionPath = taskSessionPath(task) ?? null;
     // 点击瞬间的快照，用于 await 完成后的并发校验（防止用户期间 rerun/resume/手改名）
     const expectedPriorName = task.name ?? "";
     const expectedPrompt = task.prompt;
@@ -1776,7 +1776,7 @@ function App() {
       nameGenRequestedRef.current.add(task.id);
       void handleGenerateTaskName(task.id, { auto: true }).catch(() => {});
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
   }, [tasks]);
 
   function handleUpdateProjectAvatar(projectId: string, avatar: ProjectAvatarStyle | undefined) {
@@ -1976,7 +1976,6 @@ function App() {
               monoFontFamily={monoFontFamily}
               onMonoFontFamilyChange={setMonoFontFamily}
             />
-
           );
         })}
       </div>
@@ -2024,7 +2023,6 @@ function App() {
           />
         </div>
       )}
-
     </div>
   );
   return <ProjectAppearanceProvider projects={projects}>{appTree}</ProjectAppearanceProvider>;

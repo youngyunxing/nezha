@@ -89,6 +89,26 @@ export function selectStartupAutoResumeTasks(
   return out;
 }
 
+/** 当前屏幕要显示的会话最先恢复；同项目其他任务其次，其余保持原顺序。 */
+export function prioritizeStartupAutoResumeTasks(
+  candidates: readonly StartupAutoResumeCandidate[],
+  selectedTaskId?: string | null,
+  activeProjectId?: string | null,
+): StartupAutoResumeCandidate[] {
+  return candidates
+    .map((candidate, index) => ({ candidate, index }))
+    .sort((a, b) => {
+      const selectedRank = (id: string) => (id === selectedTaskId ? 0 : 1);
+      const projectRank = (id: string) => (id === activeProjectId ? 0 : 1);
+      return (
+        selectedRank(a.candidate.task.id) - selectedRank(b.candidate.task.id) ||
+        projectRank(a.candidate.task.projectId) - projectRank(b.candidate.task.projectId) ||
+        a.index - b.index
+      );
+    })
+    .map(({ candidate }) => candidate);
+}
+
 /** 保留全部启动任务，但限制同时进入恢复阶段的数量。 */
 export async function runWithConcurrency<T>(
   items: readonly T[],

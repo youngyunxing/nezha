@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Project, Task } from "../types";
 import {
   normalizeInterruptedTasksOnStartup,
+  prioritizeStartupAutoResumeTasks,
   runWithConcurrency,
   selectStartupAutoResumeTasks,
 } from "../taskStartup";
@@ -117,6 +118,22 @@ describe("启动自动续跑：软删除的任务绝不复活", () => {
       new Set(["live"]),
     );
     expect(picked).toEqual([]);
+  });
+});
+
+describe("启动恢复顺序", () => {
+  it("当前选中的会话最先，其次当前项目，其他任务保持原顺序", () => {
+    const project: Project = { id: "p1", name: "项目", path: "/tmp/p1", lastOpenedAt: 1 };
+    const otherProject: Project = { id: "p2", name: "另一个", path: "/tmp/p2", lastOpenedAt: 2 };
+    const candidates = [
+      { task: task("a"), project, sessionId: "a" },
+      { task: task("b"), project, sessionId: "b" },
+      { task: task("c", { projectId: "p2" }), project: otherProject, sessionId: "c" },
+    ];
+
+    const prioritized = prioritizeStartupAutoResumeTasks(candidates, "b", "p2");
+    expect(prioritized.map((item) => item.task.id)).toEqual(["b", "c", "a"]);
+    expect(candidates.map((item) => item.task.id)).toEqual(["a", "b", "c"]);
   });
 });
 
