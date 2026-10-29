@@ -173,7 +173,7 @@ export function applyTerminalThemeOnPanel(
 // ── Watermark flow control ───────────────────────────────────────────────────
 
 const HIGH_WATER = 128 * 1024; // 128 KB：超过时停止写入
-const LOW_WATER  =  16 * 1024; //  16 KB：恢复写入
+const LOW_WATER = 16 * 1024; //  16 KB：恢复写入
 
 export interface SmartWriter {
   write: (data: string, callback?: () => void) => void;
@@ -399,9 +399,17 @@ const FONT_READY_TIMEOUT_MS = 1000;
 const TEXTURE_ATLAS_REFRESH_DELAYS_MS = [0, 50, 250, 1000, 2500, 5000] as const;
 
 function primaryFontFamily(fontFamily: string): string | null {
-  const first = fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "");
+  const first = fontFamily
+    .split(",")[0]
+    ?.trim()
+    .replace(/^["']|["']$/g, "");
   if (!first) return null;
-  if (first === "monospace" || first === "serif" || first === "sans-serif" || first === "system-ui") {
+  if (
+    first === "monospace" ||
+    first === "serif" ||
+    first === "sans-serif" ||
+    first === "system-ui"
+  ) {
     return null;
   }
   return first;
@@ -627,7 +635,10 @@ export function attachTerminalScrollShortcuts(term: Terminal): () => void {
   return () => term.attachCustomKeyEventHandler(() => true);
 }
 
-export function attachTerminalScrollbarAutoHide(term: Terminal, container: HTMLElement): () => void {
+export function attachTerminalScrollbarAutoHide(
+  term: Terminal,
+  container: HTMLElement,
+): () => void {
   const ownerWindow = container.ownerDocument.defaultView ?? window;
   let scrollHideTimer: number | null = null;
 
@@ -846,7 +857,8 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
   let disposed = false;
   let addon: WebglAddon | null = null;
 
-  const fontFamily = typeof term.options.fontFamily === "string" ? term.options.fontFamily : "monospace";
+  const fontFamily =
+    typeof term.options.fontFamily === "string" ? term.options.fontFamily : "monospace";
   const fontSize = typeof term.options.fontSize === "number" ? term.options.fontSize : 12;
 
   void waitForFontReady(fontFamily, fontSize).finally(() => {
@@ -883,6 +895,13 @@ export function loadWebglAddon(term: Terminal): WebglAddonHandle {
       addon = null;
     },
   };
+}
+
+export function shouldResizePtyBeforeXterm(
+  current: { cols: number; rows: number },
+  next: { cols: number; rows: number },
+): boolean {
+  return next.cols < current.cols || next.rows < current.rows;
 }
 
 /**

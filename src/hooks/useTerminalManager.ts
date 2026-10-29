@@ -304,15 +304,14 @@ export function useTerminalManager(options?: {
    *  于是 CLI 按默认 220×50 画了第一屏（首屏换行错乱），要等下一次尺寸变化（切走再切回）
    *  才重排。spawn/resume 完成后再补一次，SIGWINCH 就会让它按真实宽度重画。 */
   const reapplyTerminalSize = useCallback((taskId: string) => {
-    const { cols, rows } =
-      taskTerminalSizeRef.current[taskId] ?? lastMeasuredSizeRef.current;
+    const { cols, rows } = taskTerminalSizeRef.current[taskId] ?? lastMeasuredSizeRef.current;
     invoke("resize_pty", { taskId, cols, rows }).catch(() => {});
   }, []);
 
   const handleResize = useCallback((taskId: string, cols: number, rows: number) => {
     taskTerminalSizeRef.current[taskId] = { cols, rows };
     lastMeasuredSizeRef.current = { cols, rows };
-    invoke("resize_pty", { taskId, cols, rows }).catch(console.error);
+    return invoke("resize_pty", { taskId, cols, rows }).catch(console.error);
   }, []);
 
   /** 取某任务的旧屏幕记录：只读一次，之后走内存里的那份。 */
@@ -429,7 +428,7 @@ export function useTerminalManager(options?: {
       })();
     }, SCREEN_SAVE_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 依赖有意收敛，加进去会重复订阅
   }, []);
 
   const getTaskRestoreState = useCallback((taskId: string) => {

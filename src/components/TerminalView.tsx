@@ -66,18 +66,14 @@ import type {
 } from "../types";
 import { effectiveTerminalScrollback } from "../types";
 import { slashCommandsFor } from "../slashCommands";
-import {
-  detectSlashHint,
-  hintBottomOffset,
-  slashHintKey,
-  type SlashHintMatch,
-} from "../slashHint";
+import { detectSlashHint, hintBottomOffset, slashHintKey, type SlashHintMatch } from "../slashHint";
 import { SlashHintBar } from "./terminal-slash/SlashHintBar";
 import {
   applyTerminalThemeOnPanel,
   initTerminal,
   loadWebglAddon,
   safeFit,
+  shouldResizePtyBeforeXterm,
   createSmartWriter,
   attachMacWebKitTerminalGuard,
   attachTerminalScrollbarAutoHide,
@@ -93,12 +89,34 @@ import {
 import { attachMacWebKitShiftInputFix } from "./terminalInputFix";
 import "@xterm/xterm/css/xterm.css";
 
+export async function fitWithResizeOrder(
+  fitAddon: FitAddon,
+  term: Terminal,
+  container: HTMLElement,
+  notifyResize: (cols: number, rows: number) => Promise<void>,
+  isCurrent: () => boolean,
+): Promise<{ cols: number; rows: number } | null> {
+  const proposed = fitAddon.proposeDimensions?.();
+  const validProposal =
+    proposed &&
+    Number.isFinite(proposed.cols) &&
+    Number.isFinite(proposed.rows) &&
+    proposed.cols >= 20 &&
+    proposed.rows >= 5;
+  if (validProposal && shouldResizePtyBeforeXterm(term, proposed)) {
+    // 缩小时先缩 PTY，等待期间 xterm 仍较宽；放大则先 fit，再通知 PTY。
+    await notifyResize(proposed.cols, proposed.rows);
+    if (!isCurrent()) return null;
+  }
+  const size = safeFit(fitAddon, term, container);
+  if (size && isCurrent()) await notifyResize(size.cols, size.rows);
+  return size;
+}
+
 interface TerminalViewProps {
   onInput: (data: string) => void;
-  onResize: (cols: number, rows: number) => void;
-  onRegisterTerminal: (
-    writeFn: ((data: string, callback?: () => void) => void) | null,
-  ) => number;
+  onResize: (cols: number, rows: number) => void | Promise<void>;
+  onRegisterTerminal: (writeFn: ((data: string, callback?: () => void) => void) | null) => number;
   onReady?: (generation: number) => void;
   themeVariant: ThemeVariant;
   terminalFontSize: TerminalFontSize;
@@ -169,11 +187,11 @@ export function TerminalView({
 
   // 仅在 cols/rows 真正变化时回调；否则会触发 resize_pty → SIGWINCH →
   // 下游 TUI（Claude Code / Codex）全屏重绘，导致每次切回都看到一次多余重画。
-  const notifyResize = useCallback((cols: number, rows: number) => {
+  const notifyResize = useCallback((cols: number, rows: number): Promise<void> => {
     const last = lastSizeRef.current;
-    if (last && last.cols === cols && last.rows === rows) return;
+    if (last && last.cols === cols && last.rows === rows) return Promise.resolve();
     lastSizeRef.current = { cols, rows };
-    onResizeRef.current(cols, rows);
+    return Promise.resolve(onResizeRef.current(cols, rows));
   }, []);
 
   const insertDroppedPathText = useCallback((text: string) => {
@@ -231,9 +249,9 @@ export function TerminalView({
 
     // 字体 ready 后真实 cell 宽度可能变化，再 fit 一次让 cols/rows 跟上。
     whenFontsReady.then(() => {
-      if (disposed) return;
-      const s = safeFit(fitAddon, term, container);
-      if (s) notifyResize(s.cols, s.rows);
+      void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => !disposed).catch(
+        console.error,
+      );
     });
 
     const focusTerminal = () => {
@@ -341,10 +359,13 @@ export function TerminalView({
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible") return;
       window.requestAnimationFrame(() => {
-        const s = safeFit(fitAddon, term, container);
-        if (s) notifyResize(s.cols, s.rows);
-        refreshTerminalDisplay(term);
-        term.focus();
+        void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => !disposed)
+          .then(() => {
+            if (disposed) return;
+            refreshTerminalDisplay(term);
+            term.focus();
+          })
+          .catch(console.error);
       });
     };
 
@@ -352,10 +373,7 @@ export function TerminalView({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    const applySize = (cols: number, rows: number) => {
-      notifiedSizeRef.current = { cols, rows };
-      notifyResize(cols, rows);
-    };
+    let resizeGeneration = 0;
     const scheduleFit = () => {
       // 窗口/面板尺寸变了，光标那一行的像素位置也变了，提示条要跟着挪
       scheduleHintRead();
@@ -363,14 +381,17 @@ export function TerminalView({
       // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
       if (!isActiveRef.current) return;
 
+      const generation = ++resizeGeneration;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
-        // fit 和 PTY 通知必须在同一次提交里完成。先 fit、150ms 后才 resize_pty 会留下
-        // 尺寸失配窗口，TUI 的整屏重画可能因此折行并不断堆进 scrollback。
-        // 放大和缩小都走这里：稳定后同步缩容才能保住最底部的 Claude 输入框。
-        const s = safeFit(fitAddon, term, container);
-        if (s) applySize(s.cols, s.rows);
+        void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => {
+          return !disposed && generation === resizeGeneration;
+        })
+          .then((size) => {
+            if (size) notifiedSizeRef.current = size;
+          })
+          .catch(console.error);
       }, 150);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
@@ -442,14 +463,16 @@ export function TerminalView({
       const term = terminalRef.current;
       const container = containerRef.current;
       if (!fitAddon || !term || !container) return;
-      // 切回可见面板时按当前容器恢复网格；隐藏期间发生过的缩容也在这里补齐。
-      const s = safeFit(fitAddon, term, container);
-      if (s) {
-        notifiedSizeRef.current = { cols: s.cols, rows: s.rows };
-        notifyResize(s.cols, s.rows);
-      }
-      refreshTerminalDisplay(term);
-      term.focus();
+      void fitWithResizeOrder(fitAddon, term, container, notifyResize, () => {
+        return terminalRef.current === term;
+      })
+        .then((size) => {
+          if (size) notifiedSizeRef.current = size;
+          if (terminalRef.current !== term) return;
+          refreshTerminalDisplay(term);
+          term.focus();
+        })
+        .catch(console.error);
     });
   }, [isActive, notifyResize]);
 
@@ -529,9 +552,7 @@ export function TerminalView({
         {topRightSlot}
       </div>
       {/* 斜杠命令提示：只在正在敲命令时出现，其余时候完全不存在 */}
-      {isActive && slashHint && (
-        <SlashHintBar hint={slashHint.match} bottom={slashHint.bottom} />
-      )}
+      {isActive && slashHint && <SlashHintBar hint={slashHint.match} bottom={slashHint.bottom} />}
     </div>
   );
 }
