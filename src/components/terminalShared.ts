@@ -904,6 +904,14 @@ export function shouldResizePtyBeforeXterm(
   return next.cols < current.cols || next.rows < current.rows;
 }
 
+export function terminalResizeDelayMs(
+  current: { cols: number; rows: number },
+  next: { cols: number; rows: number },
+): number {
+  // 快速缩小再放大时直接取消缩窄，避免 CLI 在过渡宽度下写出无法恢复的硬换行。
+  return shouldResizePtyBeforeXterm(current, next) ? 800 : 150;
+}
+
 /**
  * 安全地执行 fitAddon.fit() 并返回 { cols, rows }，失败/容器不可见时返回 null。
  *

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FitAddon } from "@xterm/addon-fit";
 import type { Terminal } from "@xterm/xterm";
 import { fitWithResizeOrder } from "../components/TerminalView";
-import { shouldResizePtyBeforeXterm } from "../components/terminalShared";
+import { shouldResizePtyBeforeXterm, terminalResizeDelayMs } from "../components/terminalShared";
 
 describe("PTY 与 xterm 的缩放顺序", () => {
   it("列数缩小时先缩 PTY，避免 CLI 满宽行被 xterm 额外折行", () => {
@@ -21,6 +21,16 @@ describe("PTY 与 xterm 的缩放顺序", () => {
     expect(shouldResizePtyBeforeXterm({ cols: 100, rows: 50 }, { cols: 100, rows: 50 })).toBe(
       false,
     );
+  });
+});
+
+describe("窗口缩放防抖", () => {
+  it("缩窄等待 800ms，快速恢复时不会进入窄宽度", () => {
+    expect(terminalResizeDelayMs({ cols: 100, rows: 50 }, { cols: 80, rows: 40 })).toBe(800);
+  });
+
+  it("放大只等 150ms，尽快按新宽度重排", () => {
+    expect(terminalResizeDelayMs({ cols: 80, rows: 40 }, { cols: 100, rows: 50 })).toBe(150);
   });
 });
 

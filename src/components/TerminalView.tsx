@@ -74,6 +74,7 @@ import {
   loadWebglAddon,
   safeFit,
   shouldResizePtyBeforeXterm,
+  terminalResizeDelayMs,
   createSmartWriter,
   attachMacWebKitTerminalGuard,
   attachTerminalScrollbarAutoHide,
@@ -381,6 +382,8 @@ export function TerminalView({
       // 被文件查看器盖住的面板）窗口变化时也会收到尺寸回调，别让它们把 PTY 改成奇怪的宽度。
       if (!isActiveRef.current) return;
 
+      const proposed = fitAddon.proposeDimensions?.();
+      const delay = proposed ? terminalResizeDelayMs(term, proposed) : 150;
       const generation = ++resizeGeneration;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
@@ -392,7 +395,7 @@ export function TerminalView({
             if (size) notifiedSizeRef.current = size;
           })
           .catch(console.error);
-      }, 150);
+      }, delay);
     };
     const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
